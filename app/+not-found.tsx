@@ -1,15 +1,30 @@
-import { Link, Stack } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Link, Stack, router } from 'expo-router';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import Colors from '@/constants/Colors';
 
 export default function NotFoundScreen() {
   return (
     <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
+      <Stack.Screen options={{ 
+        title: 'Página não encontrada',
+        headerStyle: {
+          backgroundColor: Colors.background,
+        },
+        headerTintColor: Colors.text,
+        headerTitleStyle: {
+          fontFamily: 'PlusJakartaSans-SemiBold',
+        },
+      }} />
       <View style={styles.container}>
-        <Text style={styles.text}>This screen doesn't exist.</Text>
-        <Link href="/" style={styles.link}>
-          <Text>Go to home screen!</Text>
-        </Link>
+        <Text style={styles.title}>Oops!</Text>
+        <Text style={styles.text}>Esta página não existe.</Text>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.replace('/(tabs)/passwords')}
+        >
+          <Text style={styles.buttonText}>Voltar para o início</Text>
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -21,13 +36,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: Colors.background,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+    fontFamily: 'PlusJakartaSans-SemiBold',
   },
   text: {
-    fontSize: 20,
-    fontWeight: 600,
+    fontSize: 16,
+    color: Colors.textSecondary,
+    marginBottom: 24,
+    fontFamily: 'PlusJakartaSans-Regular',
   },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
+  button: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'PlusJakartaSans-SemiBold',
   },
 });

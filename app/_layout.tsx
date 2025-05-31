@@ -35,6 +35,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (appReady && !isAuthenticated) {
       router.replace('/auth');
+    } else if (appReady && isAuthenticated && router.canGoBack()) {
+      // Se estiver autenticado e puder voltar, significa que estamos na rota /auth
+      router.replace('/(tabs)/passwords');
     }
   }, [appReady, isAuthenticated]);
 
@@ -56,13 +59,20 @@ export default function RootLayout() {
           backgroundColor: Colors.background,
         },
       }}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="passwords/[id]" options={{ title: 'Password Details', presentation: 'modal' }} />
         <Stack.Screen name="passwords/add" options={{ title: 'Add New Password', presentation: 'modal' }} />
         <Stack.Screen name="link-checker/[id]" options={{ title: 'Link Check Results', presentation: 'modal' }} />
         <Stack.Screen name="modal/premium" options={{ title: 'Premium Plan', presentation: 'modal' }} />
-        <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
+        <Stack.Screen 
+          name="+not-found" 
+          options={{ 
+            title: 'Página não encontrada',
+            presentation: 'modal'
+          }} 
+        />
       </Stack>
       <StatusBar style="light" />
     </GestureHandlerRootView>

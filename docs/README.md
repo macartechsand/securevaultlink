@@ -3,6 +3,38 @@
 ## Visão Geral
 SecureLink Vault é uma aplicação mobile desenvolvida como MVP (Minimum Viable Product) focada em segurança digital. O aplicativo foi construído utilizando tecnologias modernas e robustas para garantir a proteção e gerenciamento seguro de dados sensíveis dos usuários.
 
+## Histórico de Desenvolvimento
+
+### MVP Inicial
+O SecureLink Vault foi inicialmente desenvolvido como um MVP (Minimum Viable Product) usando o Bolt AI, focando em criar uma base sólida para um aplicativo mobile de segurança. O desenvolvimento inicial priorizou:
+
+1. **Estrutura Base**
+   - Configuração do ambiente React Native/Expo
+   - Implementação da arquitetura base do projeto
+   - Configuração do TypeScript para type safety
+
+2. **Funcionalidades Core**
+   - Sistema de autenticação segura
+   - Criptografia de dados
+   - Interface de usuário básica
+   - Integração com Supabase
+
+### Atualizações Recentes
+
+#### Versão 1.0.0 (Atual)
+- ✅ Inicialização do repositório Git
+- ✅ Documentação completa do projeto
+- ✅ Estruturação do código fonte
+- ✅ Implementação das funcionalidades básicas de segurança
+- ✅ Configuração do ambiente de desenvolvimento
+- ✅ Integração com GitHub (https://github.com/macartechsand/securevaultlink.git)
+
+### Status do Projeto
+- **Versão Atual**: 1.0.0
+- **Estado**: MVP em desenvolvimento ativo
+- **Última Atualização**: 2024-03-19
+- **Repositório**: [SecureLink Vault](https://github.com/macartechsand/securevaultlink.git)
+
 ## Tecnologias Principais
 
 ### Frontend
@@ -66,7 +98,7 @@ project/
 
 1. Clone o repositório:
 ```bash
-git clone [URL_DO_REPOSITÓRIO]
+git clone https://github.com/macartechsand/securevaultlink.git
 ```
 
 2. Instale as dependências:
