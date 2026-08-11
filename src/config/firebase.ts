@@ -1,0 +1,19 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import Constants from 'expo-constants';
+
+// Configuração do Firebase
+const firebaseConfig = {
+  apiKey: Constants.expoConfig?.extra?.firebaseApiKey ?? '',
+  authDomain: Constants.expoConfig?.extra?.firebaseAuthDomain ?? '',
+  projectId: Constants.expoConfig?.extra?.firebaseProjectId ?? '',
+  storageBucket: Constants.expoConfig?.extra?.firebaseStorageBucket ?? '',
+  messagingSenderId: Constants.expoConfig?.extra?.firebaseMessagingSenderId ?? '',
+  appId: Constants.expoConfig?.extra?.firebaseAppId ?? '',
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+
+export default app; 
