@@ -33,3 +33,10 @@ npm run dev
 2. Configure as variáveis de ambiente
 3. Execute a aplicação desejada
 4. Faça commit e deploy após revisão
+
+## Fluxo de desenvolvimento
+
+- Trabalhar em `dev` para desenvolvimento incremental
+- Abrir PR de `dev` para `main` após validação
+- Revisar build e variáveis antes do deploy em produção
+- Manter `.env` fora do controle de versão

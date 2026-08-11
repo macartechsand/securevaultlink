@@ -338,3 +338,10 @@ O repositório contém suporte a Jest e alguns testes automatizados em `__tests_
 Este documento serve como guia principal da equipe de desenvolvimento. Se alguma parte do código mudar significativamente, atualize este arquivo e o `README.md`.
 
 Para publicação no Netlify, siga os passos de deploy descritos acima após terminar a revisão e commit no GitHub.
+
+## Fluxo de branch e PR
+
+- `dev`: branch de desenvolvimento e integração de novas mudanças
+- `main`: branch estável e candidata a produção
+- PRs devem ser criados de `dev` para `main` apenas após build e validação
+- O arquivo `.env` deve permanecer ignorado e nunca ser enviado para o repositório
