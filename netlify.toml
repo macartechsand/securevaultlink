@@ -1,0 +1,8 @@
+[build]
+  command = "cd web-saas && npm install && npm run build"
+  publish = "web-saas/dist"
+
+[build.environment]
+  # Add any Netlify environment variables here if needed.
+  # VITE_SUPABASE_URL = "your-supabase-url"
+  # VITE_SUPABASE_ANON_KEY = "your-supabase-anon-key"
