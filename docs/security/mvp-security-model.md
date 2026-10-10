@@ -29,6 +29,30 @@ Implementação: `web-saas/src/lib/crypto/`. Evolução prevista: Argon2id (os p
 - Testes de isolamento: `web-saas/src/services/rls.integration.test.ts` (executam apenas contra um projeto Supabase **de desenvolvimento**, com contas de teste e variáveis de ambiente).
 - **Validado em 2026-10-09** no projeto de desenvolvimento: 6/6 testes passaram (leitura, alteração, exclusão e inserção cruzadas bloqueadas; reatribuição de `user_id` bloqueada; acesso anônimo bloqueado; perfis isolados).
 
+## Cofre de arquivos
+
+| Categoria | Proteção |
+|---|---|
+| Arquivos do cofre | Chave AES-256-GCM aleatória por arquivo, embrulhada pela DEK do cofre (AAD: dono + arquivo). Conteúdo em blocos de 1 MiB; nonce = índice do bloco; AAD liga arquivo, índice e marcador de bloco final (impede reordenar, trocar ou truncar). Nome, tipo e tamanho original também ficam cifrados. |
+| Compartilhados | Cada usuário tem um par ECDH P-256; a privada fica embrulhada pela DEK. A chave do arquivo é selada para a pública do destinatário (ECDH efêmero → HKDF-SHA256 → AES-GCM). A impressão digital da chave aparece para conferência por outro canal. |
+| Transferências | Segredo de 256 bits só no fragmento do link (`#k=`), nunca enviado ao servidor; senha opcional (PBKDF2 600k combinada via HKDF). O servidor guarda só a chave embrulhada. Expiração ≤ 7 dias, 1–20 downloads, revogação. |
+
+Controles do servidor (`supabase/migrations/20261011000000_file_vault.sql`):
+- Bucket privado `vault-files`, só `application/octet-stream`, 26 MiB por objeto; cada usuário grava apenas na própria pasta e só para uma linha `pending` sua; leitura pelo dono ou por destinatário de compartilhamento.
+- Cota no banco: 25 MiB por arquivo, 100 MiB por usuário, 500 arquivos (funções `private.file_quota_bytes`/`max_file_bytes`, prontas para variar por plano). `finalize_vault_file` confere o tamanho real do objeto com o declarado.
+- Download anônimo só pela Edge Function `transfer` (consome um download atomicamente com `claim_transfer_download`, exclusiva do service role, e devolve URL assinada de 60 s). O contador de downloads não é editável pelo dono.
+- MFA (`aal2`) também exigido em todas as tabelas e no storage de arquivos.
+- `cleanup-files` (agendada) remove transferências expiradas/esgotadas/revogadas e uploads abandonados ou rejeitados.
+- Preparado para S3: colunas `storage_backend` e `storage_class` (ex.: Standard, Standard-IA, Glacier). Como tudo é cifrado no cliente, migrar de provedor é copiar blobs.
+
+Limitações dos arquivos:
+- Revogar um compartilhamento impede novos downloads, mas não apaga cópias já baixadas e não troca a chave do arquivo.
+- O servidor poderia, se comprometido, entregar uma chave pública falsa; por isso a conferência da impressão digital.
+- `find_share_recipient` confirma se um e-mail tem conta (só com e-mail exato, para usuários autenticados).
+- Quem tem o link de transferência (e a senha, se houver) baixa o arquivo; o link aparece uma única vez.
+- O arquivo é cifrado inteiro em memória (limite de 25 MiB no plano gratuito); streaming fica para arquivos grandes do Premium.
+- Os limites por IP/usuário nas Edge Functions são aproximados (por instância).
+
 ## MFA (TOTP)
 
 - Opcional por usuário, em Settings: app autenticador (TOTP) via Supabase Auth MFA. Ativar exige escanear o QR code e confirmar um código.

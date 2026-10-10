@@ -2,12 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import './App.css';
 import { AuthScreen } from './components/AuthScreen';
 import { EntryForm } from './components/EntryForm';
+import { FilesView } from './components/FilesView';
 import { Generator } from './components/Generator';
 import { MfaChallenge } from './components/MfaChallenge';
 import { PasswordTable } from './components/PasswordTable';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
+import { TransferDownload } from './components/TransferDownload';
 import { VaultGate } from './components/VaultGate';
 import { analyzeHealth, passwordStrength, type Strength } from './lib/health/passwordHealth';
 import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
@@ -15,7 +17,23 @@ import { isSupabaseConfigured } from './lib/supabase';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultEntry, useVaultSession } from './state/useVaultSession';
 
+/** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
+function readTransferLink() {
+  const id = new URLSearchParams(window.location.search).get('transfer');
+  if (!id) return null;
+  const secret = new URLSearchParams(window.location.hash.slice(1)).get('k') ?? '';
+  return { id, secret };
+}
+
 function App() {
+  const [transferLink] = useState(readTransferLink);
+  if (transferLink && isSupabaseConfigured) {
+    return <TransferDownload transferId={transferLink.id} linkSecret={transferLink.secret} />;
+  }
+  return <VaultApp />;
+}
+
+function VaultApp() {
   const session = useVaultSession();
   const { status, user, entries } = session;
   const [activeView, setActiveView] = useState('dashboard');
@@ -303,6 +321,8 @@ function App() {
             onDelete={handleDelete}
           />
         )}
+
+        {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
 
         {activeView === 'generator' && <Generator />}
 

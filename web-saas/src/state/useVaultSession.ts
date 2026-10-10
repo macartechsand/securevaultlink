@@ -11,6 +11,7 @@ import {
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
 import * as auth from '../services/authService';
+import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
 import * as mfa from '../services/mfaService';
 import * as vault from '../services/vaultService';
 
@@ -52,11 +53,13 @@ export function useVaultSession() {
   const [undecryptable, setUndecryptable] = useState(0);
   const [loadError, setLoadError] = useState('');
   const dekRef = useRef<CryptoKey | null>(null);
+  const keyPairRef = useRef<Promise<UserKeyPair> | null>(null);
   const profileRef = useRef<VaultProfile | null>(null);
   const userRef = useRef<User | null>(null);
 
   const clearSecrets = useCallback(() => {
     dekRef.current = null;
+    keyPairRef.current = null;
     setEntries([]);
     setUndecryptable(0);
   }, []);
@@ -242,6 +245,21 @@ export function useVaultSession() {
     return { dek, userId: current.id };
   };
 
+  /** Key material for file operations. Throws when the vault is locked. */
+  const getKeyContext = useCallback((): KeyContext => requireKey(), []);
+
+  /** Sharing key pair (created on first use), cached in memory until the vault locks. */
+  const getKeyPair = useCallback((): Promise<UserKeyPair> => {
+    const ctx = requireKey();
+    if (!keyPairRef.current) {
+      keyPairRef.current = ensureUserKeyPair(ctx).catch((error) => {
+        keyPairRef.current = null;
+        throw error;
+      });
+    }
+    return keyPairRef.current;
+  }, []);
+
   const addEntry = useCallback(async (data: VaultItemData) => {
     const { dek, userId } = requireKey();
     const id = crypto.randomUUID();
@@ -285,6 +303,8 @@ export function useVaultSession() {
     verifyMfa,
     changePassword,
     lock,
+    getKeyContext,
+    getKeyPair,
     addEntry,
     editEntry,
     removeEntry,

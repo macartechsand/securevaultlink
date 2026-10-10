@@ -1,0 +1,549 @@
+import { type ChangeEvent, type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { publicKeyFingerprint } from '../lib/crypto';
+import {
+  type FileShare,
+  type KeyContext,
+  type SharedFile,
+  type Transfer,
+  type UserKeyPair,
+  type VaultFile,
+  MAX_FILE_BYTES,
+  QUOTA_BYTES,
+  TRANSFER_MAX_DAYS,
+  createTransfer,
+  deleteFile,
+  downloadOwnFile,
+  downloadSharedFile,
+  findRecipient,
+  listOwnFiles,
+  listSharedWithMe,
+  listSharesForFile,
+  listTransfers,
+  removeShare,
+  revokeTransfer,
+  shareFile,
+  uploadVaultFile,
+  usedBytes,
+} from '../services/fileService';
+
+type FilesViewProps = {
+  getKeyContext: () => KeyContext;
+  getKeyPair: () => Promise<UserKeyPair>;
+};
+
+type Tab = 'vault' | 'shared' | 'transfers';
+
+export function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.');
+
+export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
+  const [tab, setTab] = useState<Tab>('vault');
+  const [own, setOwn] = useState<VaultFile[]>([]);
+  const [shared, setShared] = useState<SharedFile[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [undecryptable, setUndecryptable] = useState(0);
+  const [fingerprint, setFingerprint] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [sharing, setSharing] = useState<VaultFile | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const ctx = getKeyContext();
+      const keys = await getKeyPair();
+      const [mine, sharedWithMe] = await Promise.all([listOwnFiles(ctx), listSharedWithMe(ctx, keys)]);
+      setOwn(mine.files);
+      setShared(sharedWithMe.files);
+      setUndecryptable(mine.undecryptable + sharedWithMe.undecryptable);
+      setTransfers(await listTransfers(mine.files));
+      setFingerprint(await publicKeyFingerprint(keys.publicKey));
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [getKeyContext, getKeyPair]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const run = async (label: string, action: () => Promise<void>) => {
+    setError('');
+    setBusy(label);
+    try {
+      await action();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const used = usedBytes(own);
+  const vaultFiles = own.filter((f) => f.kind === 'vault');
+
+  const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    void run(`Encrypting and uploading ${file.name}…`, async () => {
+      if (used + file.size > QUOTA_BYTES) throw new Error('Not enough space left on the free plan.');
+      const added = await uploadVaultFile(getKeyContext(), file);
+      setOwn((list) => [added, ...list]);
+    });
+  };
+
+  return (
+    <div className="panel files-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">End-to-end encrypted</p>
+          <h3>Files</h3>
+        </div>
+        <span className="mini-tag">
+          {formatBytes(used)} of {formatBytes(QUOTA_BYTES)} used
+        </span>
+      </div>
+      <div className="progress-bar" aria-hidden="true">
+        <span className={`usage-${Math.min(10, Math.ceil((used / QUOTA_BYTES) * 10))}`} />
+      </div>
+
+      <div className="tab-row" role="tablist">
+        {(
+          [
+            ['vault', `My files (${vaultFiles.length})`],
+            ['shared', `Shared with me (${shared.length})`],
+            ['transfers', `Transfers (${transfers.length})`],
+          ] as const
+        ).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} className={`nav-item ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {busy && <div className="notice">{busy}</div>}
+      {error && <div className="form-error">{error}</div>}
+      {undecryptable > 0 && <div className="notice warning">{undecryptable} file(s) could not be decrypted and are hidden.</div>}
+      {loading && <p className="subheadline">Loading…</p>}
+
+      {!loading && tab === 'vault' && (
+        <>
+          <label className="primary-button file-pick">
+            Upload file (max {formatBytes(MAX_FILE_BYTES)})
+            <input type="file" onChange={onUpload} disabled={Boolean(busy)} hidden />
+          </label>
+          <p className="subheadline">Files are encrypted on this device before upload. Only you (and people you share with) can open them.</p>
+          <FileList
+            files={vaultFiles}
+            empty="No files yet."
+            actions={(file) => (
+              <>
+                <button type="button" className="ghost-button" disabled={Boolean(busy)} onClick={() => void run('Downloading and decrypting…', () => downloadOwnFile(getKeyContext(), file))}>
+                  Download
+                </button>
+                <button type="button" className="ghost-button" onClick={() => setSharing(file)}>
+                  Share
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={Boolean(busy)}
+                  onClick={() => {
+                    if (!window.confirm(`Delete "${file.meta.name}"? People you shared it with lose access.`)) return;
+                    void run('Deleting…', async () => {
+                      await deleteFile(file);
+                      setOwn((list) => list.filter((f) => f.id !== file.id));
+                    });
+                  }}
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          />
+        </>
+      )}
+
+      {!loading && tab === 'shared' && (
+        <>
+          <p className="subheadline">
+            Your sharing key fingerprint: <code>{fingerprint}</code>. People sharing with you can compare it to make sure
+            they encrypt for you.
+          </p>
+          <FileList
+            files={shared}
+            empty="Nothing has been shared with you yet."
+            detail={(file) => `from ${(file as SharedFile).ownerEmail}`}
+            actions={(file) => (
+              <>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={Boolean(busy)}
+                  onClick={() => void run('Downloading and decrypting…', async () => downloadSharedFile(getKeyContext(), await getKeyPair(), file as SharedFile))}
+                >
+                  Download
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    void run('Removing…', async () => {
+                      await removeShare((file as SharedFile).shareId);
+                      setShared((list) => list.filter((f) => f.shareId !== (file as SharedFile).shareId));
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              </>
+            )}
+          />
+        </>
+      )}
+
+      {!loading && tab === 'transfers' && (
+        <TransfersTab
+          transfers={transfers}
+          busy={Boolean(busy)}
+          onCreate={async (file, options) => {
+            let link = '';
+            await run(`Encrypting and uploading ${file.name}…`, async () => {
+              if (used + file.size > QUOTA_BYTES) throw new Error('Not enough space left on the free plan.');
+              const result = await createTransfer(getKeyContext(), file, options);
+              link = result.link;
+              setTransfers((list) => [result.transfer, ...list]);
+              setOwn((list) => [result.file, ...list]);
+            });
+            return link;
+          }}
+          onRevoke={(t) =>
+            void run('Revoking…', async () => {
+              await revokeTransfer(t.id);
+              setTransfers((list) => list.map((x) => (x.id === t.id ? { ...x, revoked: true } : x)));
+            })
+          }
+        />
+      )}
+
+      {sharing && <ShareDialog file={sharing} getKeyContext={getKeyContext} onClose={() => setSharing(null)} />}
+    </div>
+  );
+}
+
+function FileList({
+  files,
+  empty,
+  actions,
+  detail,
+}: {
+  files: VaultFile[];
+  empty: string;
+  actions: (file: VaultFile) => ReactNode;
+  detail?: (file: VaultFile) => string;
+}) {
+  if (files.length === 0) return <p className="empty-state">{empty}</p>;
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Added</th>
+            <th aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((file) => (
+            <tr key={'shareId' in file ? (file as SharedFile).shareId : file.id}>
+              <td>
+                <strong>{file.meta.name}</strong>
+                {detail && <small className="file-detail">{detail(file)}</small>}
+              </td>
+              <td>{formatBytes(file.meta.size)}</td>
+              <td>{new Date(file.createdAt).toLocaleDateString()}</td>
+              <td className="row-actions">{actions(file)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKeyContext: () => KeyContext; onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [candidate, setCandidate] = useState<{ userId: string; publicKey: string; fingerprint: string } | null>(null);
+  const [shares, setShares] = useState<FileShare[]>([]);
+  const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      setShares(await listSharesForFile(file.id));
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }, [file.id]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const run = async (action: () => Promise<void>) => {
+    setError('');
+    setInfo('');
+    setBusy(true);
+    try {
+      await action();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const lookup = (event: FormEvent) => {
+    event.preventDefault();
+    void run(async () => {
+      const found = await findRecipient(email);
+      if (!found) throw new Error('No SecureVault user with a sharing key was found for that email. They must sign in and open Files once.');
+      setCandidate({ ...found, fingerprint: await publicKeyFingerprint(found.publicKey) });
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal">
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">Share securely</p>
+            <h3>{file.meta.name}</h3>
+          </div>
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {!candidate ? (
+          <form className="form-grid" onSubmit={lookup}>
+            <label>
+              Recipient email (must have a SecureVault account)
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <div className="form-actions">
+              <button type="submit" className="primary-button" disabled={busy}>
+                Find
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="form-grid">
+            <p>
+              The file key will be encrypted with {email}&apos;s public key. Ask them for their fingerprint (Files → Shared
+              with me) and compare:
+            </p>
+            <code className="fingerprint">{candidate.fingerprint}</code>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await shareFile(getKeyContext(), file, candidate);
+                    setInfo(`Shared with ${email}.`);
+                    setCandidate(null);
+                    setEmail('');
+                    await refresh();
+                  })
+                }
+              >
+                Confirm and share
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setCandidate(null)}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {info && <div className="notice success">{info}</div>}
+        {error && <div className="form-error">{error}</div>}
+
+        <h4>Shared with</h4>
+        {shares.length === 0 ? (
+          <p className="empty-state">Not shared with anyone.</p>
+        ) : (
+          <ul className="share-list">
+            {shares.map((s) => (
+              <li key={s.id}>
+                {s.recipientEmail ?? s.recipientId}
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await removeShare(s.id);
+                      await refresh();
+                    })
+                  }
+                >
+                  Revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="notice">Revoking stops future downloads. It cannot erase copies the person already downloaded.</p>
+      </div>
+    </div>
+  );
+}
+
+function TransfersTab({
+  transfers,
+  busy,
+  onCreate,
+  onRevoke,
+}: {
+  transfers: Transfer[];
+  busy: boolean;
+  onCreate: (file: File, options: { days: number; maxDownloads: number; password: string | null }) => Promise<string>;
+  onRevoke: (t: Transfer) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [days, setDays] = useState(3);
+  const [maxDownloads, setMaxDownloads] = useState(3);
+  const [password, setPassword] = useState('');
+  const [link, setLink] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!file) return;
+    setLink('');
+    const result = await onCreate(file, { days, maxDownloads, password: password || null });
+    if (result) {
+      setLink(result);
+      setFile(null);
+      setPassword('');
+    }
+  };
+
+  const now = Date.now();
+  return (
+    <>
+      <form className="form-grid" onSubmit={submit}>
+        <label>
+          File to send (max {formatBytes(MAX_FILE_BYTES)})
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+        </label>
+        <label>
+          Expires after (days, max {TRANSFER_MAX_DAYS})
+          <input type="number" min={1} max={TRANSFER_MAX_DAYS} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+        </label>
+        <label>
+          Maximum downloads (1–20)
+          <input type="number" min={1} max={20} value={maxDownloads} onChange={(e) => setMaxDownloads(Number(e.target.value))} />
+        </label>
+        <label>
+          Password (optional, send it through a different channel)
+          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </label>
+        <div className="form-actions">
+          <button type="submit" className="primary-button" disabled={busy || !file}>
+            Create transfer link
+          </button>
+        </div>
+      </form>
+
+      {link && (
+        <div className="notice success">
+          <p>
+            Anyone with this link can download the file until it expires or runs out of downloads. The decryption key is in
+            the part after <code>#</code>, which is never sent to our servers.
+          </p>
+          <div className="password-output">
+            <span className="transfer-link">{link}</span>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(link);
+                  setCopied(true);
+                } catch {
+                  setCopied(false);
+                }
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p>The link is shown only now. If you lose it, create a new transfer.</p>
+        </div>
+      )}
+
+      {transfers.length === 0 ? (
+        <p className="empty-state">No transfers yet.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Downloads</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {transfers.map((t) => {
+                const expired = new Date(t.expiresAt).getTime() <= now;
+                const used = t.downloadCount >= t.maxDownloads;
+                const status = t.revoked ? 'Revoked' : expired ? 'Expired' : used ? 'Used up' : 'Active';
+                return (
+                  <tr key={t.id}>
+                    <td>
+                      {t.fileName}
+                      {t.hasPassword && <small className="file-detail">password protected</small>}
+                    </td>
+                    <td>
+                      {t.downloadCount} / {t.maxDownloads}
+                    </td>
+                    <td>{new Date(t.expiresAt).toLocaleString()}</td>
+                    <td>
+                      <span className={`status-pill ${status === 'Active' ? 'healthy' : 'review'}`}>{status}</span>
+                    </td>
+                    <td className="row-actions">
+                      {status === 'Active' && (
+                        <button type="button" className="ghost-button" disabled={busy} onClick={() => onRevoke(t)}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}

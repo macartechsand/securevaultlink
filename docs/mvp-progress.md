@@ -1,6 +1,6 @@
 # SecureVault MVP: progresso e retomada dos testes
 
-Última atualização: 2026-10-10 · Branch: `dev`
+Última atualização: 2026-10-11 · Branch: `dev`
 
 Este documento registra o que foi feito até agora e o passo a passo para continuar a validação. Detalhes de segurança: [`docs/security/mvp-security-model.md`](security/mvp-security-model.md).
 
@@ -51,9 +51,18 @@ Removido: dados e métricas falsos (`mockData.ts`), cache de senhas em texto pur
 | `20261009000000_vault_e2ee.sql` | Tabelas `vault_profiles`, `vault_entries`, RLS por usuário | ✅ Sim |
 | `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo:** apaga `vault_items` e `secure_links` (aprovado) | ⚠️ Não confirmado |
 | `20261010000000_mfa_and_remove_recovery_key.sql` | Remove a recuperação; políticas `aal2` | ✅ Sim |
-| `20261010000100_fix_mfa_policy_permissions.sql` | Corrige "permission denied for table mfa_factors" (função `private.vault_mfa_satisfied()`) | ⚠️ Não confirmado; **obrigatório** |
+| `20261010000100_fix_mfa_policy_permissions.sql` | Corrige "permission denied for table mfa_factors" (função `private.vault_mfa_satisfied()`) | ✅ Sim (fluxos testados pelo usuário) |
+| `20261011000000_file_vault.sql` | Cofre de arquivos: tabelas, bucket `vault-files`, políticas de storage, cotas, funções | ⏳ Não aplicado |
 
-### Edge Function
+### Cofre de arquivos (2026-10-11)
+- Criptografia: `web-saas/src/lib/crypto/fileCrypto.ts` (18 testes em `fileCrypto.test.ts`).
+- Serviço: `web-saas/src/services/fileService.ts`; telas: `components/FilesView.tsx` (Meus arquivos, Compartilhados comigo, Transferências) e `components/TransferDownload.tsx` (página pública `/?transfer=<id>#k=<segredo>`).
+- Testes de isolamento: `web-saas/src/services/files.integration.test.ts` (8 testes; mesmas contas do RLS).
+- Detalhes e limitações: seção "Cofre de arquivos" em `docs/security/mvp-security-model.md`.
+
+### Edge Functions
+- `supabase/functions/transfer/index.ts`: download público de transferências (deploy com `--no-verify-jwt`).
+- `supabase/functions/cleanup-files/index.ts`: limpeza agendada (secret `CLEANUP_SECRET`).
 - `supabase/functions/check-url/index.ts`: Safe Browsing, JWT obrigatório, até 50 URLs por chamada, 60 chamadas/hora por usuário, chave em `SAFE_BROWSING_API_KEY`. Deploy e secret: informados como feitos, mas o funcionamento não foi testado.
 
 ### Infra e repositório
@@ -130,6 +139,23 @@ No Supabase de desenvolvimento, abra **SQL Editor**, cole `supabase/migrations/2
 
 Se surgir "Could not load your vault", anote a mensagem exibida.
 
+### Passo 3b: cofre de arquivos
+1. SQL Editor: aplicar `supabase/migrations/20261011000000_file_vault.sql`.
+2. Deploy das funções (na raiz do repositório):
+   ```powershell
+   npx supabase functions deploy transfer --no-verify-jwt
+   npx supabase secrets set CLEANUP_SECRET=<valor aleatório com 32+ caracteres>
+   npx supabase functions deploy cleanup-files --no-verify-jwt
+   ```
+3. Agendar a limpeza: Dashboard → Integrations → Cron → novo job a cada hora, do tipo "Supabase Edge Function", chamando `cleanup-files` com método POST e header `x-cleanup-secret: <CLEANUP_SECRET>`.
+4. Testes automáticos: `npm test -- files.integration` (esperado: 8 passed).
+5. Roteiro no navegador:
+   - Files → Upload de um arquivo → Download → comparar com o original.
+   - No Storage do Supabase, o objeto em `vault-files` deve ser ilegível.
+   - Entrar com a conta B e abrir Files uma vez (cria o par de chaves). Com a conta A: Share → e-mail da B → comparar a impressão digital com a mostrada na conta B → Confirm. Na conta B, o arquivo aparece em "Shared with me" e baixa corretamente. Revoke → some para B.
+   - Transfers → criar link com 1 download e senha → abrir o link numa janela anônima → senha → Download. Abrir de novo → "not available".
+   - Tentar enviar um arquivo > 25 MB → erro claro.
+
 ### Passo 4: limpeza do legado (opcional, irreversível)
 Conferir no Table Editor que `vault_items` e `secure_links` não têm dados úteis e rodar `20261009000100_drop_legacy_plaintext_tables.sql`.
 
@@ -144,6 +170,8 @@ Conferir no Table Editor que `vault_items` e `secure_links` não têm dados úte
 | Revisão externa/pentest antes de guardar credenciais reais | Alta, antes da produção |
 | Trocar Safe Browsing por Web Risk ao lançar o plano pago | Antes da cobrança |
 | Exportação/importação cifrada do cofre | MVP 1 (adiado) |
+| Cofre de arquivos: aplicar migration, deploy das funções, cron e testes (Passo 3b) | Alta |
+| Arquivos: streaming para arquivos grandes, pastas, troca de chave ao revogar, backend S3 com classes de armazenamento | Premium |
 | Code-splitting (bundle > 500 kB por causa do dicionário zxcvbn) | Baixa |
 | Monitoramento contínuo, notificações, rotação de senhas, planos | MVP 2 |
 | Extensão de navegador (Safe Browsing proativo fora do app) | Pós-MVP / Premium |

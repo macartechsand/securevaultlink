@@ -6,6 +6,7 @@ type SidebarProps = {
 const navItems = [
   { key: 'dashboard', label: 'Overview' },
   { key: 'vault', label: 'Vault' },
+  { key: 'files', label: 'Files' },
   { key: 'generator', label: 'Generator' },
   { key: 'settings', label: 'Settings' },
 ];

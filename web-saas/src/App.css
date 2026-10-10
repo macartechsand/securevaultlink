@@ -775,3 +775,17 @@ textarea { width: 100%; font: inherit; }
   .topbar-actions { flex-wrap: wrap; }
 }
 .mfa-qr { background: #fff; padding: 8px; border-radius: 8px; }
+.files-panel .progress-bar { margin: 8px 0 16px; }
+.files-panel .progress-bar span { display: block; height: 100%; width: 0; }
+.usage-1 { width: 10% !important; } .usage-2 { width: 20% !important; } .usage-3 { width: 30% !important; }
+.usage-4 { width: 40% !important; } .usage-5 { width: 50% !important; } .usage-6 { width: 60% !important; }
+.usage-7 { width: 70% !important; } .usage-8 { width: 80% !important; } .usage-9 { width: 90% !important; }
+.usage-10 { width: 100% !important; }
+.tab-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tab-row .nav-item { width: auto; }
+.file-pick { display: inline-block; cursor: pointer; margin-bottom: 8px; }
+.file-detail { display: block; opacity: 0.7; }
+.fingerprint { display: block; font-size: 1rem; letter-spacing: 0.05em; padding: 8px 0; }
+.share-list { list-style: none; padding: 0; }
+.share-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; }
+.transfer-link { word-break: break-all; font-size: 0.8rem; }
