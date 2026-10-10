@@ -27,6 +27,7 @@ Implementação: `web-saas/src/lib/crypto/`. Evolução prevista: Argon2id (os p
 - Migration: `supabase/migrations/20261009000000_vault_e2ee.sql` (`vault_profiles`, `vault_entries`).
 - RLS habilitado e forçado. Políticas `auth.uid() = user_id` em USING e WITH CHECK; `anon` sem acesso.
 - Testes de isolamento: `web-saas/src/services/rls.integration.test.ts` (executam apenas contra um projeto Supabase **de desenvolvimento**, com contas de teste e variáveis de ambiente).
+- **Validado em 2026-10-09** no projeto de desenvolvimento: 6/6 testes passaram (leitura, alteração, exclusão e inserção cruzadas bloqueadas; reatribuição de `user_id` bloqueada; acesso anônimo bloqueado; perfis isolados).
 
 ## Dados em repouso e em trânsito no cliente
 
