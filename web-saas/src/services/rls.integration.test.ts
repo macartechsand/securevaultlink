@@ -4,7 +4,7 @@
  * Skipped unless all variables below are set. Use throw-away test accounts only
  * (email confirmation must be disabled for them, or they must already be confirmed):
  *
- *   SUPABASE_TEST_URL, SUPABASE_TEST_ANON_KEY,
+ *   SUPABASE_TEST_URL, SUPABASE_TEST_ANON_KEY (optional: default to VITE_* from .env.local),
  *   TEST_USER_A_EMAIL, TEST_USER_A_PASSWORD, TEST_USER_B_EMAIL, TEST_USER_B_PASSWORD
  *
  *   npm test -- rls.integration
@@ -12,7 +12,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-const env = process.env
+const env: Record<string, string | undefined> = {
+  ...process.env,
+  // Default to the dev project configured in web-saas/.env.local.
+  SUPABASE_TEST_URL: process.env.SUPABASE_TEST_URL || import.meta.env.VITE_SUPABASE_URL,
+  SUPABASE_TEST_ANON_KEY: process.env.SUPABASE_TEST_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY,
+}
 const configured = [
   'SUPABASE_TEST_URL',
   'SUPABASE_TEST_ANON_KEY',
