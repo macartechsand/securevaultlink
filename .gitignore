@@ -1,4 +1,19 @@
 node_modules
 .env
+.env.*
+!.env.example
 # Local Netlify folder
 .netlify
+# Generated output
+coverage/
+dist/
+.expo/
+# Local tooling binaries (SonarQube distribution)
+bin/
+# Mobile service config (restrict keys in the provider console; do not commit)
+GoogleService-Info.plist
+google-services.json
+# Keystores / private keys
+*.keystore
+*.jks
+*.pem
