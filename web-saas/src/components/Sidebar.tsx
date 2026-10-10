@@ -6,8 +6,7 @@ type SidebarProps = {
 const navItems = [
   { key: 'dashboard', label: 'Overview' },
   { key: 'vault', label: 'Vault' },
-  { key: 'monitoring', label: 'Monitoring' },
-  { key: 'reports', label: 'Reports' },
+  { key: 'generator', label: 'Generator' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -35,12 +34,6 @@ export function Sidebar({ activeView, onSelect }: SidebarProps) {
           </button>
         ))}
       </nav>
-
-      <div className="sidebar-card">
-        <p className="card-label">Current plan</p>
-        <h3>Business</h3>
-        <p>32 seats active</p>
-      </div>
     </aside>
   );
 }

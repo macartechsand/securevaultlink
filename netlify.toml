@@ -1,8 +1,18 @@
 [build]
-  command = "cd web-saas && npm install && npm run build"
+  command = "cd web-saas && npm ci && npm run build"
   publish = "web-saas/dist"
 
 [build.environment]
-  # Add any Netlify environment variables here if needed.
-  # VITE_SUPABASE_URL = "your-supabase-url"
-  # VITE_SUPABASE_ANON_KEY = "your-supabase-anon-key"
+  NODE_VERSION = "22"
+  # Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the Netlify UI (never commit real values).
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.pwnedpasswords.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Cross-Origin-Opener-Policy = "same-origin"

@@ -1,16 +1,16 @@
 type StatCardProps = {
   label: string;
   value: string;
-  change: string;
-  status: 'up' | 'down';
+  note?: string;
+  tone?: 'good' | 'bad' | 'neutral';
 };
 
-export function StatCard({ label, value, change, status }: StatCardProps) {
+export function StatCard({ label, value, note, tone = 'neutral' }: StatCardProps) {
   return (
     <div className="stat-card">
       <div className="stat-head">
         <span>{label}</span>
-        <span className={`chip ${status}`}>{change}</span>
+        {note && <span className={`chip ${tone === 'good' ? 'up' : tone === 'bad' ? 'down' : ''}`}>{note}</span>}
       </div>
       <strong>{value}</strong>
     </div>

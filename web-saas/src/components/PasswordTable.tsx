@@ -1,74 +1,126 @@
-import type { VaultItem } from '../data/mockData';
+import { useState } from 'react';
+import type { PwnedResult } from '../lib/health/pwned';
+import type { Strength } from '../lib/health/passwordHealth';
+import { safeHref } from '../lib/urlCheck';
+import type { VaultEntry } from '../state/useVaultSession';
+
+const CLIPBOARD_CLEAR_MS = 30_000;
+
+async function copySecret(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    window.setTimeout(async () => {
+      try {
+        // Only clear if the clipboard still holds what we copied.
+        if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText('');
+      } catch {
+        /* clipboard read not permitted: leave it */
+      }
+    }, CLIPBOARD_CLEAR_MS);
+  } catch {
+    /* clipboard unavailable */
+  }
+}
 
 type PasswordTableProps = {
-  items: VaultItem[];
-  onAddItem?: () => void;
+  items: VaultEntry[];
+  strengthById: Map<string, Strength>;
+  reusedIds: Set<string>;
+  pwnedById: Map<string, PwnedResult>;
+  onAdd: () => void;
+  onEdit: (entry: VaultEntry) => void;
+  onDelete: (entry: VaultEntry) => void;
 };
 
-export function PasswordTable({ items, onAddItem }: PasswordTableProps) {
+export function PasswordTable({ items, strengthById, reusedIds, pwnedById, onAdd, onEdit, onDelete }: PasswordTableProps) {
+  const [revealed, setRevealed] = useState<string | null>(null);
+
   return (
     <div className="table-card">
       <div className="table-header">
         <div>
-          <p className="eyebrow">Protected vault</p>
-          <h3>Recent entries</h3>
+          <p className="eyebrow">Encrypted vault</p>
+          <h3>Entries ({items.length})</h3>
         </div>
-        <button type="button" className="ghost-button" onClick={onAddItem}>
-          + Add item
+        <button type="button" className="primary-button" onClick={onAdd}>
+          + Add entry
         </button>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Username</th>
-            <th>Site</th>
-            <th>Category</th>
-            <th>Strength</th>
-            <th>Last used</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>
-                <div className="table-title">
-                  <span className="tiny-pill">{item.title.slice(0, 2).toUpperCase()}</span>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.url}</small>
-                  </div>
-                </div>
-              </td>
-              <td>{item.username}</td>
-              <td>
-                <div className="site-cell">
-                  <a href={item.url.startsWith('http') ? item.url : `https://${item.url}`} target="_blank" rel="noreferrer">
-                    Visit
-                  </a>
-                  {item.appLink && (
-                    <a href={item.appLink} target="_blank" rel="noreferrer" className="link-button">
-                      Open app
-                    </a>
-                  )}
-                </div>
-              </td>
-              <td>{item.category}</td>
-              <td>
-                <span className={`strength ${item.strength.toLowerCase()}`}>{item.strength}</span>
-              </td>
-              <td>{item.lastUsed}</td>
-              <td>
-                <span className={`status-pill ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {item.status}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {items.length === 0 ? (
+        <p className="empty-state">No entries yet. Add your first credential; it is encrypted before it leaves this device.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th>Category</th>
+                <th>Health</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => {
+                const href = item.url ? safeHref(item.url) : undefined;
+                const strength = strengthById.get(item.id) ?? 'Weak';
+                const pwned = pwnedById.get(item.id);
+                return (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="table-title">
+                        <span className="tiny-pill">{item.title.slice(0, 2).toUpperCase()}</span>
+                        <div>
+                          <strong>{item.title}</strong>
+                          {href ? (
+                            <small>
+                              <a href={href} target="_blank" rel="noopener noreferrer">
+                                {item.url}
+                              </a>
+                            </small>
+                          ) : (
+                            item.url && <small>{item.url}</small>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td>{item.username}</td>
+                    <td>
+                      <code>{revealed === item.id ? item.password : '••••••••••'}</code>
+                    </td>
+                    <td>{item.category}</td>
+                    <td>
+                      <span className={`strength ${strength.toLowerCase()}`}>{strength}</span>
+                      {reusedIds.has(item.id) && <span className="status-pill review">Reused</span>}
+                      {pwned?.status === 'ok' && pwned.count > 0 && (
+                        <span className="status-pill at-risk">Exposed ×{pwned.count.toLocaleString()}</span>
+                      )}
+                      {pwned?.status === 'ok' && pwned.count === 0 && <span className="status-pill healthy">Not found</span>}
+                      {pwned?.status === 'error' && <span className="status-pill review">Check failed</span>}
+                    </td>
+                    <td className="row-actions">
+                      <button type="button" className="ghost-button" onClick={() => setRevealed((r) => (r === item.id ? null : item.id))}>
+                        {revealed === item.id ? 'Hide' : 'Show'}
+                      </button>
+                      <button type="button" className="ghost-button" onClick={() => void copySecret(item.password)}>
+                        Copy
+                      </button>
+                      <button type="button" className="ghost-button" onClick={() => onEdit(item)}>
+                        Edit
+                      </button>
+                      <button type="button" className="ghost-button" onClick={() => onDelete(item)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

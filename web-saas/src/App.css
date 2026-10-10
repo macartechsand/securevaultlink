@@ -752,3 +752,25 @@ tbody td {
     min-width: 0;
   }
 }
+
+/* --- Additions for the real (non-mock) vault UI --- */
+.notice { padding: 12px 14px; border-radius: 10px; background: rgba(120, 140, 255, 0.12); font-size: 0.9rem; line-height: 1.45; margin: 8px 0; }
+.notice.warning { background: rgba(255, 184, 0, 0.14); }
+.notice.success { background: rgba(46, 204, 113, 0.16); }
+.empty-state { padding: 24px 8px; opacity: 0.75; }
+.check-row { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.inline-field { display: flex; gap: 8px; align-items: center; }
+.inline-field input { flex: 1; min-width: 0; }
+.url-finding { display: block; font-size: 0.8rem; margin-top: 4px; }
+.url-finding.high { color: #ff6b6b; }
+.url-finding.medium { color: #ffb800; }
+.url-finding.low { opacity: 0.75; }
+.table-scroll { overflow-x: auto; }
+.row-actions { white-space: nowrap; }
+.row-actions .ghost-button { padding: 4px 8px; margin-right: 4px; }
+.status-pill.at-risk { background: rgba(255, 107, 107, 0.18); color: #ff6b6b; }
+textarea { width: 100%; font: inherit; }
+@media (max-width: 760px) {
+  .app-shell { flex-direction: column; }
+  .topbar-actions { flex-wrap: wrap; }
+}
