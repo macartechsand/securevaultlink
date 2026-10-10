@@ -34,6 +34,7 @@ Implementação: `web-saas/src/lib/crypto/`. Evolução prevista: Argon2id (os p
 - Opcional por usuário, em Settings: app autenticador (TOTP) via Supabase Auth MFA. Ativar exige escanear o QR code e confirmar um código.
 - No login, quem tem MFA ativo precisa informar o código antes de qualquer acesso ao cofre (sessão `aal2`).
 - **Aplicado no banco**, não só na interface: políticas RLS *restritivas* em `vault_profiles` e `vault_entries` exigem `aal2` para usuários com fator verificado. Uma sessão só com senha (`aal1`) não lê nem grava o cofre.
+- A checagem roda na função `private.vault_mfa_satisfied()` (SECURITY DEFINER, schema não exposto pela API), porque o papel `authenticated` não tem acesso a `auth.mfa_factors`. Ver `20261010000100_fix_mfa_policy_permissions.sql`.
 - Sem códigos de backup (o Supabase não os fornece). Perda do autenticador: um administrador remove o fator no painel (Authentication → Users). Recomenda-se aos usuários cadastrar o autenticador em mais de um dispositivo.
 - A política `aal2` ainda **não** tem teste automatizado (exige TOTP real); validar manualmente no projeto de desenvolvimento.
 
