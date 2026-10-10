@@ -15,7 +15,6 @@ type ProfileRow = {
   version: number;
   kdf: VaultProfile['kdf'];
   wrapped_dek_password: string;
-  wrapped_dek_recovery: string;
 };
 
 export class VaultServiceError extends Error {}
@@ -29,13 +28,12 @@ const toRow = (profile: VaultProfile): ProfileRow => ({
   version: profile.version,
   kdf: profile.kdf,
   wrapped_dek_password: profile.wrappedDekPassword,
-  wrapped_dek_recovery: profile.wrappedDekRecovery,
 });
 
 export async function fetchProfile(): Promise<VaultProfile | null> {
   const { data, error } = await supabase
     .from('vault_profiles')
-    .select('version, kdf, wrapped_dek_password, wrapped_dek_recovery')
+    .select('version, kdf, wrapped_dek_password')
     .maybeSingle<ProfileRow>();
   if (error) fail('Loading vault profile', error);
   if (!data) return null;
@@ -43,7 +41,6 @@ export async function fetchProfile(): Promise<VaultProfile | null> {
     version: data.version,
     kdf: data.kdf,
     wrappedDekPassword: data.wrapped_dek_password,
-    wrappedDekRecovery: data.wrapped_dek_recovery,
   };
 }
 

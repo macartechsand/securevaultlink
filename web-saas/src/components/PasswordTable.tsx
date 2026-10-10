@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PwnedResult } from '../lib/health/pwned';
 import type { Strength } from '../lib/health/passwordHealth';
 import { safeHref } from '../lib/urlCheck';
+import type { UrlReputation } from '../services/urlReputation';
 import type { VaultEntry } from '../state/useVaultSession';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
@@ -27,12 +28,13 @@ type PasswordTableProps = {
   strengthById: Map<string, Strength>;
   reusedIds: Set<string>;
   pwnedById: Map<string, PwnedResult>;
+  siteById: Map<string, UrlReputation>;
   onAdd: () => void;
   onEdit: (entry: VaultEntry) => void;
   onDelete: (entry: VaultEntry) => void;
 };
 
-export function PasswordTable({ items, strengthById, reusedIds, pwnedById, onAdd, onEdit, onDelete }: PasswordTableProps) {
+export function PasswordTable({ items, strengthById, reusedIds, pwnedById, siteById, onAdd, onEdit, onDelete }: PasswordTableProps) {
   const [revealed, setRevealed] = useState<string | null>(null);
 
   return (
@@ -99,6 +101,7 @@ export function PasswordTable({ items, strengthById, reusedIds, pwnedById, onAdd
                       )}
                       {pwned?.status === 'ok' && pwned.count === 0 && <span className="status-pill healthy">Not found</span>}
                       {pwned?.status === 'error' && <span className="status-pill review">Check failed</span>}
+                      {siteById.get(item.id)?.status === 'unsafe' && <span className="status-pill at-risk">Dangerous site</span>}
                     </td>
                     <td className="row-actions">
                       <button type="button" className="ghost-button" onClick={() => setRevealed((r) => (r === item.id ? null : item.id))}>

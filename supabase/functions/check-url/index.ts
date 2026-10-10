@@ -33,7 +33,10 @@ function allowed(userId: string) {
   return true
 }
 
-async function lookupThreats(url: string, apiKey: string): Promise<string[]> {
+const MAX_URLS = 50
+
+/** Returns url -> threat types (empty array = no known threats). */
+async function lookupThreats(urls: string[], apiKey: string): Promise<Map<string, string[]>> {
   const response = await fetch('https://safebrowsing.googleapis.com/v4/threatMatches:find', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey },
@@ -43,13 +46,28 @@ async function lookupThreats(url: string, apiKey: string): Promise<string[]> {
         threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
         platformTypes: ['ANY_PLATFORM'],
         threatEntryTypes: ['URL'],
-        threatEntries: [{ url }],
+        threatEntries: urls.map((url) => ({ url })),
       },
     }),
   })
   if (!response.ok) throw new Error(`provider status ${response.status}`)
   const data = await response.json()
-  return [...new Set<string>((data.matches ?? []).map((m: { threatType: string }) => m.threatType))]
+  const result = new Map<string, string[]>(urls.map((url) => [url, []]))
+  for (const match of (data.matches ?? []) as { threatType: string; threat: { url: string } }[]) {
+    const list = result.get(match.threat.url)
+    if (list && !list.includes(match.threatType)) list.push(match.threatType)
+  }
+  return result
+}
+
+function parseUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 2048) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
 }
 
 Deno.serve(async (req) => {
@@ -63,12 +81,15 @@ Deno.serve(async (req) => {
   if (userError || !userData.user) return json({ error: 'unauthorized' }, 401)
   if (!allowed(userData.user.id)) return json({ error: 'rate limit exceeded' }, 429)
 
-  let target: URL
+  // Body: { url: string } or { urls: string[] } (max 50).
+  let urls: string[]
   try {
     const body = await req.json()
-    if (typeof body.url !== 'string' || body.url.length > 2048) throw new Error('bad url')
-    target = new URL(body.url)
-    if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new Error('bad scheme')
+    const raw: unknown[] = Array.isArray(body.urls) ? body.urls : [body.url]
+    if (raw.length === 0 || raw.length > MAX_URLS) throw new Error('bad size')
+    const parsed = raw.map(parseUrl)
+    if (parsed.some((u) => u === null)) throw new Error('bad url')
+    urls = [...new Set(parsed as string[])]
   } catch {
     return json({ error: 'invalid url' }, 400)
   }
@@ -77,8 +98,13 @@ Deno.serve(async (req) => {
   if (!apiKey) return json({ error: 'reputation provider not configured' }, 503)
 
   try {
-    const threats = await lookupThreats(target.toString(), apiKey)
-    return json({ status: threats.length ? 'unsafe' : 'no-known-threats', threats })
+    const threats = await lookupThreats(urls, apiKey)
+    const results = urls.map((url) => {
+      const found = threats.get(url) ?? []
+      return { url, status: found.length ? 'unsafe' : 'no-known-threats', threats: found }
+    })
+    // Single-URL responses keep the original shape for compatibility.
+    return json(results.length === 1 ? { ...results[0], results } : { results })
   } catch {
     return json({ error: 'reputation provider unavailable' }, 502)
   }

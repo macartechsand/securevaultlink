@@ -7,12 +7,11 @@ import {
   createVault,
   decryptEntry,
   encryptEntry,
-  resetPasswordWithRecoveryKey,
   unlockWithPassword,
-  unlockWithRecoveryKey,
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
 import * as auth from '../services/authService';
+import * as mfa from '../services/mfaService';
 import * as vault from '../services/vaultService';
 
 export const MASTER_PASSWORD_MIN_LENGTH = 12;
@@ -20,7 +19,7 @@ export const IDLE_LOCK_MS = 5 * 60 * 1000;
 
 export type VaultEntry = VaultItemData & { id: string; createdAt: string; updatedAt: string };
 
-export type SessionStatus = 'loading' | 'signed-out' | 'needs-setup' | 'locked' | 'unlocked';
+export type SessionStatus = 'loading' | 'signed-out' | 'needs-mfa' | 'needs-setup' | 'locked' | 'unlocked';
 
 export function validateMasterPassword(password: string): string | null {
   if (password.length < MASTER_PASSWORD_MIN_LENGTH) {
@@ -74,6 +73,13 @@ export function useVaultSession() {
       setUser(nextUser);
       clearSecrets();
       try {
+        // With MFA enrolled, RLS hides the vault until the session reaches aal2. Check first so
+        // an aal1 session is never mistaken for "no vault yet".
+        const level = await mfa.getAssuranceLevel();
+        if (level.next === 'aal2' && level.current !== 'aal2') {
+          setStatus('needs-mfa');
+          return;
+        }
         const profile = await vault.fetchProfile();
         profileRef.current = profile;
         setStatus(profile ? 'locked' : 'needs-setup');
@@ -163,7 +169,7 @@ export function useVaultSession() {
     await auth.signOut();
   }, [resetAll]);
 
-  /** Creates the vault. Returns the recovery key, which must be shown to the user once. */
+  /** Creates the vault. There is no recovery: the master password is the only key. */
   const setupVault = useCallback(
     async (masterPassword: string) => {
       const problem = validateMasterPassword(masterPassword);
@@ -172,7 +178,6 @@ export function useVaultSession() {
       await vault.createProfile(created.profile);
       profileRef.current = created.profile;
       await finishUnlock(created.dek);
-      return created.recoveryKey;
     },
     [finishUnlock],
   );
@@ -191,20 +196,17 @@ export function useVaultSession() {
     [finishUnlock],
   );
 
-  const recover = useCallback(
-    async (recoveryKey: string, newMasterPassword: string) => {
-      const profile = profileRef.current;
+  const verifyMfa = useCallback(
+    async (code: string) => {
       const current = userRef.current;
-      if (!profile || !current) throw new Error('No vault found.');
-      const problem = validateMasterPassword(newMasterPassword);
-      if (problem) throw new Error(problem);
-      const dek = await unlockWithRecoveryKey(profile, recoveryKey);
-      const next = await resetPasswordWithRecoveryKey(profile, recoveryKey, newMasterPassword);
-      await vault.updateProfile(current.id, next);
-      profileRef.current = next;
-      await finishUnlock(dek);
+      if (!current) throw new Error('Not signed in.');
+      const [factor] = (await mfa.listVerifiedTotpFactors()).filter((f) => f.status === 'verified');
+      if (!factor) throw new Error('No authenticator is enrolled for this account.');
+      await mfa.verifyTotp(factor.id, code);
+      userRef.current = null;
+      await bootstrap(current);
     },
-    [finishUnlock],
+    [bootstrap],
   );
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
@@ -256,7 +258,7 @@ export function useVaultSession() {
     signOut,
     setupVault,
     unlock,
-    recover,
+    verifyMfa,
     changePassword,
     lock,
     addEntry,

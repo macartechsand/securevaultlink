@@ -774,3 +774,4 @@ textarea { width: 100%; font: inherit; }
   .app-shell { flex-direction: column; }
   .topbar-actions { flex-wrap: wrap; }
 }
+.mfa-qr { background: #fff; padding: 8px; border-radius: 8px; }

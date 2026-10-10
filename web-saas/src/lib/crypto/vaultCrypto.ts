@@ -2,13 +2,12 @@
  * Client-side vault cryptography (zero-knowledge).
  *
  *  master password --PBKDF2-HMAC-SHA256--> KEK (wraps the DEK)
- *  recovery key (256-bit random)         -> recovery KEK (wraps the DEK)
  *  DEK (random AES-256-GCM key) encrypts every vault entry; the server only
  *  ever sees ciphertext, IVs and wrapped keys.
  *
  * Only WebCrypto primitives are used; no custom cryptography.
  */
-import { fromBase32, fromBase64, toBase32, toBase64 } from './encoding'
+import { fromBase64, toBase64 } from './encoding'
 
 export const KDF_ALGORITHM = 'PBKDF2-SHA256'
 export const KDF_ITERATIONS = 600_000
@@ -23,8 +22,6 @@ export type VaultProfile = {
   kdf: { algorithm: typeof KDF_ALGORITHM; iterations: number; salt: string }
   /** DEK wrapped by the master-password KEK (base64 iv||ciphertext). */
   wrappedDekPassword: string
-  /** DEK wrapped by the recovery key (base64 iv||ciphertext). */
-  wrappedDekRecovery: string
 }
 
 export type VaultItemData = {
@@ -44,7 +41,6 @@ const decoder = new TextDecoder()
 
 const randomBytes = (n: number) => globalThis.crypto.getRandomValues(new Uint8Array(n))
 const WRAP_AAD_PASSWORD = encoder.encode('securevault:dek-wrap:password:v1')
-const WRAP_AAD_RECOVERY = encoder.encode('securevault:dek-wrap:recovery:v1')
 
 function assertKdf(kdf: VaultProfile['kdf']) {
   if (
@@ -69,20 +65,6 @@ async function deriveKek(password: string, kdf: VaultProfile['kdf']): Promise<Cr
     false,
     ['encrypt', 'decrypt'],
   )
-}
-
-async function importRecoveryKek(recoveryKey: string): Promise<CryptoKey> {
-  let raw: Uint8Array<ArrayBuffer>
-  try {
-    raw = fromBase32(recoveryKey)
-  } catch {
-    throw new VaultCryptoError('Invalid recovery key')
-  }
-  if (raw.length !== 32) throw new VaultCryptoError('Invalid recovery key')
-  return subtle().importKey('raw', raw, { name: 'AES-GCM', length: 256 }, false, [
-    'encrypt',
-    'decrypt',
-  ])
 }
 
 async function wrap(kek: CryptoKey, dekRaw: Uint8Array<ArrayBuffer>, aad: Uint8Array<ArrayBuffer>) {
@@ -114,7 +96,7 @@ async function unwrap(
       'decrypt',
     ])
   } catch {
-    throw new VaultCryptoError('Wrong master password or recovery key')
+    throw new VaultCryptoError('Wrong master password')
   }
 }
 
@@ -130,41 +112,33 @@ function newKdfParams() {
   } as const
 }
 
-/** Creates a brand-new vault. The recovery key is returned once and never stored. */
+/**
+ * Creates a brand-new vault. There is no recovery mechanism by design: losing the master
+ * password means the vault can never be decrypted again.
+ */
 export async function createVault(masterPassword: string): Promise<{
   profile: VaultProfile
-  recoveryKey: string
   dek: CryptoKey
 }> {
   const kdf = newKdfParams()
   const dekRaw = randomBytes(32)
-  const recoveryRaw = randomBytes(32)
   const kek = await deriveKek(masterPassword, kdf)
-  const recoveryKek = await importRecoveryKek(toBase32(recoveryRaw))
   const profile: VaultProfile = {
     version: PROFILE_VERSION,
     kdf,
     wrappedDekPassword: await wrap(kek, dekRaw, WRAP_AAD_PASSWORD),
-    wrappedDekRecovery: await wrap(recoveryKek, dekRaw, WRAP_AAD_RECOVERY),
   }
-  const recoveryKey = toBase32(recoveryRaw).replace(/(.{4})(?=.)/g, '$1-')
   const dek = await subtle().importKey('raw', dekRaw, { name: 'AES-GCM', length: 256 }, false, [
     'encrypt',
     'decrypt',
   ])
   dekRaw.fill(0)
-  return { profile, recoveryKey, dek }
+  return { profile, dek }
 }
 
 export async function unlockWithPassword(profile: VaultProfile, masterPassword: string) {
   const kek = await deriveKek(masterPassword, profile.kdf)
   return unwrap(kek, profile.wrappedDekPassword, WRAP_AAD_PASSWORD, false)
-}
-
-export async function unlockWithRecoveryKey(profile: VaultProfile, recoveryKey: string) {
-  assertKdf(profile.kdf)
-  const kek = await importRecoveryKek(recoveryKey)
-  return unwrap(kek, profile.wrappedDekRecovery, WRAP_AAD_RECOVERY, false)
 }
 
 /** Re-wraps the DEK under a new master password (new salt). Entries stay valid. */
@@ -175,18 +149,6 @@ export async function changeMasterPassword(
 ): Promise<VaultProfile> {
   const kek = await deriveKek(currentPassword, profile.kdf)
   const dek = await unwrap(kek, profile.wrappedDekPassword, WRAP_AAD_PASSWORD, true)
-  return rewrapPassword(profile, dek, newPassword)
-}
-
-/** Sets a new master password using the recovery key. Entries stay valid. */
-export async function resetPasswordWithRecoveryKey(
-  profile: VaultProfile,
-  recoveryKey: string,
-  newPassword: string,
-): Promise<VaultProfile> {
-  assertKdf(profile.kdf)
-  const kek = await importRecoveryKek(recoveryKey)
-  const dek = await unwrap(kek, profile.wrappedDekRecovery, WRAP_AAD_RECOVERY, true)
   return rewrapPassword(profile, dek, newPassword)
 }
 

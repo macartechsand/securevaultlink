@@ -22,6 +22,7 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [reputation, setReputation] = useState<UrlReputation | null>(null);
   const [checkingUrl, setCheckingUrl] = useState(false);
+  const [confirmUnsafe, setConfirmUnsafe] = useState(false);
 
   const set = (key: keyof VaultItemData) => (e: { target: { value: string } }) =>
     setData((prev) => ({ ...prev, [key]: e.target.value }));
@@ -38,6 +39,17 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
     }
     setBusy(true);
     try {
+      // Proactive reputation check of the site before saving. If it is flagged, require a second,
+      // explicit confirmation. If the check is unavailable, saving is not blocked.
+      if (data.url.trim() && !(reputation?.status === 'unsafe' && confirmUnsafe)) {
+        const result = reputation ?? (await checkUrlReputation(data.url.trim()));
+        setReputation(result);
+        if (result.status === 'unsafe') {
+          setConfirmUnsafe(true);
+          setBusy(false);
+          return;
+        }
+      }
       await onSubmit({ ...data, title: data.title.trim(), url: data.url.trim() });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save.');
@@ -95,7 +107,7 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
           </label>
           <label>
             Site
-            <input value={data.url} onChange={(e) => { set('url')(e); setReputation(null); }} placeholder="example.com" maxLength={2048} />
+            <input value={data.url} onChange={(e) => { set('url')(e); setReputation(null); setConfirmUnsafe(false); }} placeholder="example.com" maxLength={2048} />
             {urlReport?.valid && (
               <button
                 type="button"
@@ -111,7 +123,10 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
               </button>
             )}
             {reputation?.status === 'unsafe' && (
-              <span className="url-finding high">Flagged by Safe Browsing: {reputation.threats.join(', ')}</span>
+              <span className="url-finding high">
+                Flagged by Safe Browsing as dangerous ({reputation.threats.join(', ')}). Do not enter your password on
+                this site.
+              </span>
             )}
             {reputation?.status === 'no-known-threats' && (
               <span className="url-finding low">No known threats found (this is not a guarantee).</span>
@@ -138,7 +153,7 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
           {error && <div className="form-error">{error}</div>}
           <div className="form-actions">
             <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? 'Encrypting…' : 'Save'}
+              {busy ? 'Checking & encrypting…' : confirmUnsafe ? 'Save anyway' : 'Save'}
             </button>
             <button type="button" className="ghost-button" onClick={onCancel}>
               Cancel

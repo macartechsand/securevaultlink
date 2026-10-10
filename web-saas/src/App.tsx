@@ -3,6 +3,7 @@ import './App.css';
 import { AuthScreen } from './components/AuthScreen';
 import { EntryForm } from './components/EntryForm';
 import { Generator } from './components/Generator';
+import { MfaChallenge } from './components/MfaChallenge';
 import { PasswordTable } from './components/PasswordTable';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
@@ -11,6 +12,7 @@ import { VaultGate } from './components/VaultGate';
 import { analyzeHealth, passwordStrength, type Strength } from './lib/health/passwordHealth';
 import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
 import { isSupabaseConfigured } from './lib/supabase';
+import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultEntry, useVaultSession } from './state/useVaultSession';
 
 function App() {
@@ -21,6 +23,7 @@ function App() {
   const [editing, setEditing] = useState<VaultEntry | 'new' | null>(null);
   const [actionError, setActionError] = useState('');
   const [pwnedById, setPwnedById] = useState<Map<string, PwnedResult>>(new Map());
+  const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
   const [checking, setChecking] = useState(false);
 
   const health = useMemo(() => analyzeHealth(entries), [entries]);
@@ -47,17 +50,26 @@ function App() {
     [entries, pwnedById],
   );
   const checkedCount = [...pwnedById.values()].filter((r) => r.status === 'ok').length;
+  const unsafeSites = entries.filter((e) => siteById.get(e.id)?.status === 'unsafe');
+  const siteCheckFailed = [...siteById.values()].some((r) => r.status === 'error');
 
   const runExposureCheck = useCallback(async () => {
     setChecking(true);
     try {
-      const results = await checkPwnedMany(entries.map((e) => e.password));
+      const [results, sites] = await Promise.all([
+        checkPwnedMany(entries.map((e) => e.password)),
+        checkUrlsReputation(entries.map((e) => e.url).filter(Boolean)),
+      ]);
       const byId = new Map<string, PwnedResult>();
+      const siteMap = new Map<string, UrlReputation>();
       for (const e of entries) {
         const r = results.get(e.password);
         if (r) byId.set(e.id, r);
+        const site = sites.get(e.url);
+        if (site) siteMap.set(e.id, site);
       }
       setPwnedById(byId);
+      setSiteById(siteMap);
     } finally {
       setChecking(false);
     }
@@ -101,13 +113,15 @@ function App() {
           </header>
           {status === 'loading' && <p className="subheadline">Loading…</p>}
           {status === 'signed-out' && <AuthScreen onSignIn={session.signIn} onSignUp={session.signUp} />}
+          {status === 'needs-mfa' && (
+            <MfaChallenge email={user?.email ?? ''} onVerify={session.verifyMfa} onSignOut={() => void session.signOut()} />
+          )}
           {(status === 'needs-setup' || status === 'locked') && (
             <VaultGate
               mode={status}
               email={user?.email ?? ''}
               onSetup={session.setupVault}
               onUnlock={session.unlock}
-              onRecover={session.recover}
               onSignOut={() => void session.signOut()}
             />
           )}
@@ -208,7 +222,7 @@ function App() {
                     <h3>{score === null ? 'No data yet' : `${Math.max(score, 0)}% healthy`}</h3>
                   </div>
                   <button type="button" className="primary-button" onClick={runExposureCheck} disabled={checking || entries.length === 0}>
-                    {checking ? 'Checking…' : 'Check exposure'}
+                    {checking ? 'Checking…' : 'Run security check'}
                   </button>
                 </div>
                 {entries.length === 0 ? (
@@ -216,8 +230,9 @@ function App() {
                 ) : (
                   <>
                     <p>
-                      Based on your {entries.length} stored credentials. Exposure uses the Have I Been Pwned range API:
-                      only the first 5 characters of each password's SHA-1 hash leave your device.
+                      Based on your {entries.length} stored credentials. Breach exposure uses the Have I Been Pwned
+                      range API: only the first 5 characters of each password's SHA-1 hash leave your device. Saved
+                      sites are checked against Google Safe Browsing.
                     </p>
                     {health.reusedGroups.length > 0 && (
                       <div className="notice warning">
@@ -225,6 +240,15 @@ function App() {
                           .map((group) => group.map((id) => entries.find((e) => e.id === id)?.title ?? '?').join(' = '))
                           .join('; ')}
                       </div>
+                    )}
+                    {unsafeSites.length > 0 && (
+                      <div className="notice warning">
+                        Dangerous site{unsafeSites.length === 1 ? '' : 's'} flagged by Google Safe Browsing:{' '}
+                        {unsafeSites.map((e) => e.title).join(', ')}. Do not sign in there; review these entries.
+                      </div>
+                    )}
+                    {siteCheckFailed && (
+                      <div className="notice">Site reputation could not be checked for some entries (service unavailable).</div>
                     )}
                     {exposedCount > 0 && (
                       <div className="notice warning">
@@ -243,6 +267,7 @@ function App() {
                 strengthById={strengthById}
                 reusedIds={reusedIds}
                 pwnedById={pwnedById}
+                siteById={siteById}
                 onAdd={() => setEditing('new')}
                 onEdit={setEditing}
                 onDelete={handleDelete}
@@ -257,6 +282,7 @@ function App() {
             strengthById={strengthById}
             reusedIds={reusedIds}
             pwnedById={pwnedById}
+            siteById={siteById}
             onAdd={() => setEditing('new')}
             onEdit={setEditing}
             onDelete={handleDelete}

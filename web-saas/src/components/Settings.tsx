@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { MfaSettings } from './MfaSettings';
 
 type SettingsProps = {
   email: string;
@@ -33,6 +34,7 @@ export function Settings({ email, idleMinutes, onChangePassword, onLock }: Setti
 
   return (
     <div className="settings-grid">
+      <MfaSettings />
       <div className="panel">
         <div className="panel-head">
           <div>
@@ -72,7 +74,7 @@ export function Settings({ email, idleMinutes, onChangePassword, onLock }: Setti
           </div>
         </form>
         <p className="notice warning">
-          If you lose both your master password and your recovery key, your vault cannot be recovered.
+          There is no recovery: if you forget your master password, your vault cannot be decrypted by anyone.
         </p>
       </div>
     </div>
