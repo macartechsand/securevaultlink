@@ -1,76 +1,109 @@
-# SecureVault MVP: progresso e retomada dos testes
+# SecureVault MVP: progresso e retomada
 
 Última atualização: 2026-10-11 · Branch: `dev`
 
-Este documento registra o que foi feito até agora e o passo a passo para continuar a validação. Detalhes de segurança: [`docs/security/mvp-security-model.md`](security/mvp-security-model.md).
+Este documento reúne tudo o que foi feito até agora, o estado dos testes e como retomar o trabalho.
 
----
-
-## 1. Contexto e decisões
-
-| Decisão | Escolha |
+| Documento | Conteúdo |
 |---|---|
-| Produto do MVP | Web (`web-saas/`: React 19 + Vite + Supabase). App Expo da raiz **congelado como legado** (não criptografa; não usar com senhas reais). |
-| Backend | Só Supabase (Auth, Postgres com RLS, Edge Functions). Sem Firebase, sem FastAPI. |
-| Criptografia | Zero-knowledge no navegador: PBKDF2-SHA256 (600k) → chave que embrulha uma DEK AES-256-GCM. O servidor só vê ciphertext. |
-| Recuperação | **Nenhuma.** A senha mestra é a única chave; se esquecida, o cofre é perdido. A chave de recuperação foi removida (decisão do responsável pelo produto). |
-| MFA | TOTP opcional por usuário, exigido no banco (RLS `aal2`) para quem ativou. |
-| URL suspeita | Heurísticas locais + Google Safe Browsing via Edge Function (gratuito só para uso não comercial; migrar para Web Risk quando houver cobrança). |
-| KDF | PBKDF2 agora; Argon2id como evolução (parâmetros versionados no perfil). |
-| Ambiente de testes | Projeto Supabase **de desenvolvimento**, com contas descartáveis. |
+| **[`pending-actions.md`](pending-actions.md)** | **Checklist do que o responsável precisa fazer agora** (cofre de arquivos) |
+| [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de criptografia, isolamento, MFA, arquivos e limitações |
+| Este arquivo | Histórico, decisões, inventário, testes e roadmap |
 
 ---
 
-## 2. O que foi implementado
+## 1. Decisões do produto
 
-### Web (`web-saas/src/`)
+| Tema | Decisão |
+|---|---|
+| Produto do MVP | Web (`web-saas/`: React 19 + Vite + TypeScript + Supabase). App Expo da raiz **congelado como legado** (não criptografa; não usar com senhas reais). |
+| Backend | Só Supabase: Auth, Postgres com RLS, Storage, Edge Functions. Sem Firebase, sem FastAPI. |
+| Criptografia | Zero-knowledge no navegador (WebCrypto). O servidor só vê ciphertext e chaves embrulhadas. |
+| KDF | PBKDF2-SHA256, 600k iterações; Argon2id como evolução (parâmetros versionados). |
+| Recuperação | **Nenhuma.** A senha mestra é a única chave do cofre; se esquecida, o cofre é perdido. |
+| MFA | TOTP opcional por usuário, exigido no banco (RLS `aal2`) para quem ativou. |
+| URL suspeita | Heurísticas locais + Google Safe Browsing via Edge Function (não comercial; trocar por Web Risk quando houver cobrança). |
+| Arquivos | Supabase Storage no MVP; S3 com classes de armazenamento (Standard/IA/Glacier) para Premium. |
+| Transferências | Link para qualquer pessoa, com a chave no fragmento `#` do link; senha opcional; até 7 dias e 1–20 downloads. |
+| Limites do plano gratuito | 100 MB por usuário, 25 MB por arquivo, 500 arquivos. |
+| Testes | Somente em projeto Supabase **de desenvolvimento**, com contas descartáveis. |
+
+---
+
+## 2. Linha do tempo
+
+| Data | Etapa |
+|---|---|
+| 2026-10-09 | Auditoria do protótipo (Bolt). Achados críticos: senhas em texto puro, "criptografia" por hash, sem RLS. |
+| 2026-10-09 | Higiene do repositório; módulo de criptografia; schema com RLS; nova UI sem dados falsos; saúde das senhas; HIBP; heurísticas de URL; headers de segurança. |
+| 2026-10-09 | RLS validado no projeto de desenvolvimento (6/6). |
+| 2026-10-10 | Chave de recuperação removida; MFA TOTP; Safe Browsing proativo no app; correção do erro de permissão em `mfa_factors`. |
+| 2026-10-10 | Usuário validou no navegador: cadastro, cofre de credenciais, MFA e edição. Tudo ok. |
+| 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. **Pendente de validação** (ver `pending-actions.md`). |
+
+---
+
+## 3. Inventário
+
+### 3.1 Funcionalidades
+**Validadas pelo usuário no navegador:**
+- Conta (Supabase Auth) e senha mestra separada; cofre criado no primeiro acesso.
+- Credenciais: criar, editar, excluir, categorizar, buscar, mostrar e copiar (área de transferência limpa após 30 s).
+- MFA: ativar em Settings; código pedido no login.
+
+**Implementadas, ainda sem validação completa no navegador:**
+- Gerador de senhas (CSPRNG, sem viés).
+- Painel com dados reais: total, fracas, reutilizadas, expostas (HIBP) e sites perigosos (**Run security check**).
+- Verificação de reputação do site ao salvar um item (Safe Browsing).
+- Troca da senha mestra; bloqueio manual e automático (5 min).
+- Desativar MFA.
+- **Cofre de arquivos:**
+  - Upload, download e exclusão cifrados.
+  - Uso da cota.
+  - Compartilhamento por e-mail com impressão digital da chave, revogação e "Shared with me".
+  - Transferências por link (senha opcional, expiração, limite de downloads, revogação) e página pública de download.
+
+**Removido do protótipo:** dados e métricas falsos, cache de senhas em texto puro (`localStorage`), fallback silencioso que mostrava sucesso falso, telas fictícias (Monitoring, Reports, plano).
+
+### 3.2 Código (`web-saas/src/`)
 | Área | Arquivos |
 |---|---|
-| Criptografia | `lib/crypto/vaultCrypto.ts`, `lib/crypto/encoding.ts` |
-| Sessão do cofre (estado, auto-lock 5 min, MFA, erros) | `state/useVaultSession.ts` |
-| Acesso a dados (sem fallback silencioso) | `services/vaultService.ts`, `services/authService.ts`, `services/mfaService.ts`, `services/urlReputation.ts` |
-| Gerador seguro (CSPRNG, sem viés) | `lib/passwordGenerator.ts` |
-| Saúde: fraca/reutilizada (zxcvbn-ts) e exposta (HIBP k-anonymity) | `lib/health/passwordHealth.ts`, `lib/health/pwned.ts` |
-| URL: `href` só http(s) + heurísticas | `lib/urlCheck.ts` |
-| Telas | `App.tsx`, `components/AuthScreen.tsx`, `VaultGate.tsx`, `MfaChallenge.tsx`, `MfaSettings.tsx`, `EntryForm.tsx`, `PasswordTable.tsx`, `Generator.tsx`, `Settings.tsx`, `Sidebar.tsx`, `StatCard.tsx` |
+| Criptografia do cofre | `lib/crypto/vaultCrypto.ts`, `lib/crypto/encoding.ts` |
+| Criptografia de arquivos, ECDH e transferências | `lib/crypto/fileCrypto.ts` |
+| Sessão (estado, auto-lock, MFA, chaves em memória, erros) | `state/useVaultSession.ts` |
+| Serviços | `services/authService.ts`, `vaultService.ts`, `mfaService.ts`, `urlReputation.ts`, `fileService.ts` |
+| Gerador, saúde, HIBP, URL | `lib/passwordGenerator.ts`, `lib/health/passwordHealth.ts`, `lib/health/pwned.ts`, `lib/urlCheck.ts` |
+| Telas | `App.tsx` e `components/`: `AuthScreen`, `VaultGate`, `MfaChallenge`, `MfaSettings`, `EntryForm`, `PasswordTable`, `Generator`, `Settings`, `FilesView`, `TransferDownload`, `Sidebar`, `StatCard` |
+| Testes | `lib/crypto/vaultCrypto.test.ts`, `lib/crypto/fileCrypto.test.ts`, `lib/lib.test.ts`, `services/rls.integration.test.ts`, `services/files.integration.test.ts` |
 
-Funcionalidades disponíveis:
-- Conta (Supabase Auth) e senha mestra separada; cofre criado no primeiro acesso.
-- Criar, editar, excluir, categorizar, buscar, mostrar e copiar credenciais (área de transferência limpa após 30 s).
-- Gerador de senhas.
-- Painel com dados reais: total, fracas, reutilizadas, expostas e sites perigosos ("Run security check").
-- Verificação automática do site ao salvar um item (se for perigoso, salvar exige confirmação).
-- Troca da senha mestra; bloqueio manual e automático.
-- MFA: ativar e desativar em Settings; código pedido no login.
-
-Removido: dados e métricas falsos (`mockData.ts`), cache de senhas em texto puro (`localPersistence.ts`), serviço antigo (`supabaseService.ts`), telas fictícias (Monitoring, Reports, plano).
-
-### Banco (`supabase/migrations/`), em ordem de aplicação
+### 3.3 Banco (`supabase/migrations/`), em ordem de aplicação
 | Arquivo | Conteúdo | Aplicado no dev? |
 |---|---|---|
-| `20261009000000_vault_e2ee.sql` | Tabelas `vault_profiles`, `vault_entries`, RLS por usuário | ✅ Sim |
-| `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo:** apaga `vault_items` e `secure_links` (aprovado) | ⚠️ Não confirmado |
-| `20261010000000_mfa_and_remove_recovery_key.sql` | Remove a recuperação; políticas `aal2` | ✅ Sim |
-| `20261010000100_fix_mfa_policy_permissions.sql` | Corrige "permission denied for table mfa_factors" (função `private.vault_mfa_satisfied()`) | ✅ Sim (fluxos testados pelo usuário) |
-| `20261011000000_file_vault.sql` | Cofre de arquivos: tabelas, bucket `vault-files`, políticas de storage, cotas, funções | ⏳ Não aplicado |
+| `20261009000000_vault_e2ee.sql` | `vault_profiles`, `vault_entries`, RLS por usuário | ✅ |
+| `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo:** apaga `vault_items` e `secure_links` (aprovado) | ⚠️ Não confirmado (opcional) |
+| `20261010000000_mfa_and_remove_recovery_key.sql` | Remove a recuperação; políticas `aal2` | ✅ |
+| `20261010000100_fix_mfa_policy_permissions.sql` | Checagem `aal2` via `private.vault_mfa_satisfied()` | ✅ |
+| `20261011000000_file_vault.sql` | `user_keys`, `vault_files`, `file_shares`, `transfers`, bucket `vault-files`, políticas de storage, cotas, funções | ⏳ Não aplicado → `pending-actions.md` §1 |
 
-### Cofre de arquivos (2026-10-11)
-- Criptografia: `web-saas/src/lib/crypto/fileCrypto.ts` (18 testes em `fileCrypto.test.ts`).
-- Serviço: `web-saas/src/services/fileService.ts`; telas: `components/FilesView.tsx` (Meus arquivos, Compartilhados comigo, Transferências) e `components/TransferDownload.tsx` (página pública `/?transfer=<id>#k=<segredo>`).
-- Testes de isolamento: `web-saas/src/services/files.integration.test.ts` (8 testes; mesmas contas do RLS).
-- Detalhes e limitações: seção "Cofre de arquivos" em `docs/security/mvp-security-model.md`.
+### 3.4 Edge Functions (`supabase/functions/`)
+| Função | Papel | Acesso | Situação |
+|---|---|---|---|
+| `check-url` | Reputação de URLs (Safe Browsing), até 50 por chamada | Usuário logado | Publicada (informado); sem teste de ponta a ponta |
+| `transfer` | Download público de transferências; consome o download e gera URL assinada de 60 s | Público (`--no-verify-jwt`) | ⏳ Não publicada → `pending-actions.md` §2 |
+| `cleanup-files` | Remove transferências vencidas e uploads abandonados | Header `x-cleanup-secret` | ⏳ Não publicada nem agendada → §2 e §3 |
 
-### Edge Functions
-- `supabase/functions/transfer/index.ts`: download público de transferências (deploy com `--no-verify-jwt`).
-- `supabase/functions/cleanup-files/index.ts`: limpeza agendada (secret `CLEANUP_SECRET`).
-- `supabase/functions/check-url/index.ts`: Safe Browsing, JWT obrigatório, até 50 URLs por chamada, 60 chamadas/hora por usuário, chave em `SAFE_BROWSING_API_KEY`. Deploy e secret: informados como feitos, mas o funcionamento não foi testado.
+Secrets: `SAFE_BROWSING_API_KEY` (definido, informado) e `CLEANUP_SECRET` (pendente).
 
-### Infra e repositório
+### 3.5 Infra e repositório
 - `netlify.toml`: CSP, HSTS, `frame-ancestors`/`X-Frame-Options`, nosniff, Referrer-Policy, Permissions-Policy, COOP; build com `npm ci`.
-- `.gitignore` ampliado; `coverage/`, `bin/` e `GoogleService-Info.plist` retirados do git (os arquivos continuam no disco).
+- `.gitignore` ampliado: `.env*`, `coverage/`, `bin/`, `GoogleService-Info.plist`, keystores (retirados do git; continuam no disco).
+- `README.md` atualizado: aponta para estes documentos e marca o mobile como legado.
 
-### Commits (branch `dev`)
+### 3.6 Commits (branch `dev`, do mais recente ao mais antigo)
 ```
+064ea63 feat: encrypted file vault with user sharing and temporary transfer links
+730ff06 feat(web): client-side file encryption, ECDH sharing and transfer link keys
+175762d docs: add MVP progress and test-resume guide
 def8fb2 test: allow RLS integration credentials from git-ignored .env.test.local
 62734f2 fix(db): run MFA aal2 check in a security definer function
 3675c2f fix(web): surface vault load errors instead of falling back to the unlock screen
@@ -86,102 +119,77 @@ ec62db0 feat(web): add client-side vault crypto module with real tests
 
 ---
 
-## 3. Estado dos testes
+## 4. Estado dos testes
 
 | Teste | Situação |
 |---|---|
-| Unitários (`npm test` em `web-saas`): criptografia real, gerador, saúde, HIBP, URL | ✅ 23 passaram (última execução: 2026-10-10) |
-| Typecheck (`tsc -b`), lint (`oxlint`), build (`vite build`) | ✅ Passaram |
-| RLS: isolamento entre usuários (`src/services/rls.integration.test.ts`) | ✅ 6/6 em 2026-10-09; ⏳ **repetir** após as migrations de MFA |
-| RLS com MFA (`aal2`) | ⏳ Sem teste automatizado; validar manualmente |
-| Fluxo completo no navegador | ⏳ Pendente |
-| Safe Browsing (Edge Function) | ⏳ Pendente |
-| `npm audit` (web-saas) | ✅ 0 vulnerabilidades |
+| Unitários (`npm test` em `web-saas`): criptografia do cofre e de arquivos, ECDH, transferências, gerador, saúde, HIBP, URL | ✅ 41 passaram (2026-10-11) |
+| Typecheck (`tsc -b`), lint (`oxlint`), build (`vite build`) | ✅ Sem erros nem avisos relevantes (2026-10-11) |
+| `npm audit` (web-saas) | ✅ 0 vulnerabilidades (2026-10-09) |
+| RLS do cofre de senhas (`rls.integration`, 6 testes) | ✅ 6/6 em 2026-10-09; ⏳ repetir após as migrations de MFA |
+| Isolamento do cofre de arquivos (`files.integration`, 8 testes) | ⏳ Nunca executado (depende de `pending-actions.md` §1 e §4) |
+| Políticas `aal2` (MFA no banco) | ⏳ Sem teste automatizado; MFA validado manualmente pelo usuário |
+| Navegador: cadastro, credenciais, MFA, edição | ✅ Validado pelo usuário (2026-10-10) |
+| Navegador: painel, Safe Browsing, troca de senha, auto-lock | ⏳ Não confirmado |
+| Navegador: cofre de arquivos | ⏳ Pendente → `pending-actions.md` §5 |
 
-**Último problema encontrado:** ao criar uma conta, a tela mostrava `Loading vault profile failed: permission denied for table mfa_factors`. A correção é a migration `20261010000100_fix_mfa_policy_permissions.sql`, cuja aplicação ainda não foi confirmada.
+Para rodar os testes de integração, credenciais das contas de teste ficam em `web-saas/.env.test.local` (git-ignored; URL e chave pública vêm de `web-saas/.env.local`).
 
 ---
 
-## 4. Como retomar os testes
+## 5. Como retomar
 
-### Passo 1: aplicar a correção do MFA
-No Supabase de desenvolvimento, abra **SQL Editor**, cole `supabase/migrations/20261010000100_fix_mfa_policy_permissions.sql` e execute. Resultado esperado: *Success. No rows returned*.
+1. **Agora:** seguir [`pending-actions.md`](pending-actions.md) (migration, funções, cron, testes e roteiro de arquivos).
+2. **Validações complementares do cofre de senhas:** roteiro abaixo, para os itens ainda não confirmados.
+3. **Opcional:** apagar as tabelas legadas com `20261009000100_drop_legacy_plaintext_tables.sql` (irreversível; conferir antes que estão vazias).
+4. Com tudo validado: PR `dev` → `main` e deploy no Netlify (variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no painel do Netlify).
 
-### Passo 2: testes de isolamento (RLS)
-1. Crie `web-saas/.env.test.local` (o git ignora este arquivo; use **somente contas descartáveis**):
-   ```
-   TEST_USER_A_EMAIL=teste-a@exemplo.invalid
-   TEST_USER_A_PASSWORD=<senha da conta A>
-   TEST_USER_B_EMAIL=teste-b@exemplo.invalid
-   TEST_USER_B_PASSWORD=<senha da conta B>
-   ```
-   A URL e a chave pública do Supabase são lidas de `web-saas/.env.local`. As contas são criadas em **Authentication → Users → Add user**, com **Auto Confirm User** marcado.
-2. Execute:
-   ```powershell
-   cd "C:\Users\hiago\Documents\security app\securityvaultclone\web-saas"
-   npm test -- rls.integration
-   ```
-   Esperado: **6 passed**. Se aparecer **6 skipped**, as variáveis não foram lidas.
-3. Opcional: apague `.env.test.local` ao terminar.
-
-### Passo 3: roteiro manual no navegador
+### Roteiro complementar: cofre de senhas
 `npm run dev` em `web-saas`, e então:
-1. **Conta nova:** cadastrar → deve aparecer "Choose a master password" (não "Unlock"). Criar o cofre.
-2. **CRUD:** adicionar 3 itens (um com senha fraca, dois com a mesma senha) → editar, excluir, mostrar e copiar.
-3. **Persistência:** recarregar (Ctrl+F5) → "Unlock" → senha mestra → itens intactos.
-4. **Senha errada:** deve dar erro e não abrir o cofre.
-5. **Cifragem no servidor:** no Table Editor, `vault_entries` deve mostrar só texto ilegível em `ciphertext`.
-6. **Painel:** "Run security check" → fracas, reutilizadas, expostas (HIBP) e sites.
-7. **Safe Browsing:** salvar um item com o site `http://testsafebrowsing.appspot.com/s/malware.html` → deve alertar e pedir "Save anyway".
-8. **MFA:** Settings → ativar (QR + código) → sair e entrar → deve pedir o código e depois a senha mestra. Recarregar → pede o código de novo.
-9. **Bloqueio:** "Lock" e auto-lock após 5 min sem interação.
-10. **Troca da senha mestra** (Settings) → bloquear → desbloquear com a nova senha.
+1. **Persistência:** recarregar (Ctrl+F5) → Unlock → itens intactos. Senha mestra errada → erro, cofre fechado.
+2. **Cifragem no servidor:** Table Editor → `vault_entries.ciphertext` ilegível.
+3. **Painel:** adicionar uma senha fraca e duas iguais → **Run security check** → fracas, reutilizadas e expostas.
+4. **Safe Browsing:** salvar um item com `http://testsafebrowsing.appspot.com/s/malware.html` → alerta e **Save anyway**.
+5. **Bloqueio:** **Lock** e auto-lock após 5 min sem interação.
+6. **Troca da senha mestra** (Settings) → bloquear → desbloquear com a nova.
+7. **MFA:** recarregar a página com MFA ativo → pede o código de novo; desativar em Settings.
 
-Se surgir "Could not load your vault", anote a mensagem exibida.
-
-### Passo 3b: cofre de arquivos
-1. SQL Editor: aplicar `supabase/migrations/20261011000000_file_vault.sql`.
-2. Deploy das funções (na raiz do repositório):
-   ```powershell
-   npx supabase functions deploy transfer --no-verify-jwt
-   npx supabase secrets set CLEANUP_SECRET=<valor aleatório com 32+ caracteres>
-   npx supabase functions deploy cleanup-files --no-verify-jwt
-   ```
-3. Agendar a limpeza: Dashboard → Integrations → Cron → novo job a cada hora, do tipo "Supabase Edge Function", chamando `cleanup-files` com método POST e header `x-cleanup-secret: <CLEANUP_SECRET>`.
-4. Testes automáticos: `npm test -- files.integration` (esperado: 8 passed).
-5. Roteiro no navegador:
-   - Files → Upload de um arquivo → Download → comparar com o original.
-   - No Storage do Supabase, o objeto em `vault-files` deve ser ilegível.
-   - Entrar com a conta B e abrir Files uma vez (cria o par de chaves). Com a conta A: Share → e-mail da B → comparar a impressão digital com a mostrada na conta B → Confirm. Na conta B, o arquivo aparece em "Shared with me" e baixa corretamente. Revoke → some para B.
-   - Transfers → criar link com 1 download e senha → abrir o link numa janela anônima → senha → Download. Abrir de novo → "not available".
-   - Tentar enviar um arquivo > 25 MB → erro claro.
-
-### Passo 4: limpeza do legado (opcional, irreversível)
-Conferir no Table Editor que `vault_items` e `secure_links` não têm dados úteis e rodar `20261009000100_drop_legacy_plaintext_tables.sql`.
+Se surgir "Could not load your vault", anote a mensagem exibida na tela.
 
 ---
 
-## 5. Pendências e próximos passos
+## 6. Roadmap e pendências
 
-| Item | Prioridade |
+| Item | Prioridade / fase |
 |---|---|
-| Passos 1 a 3 acima | Alta |
-| Teste automatizado das políticas `aal2` (exige TOTP de teste) | Média |
-| Revisão externa/pentest antes de guardar credenciais reais | Alta, antes da produção |
-| Trocar Safe Browsing por Web Risk ao lançar o plano pago | Antes da cobrança |
-| Exportação/importação cifrada do cofre | MVP 1 (adiado) |
-| Cofre de arquivos: aplicar migration, deploy das funções, cron e testes (Passo 3b) | Alta |
-| Arquivos: streaming para arquivos grandes, pastas, troca de chave ao revogar, backend S3 com classes de armazenamento | Premium |
-| Code-splitting (bundle > 500 kB por causa do dicionário zxcvbn) | Baixa |
-| Monitoramento contínuo, notificações, rotação de senhas, planos | MVP 2 |
-| Extensão de navegador (Safe Browsing proativo fora do app) | Pós-MVP / Premium |
+| Ações de `pending-actions.md` | **Alta, agora** |
+| Repetir os testes de RLS do cofre de senhas | Alta |
+| Revisão externa / pentest antes de guardar dados reais | Alta, antes da produção |
+| Teste automatizado das políticas `aal2` (TOTP de teste) | Média |
+| Exportação e importação cifrada do cofre | MVP 1 |
+| Trocar Safe Browsing por Web Risk | Antes de cobrar |
+| Planos e cobrança (Stripe na web; IAP/RevenueCat no mobile); cotas por plano | MVP 2 |
+| Arquivos Premium: backend S3 com classes (Standard/IA/Glacier), streaming para arquivos grandes, pastas, troca de chave ao revogar | MVP 2 / Premium |
+| Monitoramento contínuo de exposição, notificações, rotação assistida de senhas | MVP 2 |
+| Extensão de navegador (proteção proativa fora do app) | Pós-MVP / Premium |
 | Reconstruir o app mobile sobre `lib/crypto` | MVP 3 |
-| PR `dev` → `main` após a validação | Após os passos 1 a 3 |
+| Equipes e funções empresariais | MVP 4 |
+| Code-splitting (bundle > 500 kB por causa do dicionário zxcvbn) | Baixa |
 
-## 6. Limitações conhecidas
+---
 
-- Esquecer a senha mestra = perda definitiva do cofre (sem recuperação).
+## 7. Limitações conhecidas (resumo)
+
+Detalhes em [`security/mvp-security-model.md`](security/mvp-security-model.md).
+
+- Esquecer a senha mestra = perda definitiva do cofre e dos arquivos.
 - Perder o autenticador do MFA exige que um administrador remova o fator no painel do Supabase.
-- XSS no app exporia o cofre desbloqueado; mitigado por CSP e pela ausência de HTML dinâmico.
+- XSS exporia o cofre desbloqueado; mitigado por CSP e pela ausência de HTML dinâmico.
 - Safe Browsing só cobre o que passa pelo app; "No known threats" não é garantia.
-- Metadados (quantidade de itens, tamanhos, datas) são visíveis ao servidor.
+- Revogar um compartilhamento não apaga cópias já baixadas.
+- A impressão digital deve ser conferida, porque um servidor comprometido poderia trocar a chave pública.
+- O destinatário precisa abrir **Files** uma vez para criar o par de chaves antes de receber compartilhamentos.
+- Quem tem o link de transferência (e a senha, se houver) baixa o arquivo.
+- Arquivos são cifrados inteiros em memória (adequado até 25 MB).
+- Metadados (quantidade, tamanhos e datas) são visíveis ao servidor.
+- Limites de requisição nas Edge Functions são aproximados.
