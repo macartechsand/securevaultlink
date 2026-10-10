@@ -7,16 +7,23 @@
  *   SUPABASE_TEST_URL, SUPABASE_TEST_ANON_KEY (optional: default to VITE_* from .env.local),
  *   TEST_USER_A_EMAIL, TEST_USER_A_PASSWORD, TEST_USER_B_EMAIL, TEST_USER_B_PASSWORD
  *
+ * They can be exported in the shell or placed in web-saas/.env.test.local (git-ignored).
+ *
  *   npm test -- rls.integration
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { loadEnv } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+// Test credentials may also come from web-saas/.env.test.local (git-ignored, never commit it).
+const fileEnv = loadEnv('test', process.cwd(), '')
 const env: Record<string, string | undefined> = {
+  ...fileEnv,
   ...process.env,
   // Default to the dev project configured in web-saas/.env.local.
-  SUPABASE_TEST_URL: process.env.SUPABASE_TEST_URL || import.meta.env.VITE_SUPABASE_URL,
-  SUPABASE_TEST_ANON_KEY: process.env.SUPABASE_TEST_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY,
+  SUPABASE_TEST_URL: process.env.SUPABASE_TEST_URL || fileEnv.SUPABASE_TEST_URL || fileEnv.VITE_SUPABASE_URL,
+  SUPABASE_TEST_ANON_KEY:
+    process.env.SUPABASE_TEST_ANON_KEY || fileEnv.SUPABASE_TEST_ANON_KEY || fileEnv.VITE_SUPABASE_ANON_KEY,
 }
 const configured = [
   'SUPABASE_TEST_URL',
