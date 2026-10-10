@@ -19,7 +19,14 @@ export const IDLE_LOCK_MS = 5 * 60 * 1000;
 
 export type VaultEntry = VaultItemData & { id: string; createdAt: string; updatedAt: string };
 
-export type SessionStatus = 'loading' | 'signed-out' | 'needs-mfa' | 'needs-setup' | 'locked' | 'unlocked';
+export type SessionStatus =
+  | 'loading'
+  | 'signed-out'
+  | 'needs-mfa'
+  | 'needs-setup'
+  | 'locked'
+  | 'unlocked'
+  | 'load-error';
 
 export function validateMasterPassword(password: string): string | null {
   if (password.length < MASTER_PASSWORD_MIN_LENGTH) {
@@ -43,6 +50,7 @@ export function useVaultSession() {
   const [user, setUser] = useState<User | null>(null);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [undecryptable, setUndecryptable] = useState(0);
+  const [loadError, setLoadError] = useState('');
   const dekRef = useRef<CryptoKey | null>(null);
   const profileRef = useRef<VaultProfile | null>(null);
   const userRef = useRef<User | null>(null);
@@ -72,6 +80,8 @@ export function useVaultSession() {
       userRef.current = nextUser;
       setUser(nextUser);
       clearSecrets();
+      setLoadError('');
+      setStatus('loading');
       try {
         // With MFA enrolled, RLS hides the vault until the session reaches aal2. Check first so
         // an aal1 session is never mistaken for "no vault yet".
@@ -83,10 +93,11 @@ export function useVaultSession() {
         const profile = await vault.fetchProfile();
         profileRef.current = profile;
         setStatus(profile ? 'locked' : 'needs-setup');
-      } catch {
+      } catch (error) {
+        // Never fall back to "locked"/"needs-setup" on failure: show the real problem instead.
         profileRef.current = null;
-        setStatus('locked');
-        throw new Error('Could not load your vault. Check your connection and try again.');
+        setLoadError(message(error, 'Could not load your vault.'));
+        setStatus('load-error');
       }
     },
     [clearSecrets],
@@ -96,13 +107,17 @@ export function useVaultSession() {
     let active = true;
     auth.getSession().then(({ data }) => {
       if (!active) return;
-      if (data.session?.user) void bootstrap(data.session.user).catch(() => undefined);
+      if (data.session?.user) void bootstrap(data.session.user);
       else setStatus('signed-out');
     });
     const { data: listener } = auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      if (session?.user) void bootstrap(session.user).catch(() => undefined);
-      else resetAll();
+      // supabase-js warns against awaiting other Supabase calls inside this callback (it can
+      // deadlock the auth lock), so defer the work to the next tick.
+      window.setTimeout(() => {
+        if (!active) return;
+        if (session?.user) void bootstrap(session.user);
+        else resetAll();
+      }, 0);
     });
     return () => {
       active = false;
@@ -248,8 +263,17 @@ export function useVaultSession() {
     setEntries((list) => list.filter((e) => e.id !== id));
   }, []);
 
+  const retry = useCallback(() => {
+    const current = userRef.current;
+    if (!current) return;
+    userRef.current = null;
+    void bootstrap(current);
+  }, [bootstrap]);
+
   return {
     status,
+    loadError,
+    retry,
     user,
     entries,
     undecryptable,

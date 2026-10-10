@@ -113,6 +113,21 @@ function App() {
           </header>
           {status === 'loading' && <p className="subheadline">Loading…</p>}
           {status === 'signed-out' && <AuthScreen onSignIn={session.signIn} onSignUp={session.signUp} />}
+          {status === 'load-error' && (
+            <section className="page-panel auth-box">
+              <p className="eyebrow">Something went wrong</p>
+              <h3>Could not load your vault</h3>
+              <div className="form-error">{session.loadError}</div>
+              <div className="form-actions">
+                <button type="button" className="primary-button" onClick={session.retry}>
+                  Try again
+                </button>
+                <button type="button" className="ghost-button" onClick={() => void session.signOut()}>
+                  Sign out
+                </button>
+              </div>
+            </section>
+          )}
           {status === 'needs-mfa' && (
             <MfaChallenge email={user?.email ?? ''} onVerify={session.verifyMfa} onSignOut={() => void session.signOut()} />
           )}
