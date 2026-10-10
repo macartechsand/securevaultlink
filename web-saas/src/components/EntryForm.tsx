@@ -3,6 +3,7 @@ import type { VaultItemData } from '../lib/crypto';
 import { analyzeUrl } from '../lib/urlCheck';
 import { passwordStrength } from '../lib/health/passwordHealth';
 import { generatePassword } from '../lib/passwordGenerator';
+import { checkUrlReputation, type UrlReputation } from '../services/urlReputation';
 
 export const CATEGORIES = ['Work', 'Finance', 'Social', 'Personal', 'Other'];
 
@@ -19,6 +20,8 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [reputation, setReputation] = useState<UrlReputation | null>(null);
+  const [checkingUrl, setCheckingUrl] = useState(false);
 
   const set = (key: keyof VaultItemData) => (e: { target: { value: string } }) =>
     setData((prev) => ({ ...prev, [key]: e.target.value }));
@@ -92,7 +95,28 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
           </label>
           <label>
             Site
-            <input value={data.url} onChange={set('url')} placeholder="example.com" maxLength={2048} />
+            <input value={data.url} onChange={(e) => { set('url')(e); setReputation(null); }} placeholder="example.com" maxLength={2048} />
+            {urlReport?.valid && (
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={checkingUrl}
+                onClick={async () => {
+                  setCheckingUrl(true);
+                  setReputation(await checkUrlReputation(data.url));
+                  setCheckingUrl(false);
+                }}
+              >
+                {checkingUrl ? 'Checking…' : 'Check site reputation'}
+              </button>
+            )}
+            {reputation?.status === 'unsafe' && (
+              <span className="url-finding high">Flagged by Safe Browsing: {reputation.threats.join(', ')}</span>
+            )}
+            {reputation?.status === 'no-known-threats' && (
+              <span className="url-finding low">No known threats found (this is not a guarantee).</span>
+            )}
+            {reputation?.status === 'error' && <span className="url-finding medium">{reputation.message}</span>}
             {urlReport?.findings.map((f) => (
               <span key={f.code} className={`url-finding ${f.severity}`}>
                 {f.message}
