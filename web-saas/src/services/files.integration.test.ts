@@ -129,6 +129,19 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     expect(r3.error).not.toBeNull()
   })
 
+  it('owners cannot bypass finalize or the quota by editing protected columns', async () => {
+    const id = crypto.randomUUID()
+    const path = `${a.userId}/${id}`
+    created.push({ id, path })
+    const ins = await a.client.from('vault_files').insert({ id, kind: 'vault', chunk_size: 1048576, size_bytes: 64, encrypted_meta: 'x', wrapped_key: 'x', storage_path: path })
+    expect(ins.error).toBeNull()
+    expect((await a.client.from('vault_files').update({ status: 'ready' }).eq('id', id)).error).not.toBeNull()
+    expect((await a.client.from('vault_files').update({ size_bytes: 16 }).eq('id', id)).error).not.toBeNull()
+    expect((await a.client.from('vault_files').update({ owner_id: b.userId }).eq('id', id)).error).not.toBeNull()
+    const row = await a.client.from('vault_files').select('status, size_bytes').eq('id', id).single()
+    expect(row.data).toEqual({ status: 'pending', size_bytes: 64 })
+  })
+
   it('a finalize with a mismatched size is rejected', async () => {
     const id = crypto.randomUUID()
     const path = `${a.userId}/${id}`
