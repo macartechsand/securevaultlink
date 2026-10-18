@@ -1,6 +1,6 @@
 # Ações pendentes
 
-Última atualização: 2026-10-19 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-10-20 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
@@ -8,12 +8,44 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
-## Urgente: protótipo antigo no Netlify
+## Lançamento do beta fechado (10 usuários): fazer agora
+
+Deploy feito em **2026-10-20** em `https://securelinkvaultdev.netlify.app`, a partir do commit `a08ea58`. A versão nova substituiu o protótipo, e os cabeçalhos de segurança e o `noindex` foram verificados de fora.
+
+**Até o passo 1 ser feito, qualquer pessoa consegue criar conta.**
+
+1. [ ] **SQL Editor:** rodar `supabase/migrations/20261020000000_closed_beta.sql`. Ela libera cadastro só para convidados, limita a 10 contas e ajusta as cotas (80 MB por usuário no gratuito). As contas que já existem entram automaticamente na lista de convidados.
+2. [ ] **SQL Editor:** rodar `supabase/migrations/20261009000100_drop_legacy_plaintext_tables.sql` (apaga as tabelas em texto puro do protótipo; irreversível).
+3. [ ] **Supabase → Authentication → URL Configuration:**
+   - *Site URL:* `https://securelinkvaultdev.netlify.app`
+   - *Redirect URLs:* `https://securelinkvaultdev.netlify.app/**` e `http://localhost:5173/**`
+4. [ ] **Supabase → Authentication → Providers → Email** (ou *Auth Settings*):
+   - **Confirm email** ligado. Isso impede que alguém cadastre o e-mail de um convidado antes dele.
+   - **Minimum password length**: 10.
+5. [ ] **E-mails de confirmação.** O SMTP padrão do Supabase envia **só ~2 e-mails por hora**. Escolha um caminho:
+   - **(a) Recomendado:** configurar um SMTP próprio em *Authentication → SMTP Settings*. O Resend, por exemplo, tem plano gratuito.
+   - **(b)** Criar cada conta você mesmo em *Authentication → Users → Add user*, com **Auto Confirm User**, e passar a senha temporária à pessoa **por outro canal**, pedindo que ela troque. O e-mail precisa estar convidado (passo 6).
+6. [ ] **Convidar os testadores:** Administração → **Beta e limites** → Convidar (exige ser administrador e ter MFA; ver "Tornar-se administrador" abaixo). Avise cada pessoa para se cadastrar com **exatamente** esse e-mail.
+7. [ ] **Agendar a limpeza** (`cleanup-files`) de hora em hora no Cron. O painel de Administração mostra se ela rodou.
+8. [ ] Se usar o R2: incluir `https://securelinkvaultdev.netlify.app` em `AllowedOrigins` no CORS do bucket.
+
+**Orientações para os testadores:**
+- Use uma senha mestra longa e ative a chave de recuperação e a verificação em duas etapas em Configurações.
+- **Não guarde senhas reais e importantes durante o beta.** O produto ainda não passou por auditoria externa.
+- Para problemas: Configurações → Diagnóstico → Copiar relatório e enviar ao administrador.
+
+**Limites do plano gratuito do Supabase a acompanhar:**
+- **Armazenamento:** 1 GB, e a cota de 80 MB × 10 usuários usa 800 MB.
+- **Projeto pausado:** acontece após 7 dias sem uso; ao reativar, tudo volta.
+- **Tráfego de saída:** 5 GB por mês.
+- **Ajuste:** as cotas e o número de contas mudam em Administração → Beta e limites, sem nova migration.
+
+## (Resolvido em 2026-10-20) Protótipo antigo no Netlify
 
 `https://securelinkvaultdev.netlify.app` ainda serve o **protótipo antigo**: métricas fictícias, sem CSP, gravando senhas **em texto puro** na tabela `vault_items` do mesmo projeto Supabase de desenvolvimento.
 
 - [ ] Rodar `supabase/migrations/20261009000100_drop_legacy_plaintext_tables.sql` no SQL Editor. Ele apaga `vault_items` e `secure_links` e é irreversível.
-- [ ] Decidir entre publicar a versão atual a partir da `dev` (pedir ao Claude o PR `dev` → `main`) **ou** pausar o site no Netlify até lá.
+- [x] Versão atual publicada pelo Netlify CLI em 2026-10-20 (o protótipo saiu do ar).
 
 ## Fases A a F (2026-10-18 e 2026-10-19): aplicar em ordem
 

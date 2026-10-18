@@ -1,6 +1,6 @@
 # SecureVault MVP: progresso e retomada
 
-Última atualização: 2026-10-19 · Branch: `dev`
+Última atualização: 2026-10-20 · Branch: `dev`
 
 Este documento reúne tudo o que foi feito até agora, o estado dos testes e como retomar o trabalho.
 
@@ -43,6 +43,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-10 | Usuário validou no navegador: cadastro, cofre de credenciais, MFA e edição. Tudo ok. |
 | 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. |
 | 2026-10-18 | Nova rodada de requisitos, inspirada no CyberArk Identity. Decisões: recovery key **opcional**; Free com compartilhamentos e transferências de até 48 h e Premium customizado; armazenamento pago no **Cloudflare R2**; visual console escuro + tema claro, em português; rotação assistida agora e conectores no servidor depois. **Fase A implementada**: recovery opcional, planos no banco, validade nos compartilhamentos, log de auditoria e tela Activity. Migration `20261018000100` pendente de aplicação. |
+| 2026-10-20 | Migrations e funções das fases A a F aplicadas; **22/22 testes de isolamento passando**. Beta fechado implementado (convites, limite de 10 contas, cotas para o Supabase Free). Corrigido: depois de revogar um compartilhamento, o endpoint autenticado do Storage ainda servia o arquivo por alguns segundos (cache); os downloads agora usam URLs assinadas novas. **Deploy de teste no Netlify** (`securelinkvaultdev.netlify.app`) com os cabeçalhos verificados. |
 | 2026-10-19 | Visual aprovado. **Fases C a F implementadas**: Secured Items com chave por item, postura e sessões, administração e diagnóstico, catálogo de conectores com troca assistida e programada, e backend Cloudflare R2. Pendente: 4 migrations, deploy de funções e testes (ver `pending-actions.md`). |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
