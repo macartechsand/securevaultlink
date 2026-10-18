@@ -8,6 +8,29 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Urgente: protótipo antigo no Netlify
+
+`https://securelinkvaultdev.netlify.app` ainda serve o **protótipo antigo**: métricas fictícias, sem CSP, gravando senhas **em texto puro** na tabela `vault_items` do mesmo projeto Supabase de desenvolvimento.
+
+- [ ] Rodar `supabase/migrations/20261009000100_drop_legacy_plaintext_tables.sql` no SQL Editor. Ele apaga `vault_items` e `secure_links` e é irreversível.
+- [ ] Decidir entre publicar a versão atual a partir da `dev` (pedir ao Claude o PR `dev` → `main`) **ou** pausar o site no Netlify até lá.
+
+## Fase A (2026-10-18): recovery key opcional, planos, validade de 48 h e auditoria
+
+- [ ] SQL Editor: rodar `supabase/migrations/20261018000100_plans_audit_expiry.sql`. Resultado esperado: *Success. No rows returned*.
+- [ ] Republicar a limpeza, que agora também remove compartilhamentos vencidos e eventos de auditoria com mais de 1 ano:
+  ```powershell
+  cd "C:\Users\hiago\Documents\security app\securityvaultclone"
+  npx supabase functions deploy cleanup-files --no-verify-jwt
+  ```
+- [ ] Avisar o Claude para rodar os testes de integração. Esperado: **17 passed** (6 do cofre de senhas e 11 de arquivos, planos e auditoria).
+- [ ] No navegador (`npm run dev` em `web-saas`):
+  - **Settings → Recovery key → Turn on**, confirmar com a senha mestra e guardar a chave. Depois **Lock** → **Forgot master password?** → chave + nova senha mestra. O cofre deve abrir com os itens.
+  - **Generate a new key**: a chave antiga deve deixar de funcionar.
+  - **Files → Share**: as opções de duração vão até **48 hours** (plano Free), e o destinatário vê "expires in …".
+  - **Files → Transfers**: duração de até 48 horas.
+  - **Activity**: devem aparecer os eventos (cofre criado, credencial editada, arquivo compartilhado, desbloqueios…).
+
 ## Resumo
 
 | # | Tarefa | Onde | Tempo aprox. | Situação |

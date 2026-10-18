@@ -20,12 +20,13 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | Backend | Só Supabase: Auth, Postgres com RLS, Storage, Edge Functions. Sem Firebase, sem FastAPI. |
 | Criptografia | Zero-knowledge no navegador (WebCrypto). O servidor só vê ciphertext e chaves embrulhadas. |
 | KDF | PBKDF2-SHA256, 600k iterações; Argon2id como evolução (parâmetros versionados). |
-| Recuperação | **Nenhuma.** A senha mestra é a única chave do cofre; se esquecida, o cofre é perdido. |
+| Recuperação | **Recovery key opcional** (decisão de 2026-10-18; antes não havia recuperação). Ativada em Settings, mostrada uma vez, pode ser regenerada ou desativada com a senha mestra. Sem ela, esquecer a senha mestra significa perder o cofre. |
 | MFA | TOTP opcional por usuário, exigido no banco (RLS `aal2`) para quem ativou. |
 | URL suspeita | Heurísticas locais + Google Safe Browsing via Edge Function (não comercial; trocar por Web Risk quando houver cobrança). |
 | Arquivos | Supabase Storage no MVP; S3 com classes de armazenamento (Standard/IA/Glacier) para Premium. |
-| Transferências | Link para qualquer pessoa, com a chave no fragmento `#` do link; senha opcional; até 7 dias e 1–20 downloads. |
-| Limites do plano gratuito | 100 MB por usuário, 25 MB por arquivo, 500 arquivos. |
+| Transferências e compartilhamentos | Link para qualquer pessoa (chave no fragmento `#`), senha opcional, 1–20 downloads. **Free: até 48 h. Premium: até 30 dias**, e compartilhamentos entre usuários Premium podem não expirar. Limites aplicados no banco. |
+| Planos | Tabela `user_plans`, alterada só pelo servidor. Free: 100 MB no total e 25 MB por arquivo. Premium: 10 GB (no R2, depois). |
+| Auditoria | `audit_events`, só de inclusão: eventos gravados pelo banco (triggers) e eventos informados pelo app (marcados como `client`). Retenção de 365 dias. |
 | Testes | Somente em projeto Supabase **de desenvolvimento**, com contas descartáveis. |
 
 ---
@@ -40,6 +41,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-10 | Chave de recuperação removida; MFA TOTP; Safe Browsing proativo no app; correção do erro de permissão em `mfa_factors`. |
 | 2026-10-10 | Usuário validou no navegador: cadastro, cofre de credenciais, MFA e edição. Tudo ok. |
 | 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. |
+| 2026-10-18 | Nova rodada de requisitos, inspirada no CyberArk Identity. Decisões: recovery key **opcional**; Free com compartilhamentos e transferências de até 48 h e Premium customizado; armazenamento pago no **Cloudflare R2**; visual console escuro + tema claro, em português; rotação assistida agora e conectores no servidor depois. **Fase A implementada**: recovery opcional, planos no banco, validade nos compartilhamentos, log de auditoria e tela Activity. Migration `20261018000100` pendente de aplicação. |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---
@@ -161,6 +163,18 @@ Se surgir "Could not load your vault", anote a mensagem exibida na tela.
 ---
 
 ## 6. Roadmap e pendências
+
+### Fases acordadas em 2026-10-18
+| Fase | Conteúdo | Situação |
+|---|---|---|
+| A. Base de segurança | Recovery key opcional, planos, 48 h no Free, auditoria | ✅ Código; ⏳ migration e testes |
+| B. Novo visual | Design system escuro + claro, interface em português | ⏳ Próxima |
+| C. Secured Items | Tipos (login, nota segura, segredo/API key, cartão), campos personalizados, anexos por item, pastas, tags, filtros, histórico de senhas, compartilhamento com permissão de ver ou editar | ⏳ |
+| D. Postura e saúde | Score real (senhas, MFA, recovery, sites, compartilhamentos, idade das senhas), sessões e dispositivos, recomendações | ⏳ |
+| E. Admin e troubleshooting | Painel de admin sem acesso ao conteúdo dos cofres; resetar MFA; saúde do sistema; página de diagnóstico do usuário | ⏳ |
+| F. Conectores e rotação | Rotação assistida, estrutura de conectores, conectores automáticos no servidor (com consentimento), armazenamento Premium no Cloudflare R2 | ⏳ |
+
+### Itens gerais
 
 | Item | Prioridade / fase |
 |---|---|
