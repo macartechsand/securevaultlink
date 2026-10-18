@@ -16,11 +16,46 @@ import {
   wrapFileKeyForOwner,
 } from '../lib/crypto';
 import { supabase } from '../lib/supabase';
+import { logClientEvent } from './auditService';
 
 export const BUCKET = 'vault-files';
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-export const QUOTA_BYTES = 100 * 1024 * 1024;
-export const TRANSFER_MAX_DAYS = 7;
+
+export type PlanLimits = {
+  plan: 'free' | 'premium';
+  quotaBytes: number;
+  maxFileBytes: number;
+  maxShareHours: number;
+  maxTransferHours: number;
+};
+
+/** Free-plan defaults, used until the server answers (the server always enforces its own limits). */
+export const FREE_LIMITS: PlanLimits = {
+  plan: 'free',
+  quotaBytes: 100 * 1024 * 1024,
+  maxFileBytes: MAX_FILE_BYTES,
+  maxShareHours: 48,
+  maxTransferHours: 48,
+};
+
+export async function fetchPlanLimits(): Promise<PlanLimits> {
+  const { data, error } = await supabase.rpc('my_plan_limits');
+  const row = (data as { plan: string; quota_bytes: number; max_file_bytes: number; max_share_hours: number; max_transfer_hours: number }[] | null)?.[0];
+  if (error || !row) return FREE_LIMITS;
+  return {
+    plan: row.plan === 'premium' ? 'premium' : 'free',
+    quotaBytes: Number(row.quota_bytes),
+    // Files are encrypted in memory for now; keep the client cap until streaming exists.
+    maxFileBytes: Math.min(MAX_FILE_BYTES, Number(row.max_file_bytes)),
+    maxShareHours: row.max_share_hours,
+    maxTransferHours: row.max_transfer_hours,
+  };
+}
+
+/** Expiry timestamp for a duration in hours, a minute short so server-side checks always pass. */
+export function expiryFromHours(hours: number) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000 - 60_000).toISOString();
+}
 
 export class FileServiceError extends Error {}
 
@@ -56,9 +91,15 @@ export type VaultFile = {
   expiresAt: string | null;
 };
 
-export type SharedFile = VaultFile & { shareId: string; ownerEmail: string; sealedKey: string };
+export type SharedFile = VaultFile & { shareId: string; ownerEmail: string; sealedKey: string; shareExpiresAt: string | null };
 
-export type FileShare = { id: string; recipientEmail?: string; recipientId: string; createdAt: string };
+export type FileShare = {
+  id: string;
+  recipientEmail?: string;
+  recipientId: string;
+  createdAt: string;
+  expiresAt: string | null;
+};
 
 export type Transfer = {
   id: string;
@@ -231,6 +272,7 @@ export async function downloadOwnFile(ctx: KeyContext, file: VaultFile) {
   const key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, file.id, data!.wrapped_key);
   const plain = await decryptFileContent(key, file.id, await downloadObject(file.storagePath), file.chunkSize);
   saveToDisk(plain, file.meta.name);
+  logClientEvent('file.downloaded', { type: file.kind, id: file.id });
 }
 
 export async function deleteFile(file: VaultFile) {
@@ -253,7 +295,13 @@ export async function findRecipient(email: string): Promise<{ userId: string; pu
   return row ? { userId: row.user_id, publicKey: row.public_key } : null;
 }
 
-export async function shareFile(ctx: KeyContext, file: VaultFile, recipient: { userId: string; publicKey: string }) {
+/** Shares a file with another user until `expiresAt` (null = no expiry, premium only). */
+export async function shareFile(
+  ctx: KeyContext,
+  file: VaultFile,
+  recipient: { userId: string; publicKey: string },
+  expiresAt: string | null,
+) {
   const { data, error } = await supabase
     .from('vault_files')
     .select('wrapped_key')
@@ -264,7 +312,7 @@ export async function shareFile(ctx: KeyContext, file: VaultFile, recipient: { u
   const sealed = await sealFileKeyForRecipient(recipient.publicKey, key, file.id, recipient.userId);
   const { error: insertError } = await supabase
     .from('file_shares')
-    .insert({ file_id: file.id, recipient_id: recipient.userId, sealed_key: sealed });
+    .insert({ file_id: file.id, recipient_id: recipient.userId, sealed_key: sealed, expires_at: expiresAt });
   if (insertError) {
     if (insertError.code === '23505') throw new FileServiceError('This file is already shared with that person.');
     fail('Sharing file', insertError);
@@ -274,15 +322,16 @@ export async function shareFile(ctx: KeyContext, file: VaultFile, recipient: { u
 export async function listSharesForFile(fileId: string): Promise<FileShare[]> {
   const { data, error } = await supabase
     .from('file_shares')
-    .select('id, recipient_id, recipient_email, created_at')
+    .select('id, recipient_id, recipient_email, created_at, expires_at')
     .eq('file_id', fileId)
-    .returns<{ id: string; recipient_id: string; recipient_email: string | null; created_at: string }[]>();
+    .returns<{ id: string; recipient_id: string; recipient_email: string | null; created_at: string; expires_at: string | null }[]>();
   if (error) fail('Loading shares', error);
   return (data ?? []).map((s) => ({
     id: s.id,
     recipientId: s.recipient_id,
     recipientEmail: s.recipient_email ?? undefined,
     createdAt: s.created_at,
+    expiresAt: s.expires_at,
   }));
 }
 
@@ -295,19 +344,25 @@ export async function removeShare(shareId: string) {
 export async function listSharedWithMe(ctx: KeyContext, keys: UserKeyPair): Promise<{ files: SharedFile[]; undecryptable: number }> {
   const { data, error } = await supabase
     .from('file_shares')
-    .select(`id, owner_email, sealed_key, vault_files!inner(${FILE_COLUMNS})`)
+    .select(`id, owner_email, sealed_key, expires_at, vault_files!inner(${FILE_COLUMNS})`)
     .eq('recipient_id', ctx.userId)
     .order('created_at', { ascending: false });
   if (error) fail('Loading shared files', error);
   const files: SharedFile[] = [];
   let undecryptable = 0;
-  for (const share of (data ?? []) as unknown as { id: string; owner_email: string | null; sealed_key: string; vault_files: FileRow }[]) {
+  for (const share of (data ?? []) as unknown as { id: string; owner_email: string | null; sealed_key: string; expires_at: string | null; vault_files: FileRow }[]) {
     const row = share.vault_files;
     if (row.status !== 'ready') continue;
     try {
       const key = await openSealedFileKey(keys.privateKey, keys.publicKey, share.sealed_key, row.id, ctx.userId);
       const meta = await decryptFileMetadata(key, row.id, row.encrypted_meta);
-      files.push({ ...toVaultFile(row, meta), shareId: share.id, ownerEmail: share.owner_email ?? 'unknown', sealedKey: share.sealed_key });
+      files.push({
+        ...toVaultFile(row, meta),
+        shareId: share.id,
+        ownerEmail: share.owner_email ?? 'unknown',
+        sealedKey: share.sealed_key,
+        shareExpiresAt: share.expires_at,
+      });
     } catch {
       undecryptable += 1;
     }
@@ -319,6 +374,7 @@ export async function downloadSharedFile(ctx: KeyContext, keys: UserKeyPair, fil
   const key = await openSealedFileKey(keys.privateKey, keys.publicKey, file.sealedKey, file.id, ctx.userId);
   const plain = await decryptFileContent(key, file.id, await downloadObject(file.storagePath), file.chunkSize);
   saveToDisk(plain, file.meta.name);
+  logClientEvent('file.shared_downloaded', { type: 'file', id: file.id });
 }
 
 /* ------------------------------------------------------------------ transfers */
@@ -326,11 +382,9 @@ export async function downloadSharedFile(ctx: KeyContext, keys: UserKeyPair, fil
 export async function createTransfer(
   ctx: KeyContext,
   file: File,
-  options: { days: number; maxDownloads: number; password: string | null },
+  options: { hours: number; maxDownloads: number; password: string | null },
 ): Promise<{ link: string; transfer: Transfer; file: VaultFile }> {
-  const days = Math.min(Math.max(Math.trunc(options.days), 1), TRANSFER_MAX_DAYS);
-  // A little under the limit so the server-side check (created_at + 7 days) always passes.
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+  const expiresAt = expiryFromHours(Math.max(1, Math.trunc(options.hours)));
   const { file: uploaded, fileKey } = await uploadEncrypted(ctx, file, 'transfer', expiresAt);
 
   const id = crypto.randomUUID();

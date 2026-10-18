@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fromBase64, toBase64 } from './encoding'
+import { fromBase32, fromBase64, toBase32, toBase64 } from './encoding'
 import {
   VaultCryptoError,
+  disableRecoveryKey,
+  enableRecoveryKey,
+  hasRecoveryKey,
+  resetPasswordWithRecoveryKey,
+  unlockWithRecoveryKey,
   changeMasterPassword,
   createVault,
   decryptEntry,
@@ -123,5 +128,62 @@ describe('entry encryption', () => {
     const { dek } = await createVault('Master-Password-123!')
     expect(dek.extractable).toBe(false)
     await expect(crypto.subtle.exportKey('raw', dek)).rejects.toBeDefined()
+  })
+})
+
+describe('optional recovery key', () => {
+  it('base32 round-trips and rejects invalid input', () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32))
+    expect(fromBase32(toBase32(bytes))).toEqual(bytes)
+    expect(() => fromBase32('not*valid')).toThrow()
+  })
+
+  it('is off by default', async () => {
+    const { profile } = await createVault('Master-Password-123!')
+    expect(hasRecoveryKey(profile)).toBe(false)
+    await expect(unlockWithRecoveryKey(profile, 'AAAA')).rejects.toBeInstanceOf(VaultCryptoError)
+  })
+
+  it('requires the master password to enable', async () => {
+    const { profile } = await createVault('Master-Password-123!')
+    await expect(enableRecoveryKey(profile, 'wrong')).rejects.toBeInstanceOf(VaultCryptoError)
+  })
+
+  it('unlocks and resets the master password, keeping entries valid', async () => {
+    const { profile, dek } = await createVault('Master-Password-123!')
+    const blob = await encryptEntry(dek, USER, ENTRY, item)
+    const { profile: withRecovery, recoveryKey } = await enableRecoveryKey(profile, 'Master-Password-123!')
+    expect(recoveryKey).toMatch(/^([A-Z2-7]{4}-){12}[A-Z2-7]{4}$/)
+    expect(hasRecoveryKey(withRecovery)).toBe(true)
+
+    const viaRecovery = await unlockWithRecoveryKey(withRecovery, recoveryKey.toLowerCase())
+    expect(await decryptEntry(viaRecovery, USER, ENTRY, blob)).toEqual(item)
+
+    const reset = await resetPasswordWithRecoveryKey(withRecovery, recoveryKey, 'Brand-New-Password-789!')
+    await expect(unlockWithPassword(reset, 'Master-Password-123!')).rejects.toBeInstanceOf(VaultCryptoError)
+    const unlocked = await unlockWithPassword(reset, 'Brand-New-Password-789!')
+    expect(await decryptEntry(unlocked, USER, ENTRY, blob)).toEqual(item)
+    // The recovery key keeps working after the reset.
+    await expect(unlockWithRecoveryKey(reset, recoveryKey)).resolves.toBeDefined()
+  })
+
+  it('regenerating invalidates the previous key; disabling removes it', async () => {
+    const { profile } = await createVault('Master-Password-123!')
+    const first = await enableRecoveryKey(profile, 'Master-Password-123!')
+    const second = await enableRecoveryKey(first.profile, 'Master-Password-123!')
+    expect(second.recoveryKey).not.toEqual(first.recoveryKey)
+    await expect(unlockWithRecoveryKey(second.profile, first.recoveryKey)).rejects.toBeInstanceOf(VaultCryptoError)
+    await expect(unlockWithRecoveryKey(second.profile, second.recoveryKey)).resolves.toBeDefined()
+
+    await expect(disableRecoveryKey(second.profile, 'wrong')).rejects.toBeInstanceOf(VaultCryptoError)
+    const off = await disableRecoveryKey(second.profile, 'Master-Password-123!')
+    expect(hasRecoveryKey(off)).toBe(false)
+    await expect(unlockWithRecoveryKey(off, second.recoveryKey)).rejects.toBeInstanceOf(VaultCryptoError)
+  })
+
+  it('rejects a recovery key from another vault', async () => {
+    const a = await enableRecoveryKey((await createVault('Master-Password-123!')).profile, 'Master-Password-123!')
+    const b = await enableRecoveryKey((await createVault('Master-Password-123!')).profile, 'Master-Password-123!')
+    await expect(unlockWithRecoveryKey(a.profile, b.recoveryKey)).rejects.toBeInstanceOf(VaultCryptoError)
   })
 })

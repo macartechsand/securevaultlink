@@ -6,10 +6,16 @@ import {
   changeMasterPassword,
   createVault,
   decryptEntry,
+  disableRecoveryKey,
+  enableRecoveryKey,
   encryptEntry,
+  hasRecoveryKey,
+  resetPasswordWithRecoveryKey,
   unlockWithPassword,
+  unlockWithRecoveryKey,
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
+import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
 import * as mfa from '../services/mfaService';
@@ -52,6 +58,7 @@ export function useVaultSession() {
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [undecryptable, setUndecryptable] = useState(0);
   const [loadError, setLoadError] = useState('');
+  const [hasRecovery, setHasRecovery] = useState(false);
   const dekRef = useRef<CryptoKey | null>(null);
   const keyPairRef = useRef<Promise<UserKeyPair> | null>(null);
   const profileRef = useRef<VaultProfile | null>(null);
@@ -65,6 +72,7 @@ export function useVaultSession() {
   }, []);
 
   const lock = useCallback(() => {
+    if (dekRef.current) logClientEvent('vault.locked');
     clearSecrets();
     setStatus((current) => (current === 'unlocked' ? 'locked' : current));
   }, [clearSecrets]);
@@ -95,6 +103,7 @@ export function useVaultSession() {
         }
         const profile = await vault.fetchProfile();
         profileRef.current = profile;
+        setHasRecovery(profile ? hasRecoveryKey(profile) : false);
         setStatus(profile ? 'locked' : 'needs-setup');
       } catch (error) {
         // Never fall back to "locked"/"needs-setup" on failure: show the real problem instead.
@@ -187,7 +196,7 @@ export function useVaultSession() {
     await auth.signOut();
   }, [resetAll]);
 
-  /** Creates the vault. There is no recovery: the master password is the only key. */
+  /** Creates the vault. Recovery is opt-in later (Settings). */
   const setupVault = useCallback(
     async (masterPassword: string) => {
       const problem = validateMasterPassword(masterPassword);
@@ -204,15 +213,59 @@ export function useVaultSession() {
     async (masterPassword: string) => {
       const profile = profileRef.current;
       if (!profile) throw new Error('No vault found.');
+      let dek: CryptoKey;
       try {
-        await finishUnlock(await unlockWithPassword(profile, masterPassword));
+        dek = await unlockWithPassword(profile, masterPassword);
       } catch (error) {
         dekRef.current = null;
+        logClientEvent('vault.unlock_failed');
         throw new Error(message(error, 'Could not unlock the vault.'));
       }
+      await finishUnlock(dek);
+      logClientEvent('vault.unlocked');
     },
     [finishUnlock],
   );
+
+  /** Resets the master password with the recovery key, then unlocks. */
+  const recover = useCallback(
+    async (recoveryKey: string, newMasterPassword: string) => {
+      const profile = profileRef.current;
+      const current = userRef.current;
+      if (!profile || !current) throw new Error('No vault found.');
+      const problem = validateMasterPassword(newMasterPassword);
+      if (problem) throw new Error(problem);
+      const dek = await unlockWithRecoveryKey(profile, recoveryKey);
+      const next = await resetPasswordWithRecoveryKey(profile, recoveryKey, newMasterPassword);
+      await vault.updateProfile(current.id, next);
+      profileRef.current = next;
+      await finishUnlock(dek);
+      logClientEvent('vault.recovered');
+    },
+    [finishUnlock],
+  );
+
+  /** Turns on or regenerates the recovery key. Returns it once; it is never stored. */
+  const enableRecovery = useCallback(async (masterPassword: string) => {
+    const profile = profileRef.current;
+    const current = userRef.current;
+    if (!profile || !current) throw new Error('No vault found.');
+    const { profile: next, recoveryKey } = await enableRecoveryKey(profile, masterPassword);
+    await vault.updateProfile(current.id, next);
+    profileRef.current = next;
+    setHasRecovery(true);
+    return recoveryKey;
+  }, []);
+
+  const disableRecovery = useCallback(async (masterPassword: string) => {
+    const profile = profileRef.current;
+    const current = userRef.current;
+    if (!profile || !current) throw new Error('No vault found.');
+    const next = await disableRecoveryKey(profile, masterPassword);
+    await vault.updateProfile(current.id, next);
+    profileRef.current = next;
+    setHasRecovery(false);
+  }, []);
 
   const verifyMfa = useCallback(
     async (code: string) => {
@@ -300,6 +353,10 @@ export function useVaultSession() {
     signOut,
     setupVault,
     unlock,
+    recover,
+    hasRecovery,
+    enableRecovery,
+    disableRecovery,
     verifyMfa,
     changePassword,
     lock,

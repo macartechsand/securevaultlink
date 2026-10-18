@@ -1,4 +1,5 @@
-// Supabase Edge Function: removes expired transfers and abandoned/rejected uploads.
+// Supabase Edge Function: removes expired transfers, expired shares, abandoned/rejected uploads,
+// and audit events older than 365 days.
 // Intended to run on a schedule (e.g. hourly via Supabase Cron calling this URL).
 // Protected by a shared secret header, not by user JWT.
 //
@@ -44,6 +45,12 @@ Deno.serve(async (req) => {
     add((await admin.from('vault_files').select('id, storage_path').eq('kind', 'transfer').in('id', spentIds.slice(0, BATCH))).data)
   }
 
+  // Expired user-to-user shares (recipients already lose access at expiry through RLS).
+  const sharesRemoved = (await admin.from('file_shares').delete().lte('expires_at', now.toISOString()).select('id')).data?.length ?? 0
+  // Audit retention: 365 days.
+  const auditCutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString()
+  await admin.from('audit_events').delete().lt('created_at', auditCutoff)
+
   let removed = 0
   const entries = [...targets.entries()]
   for (let i = 0; i < entries.length; i += BATCH) {
@@ -54,5 +61,5 @@ Deno.serve(async (req) => {
     removed += chunk.length
   }
 
-  return new Response(JSON.stringify({ removed }), { headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify({ removed, sharesRemoved }), { headers: { 'Content-Type': 'application/json' } })
 })

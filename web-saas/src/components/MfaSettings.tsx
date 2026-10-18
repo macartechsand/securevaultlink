@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { logClientEvent } from '../services/auditService';
 import { enrollTotp, listVerifiedTotpFactors, type TotpFactor, unenrollTotp, verifyTotp } from '../services/mfaService';
 
 export function MfaSettings() {
@@ -39,6 +40,7 @@ export function MfaSettings() {
     if (!enrollment) return;
     void run(async () => {
       await verifyTotp(enrollment.factorId, code);
+      logClientEvent('mfa.enrolled');
       setEnrollment(null);
       setCode('');
       setInfo('Two-factor authentication is on. You will need a code from your authenticator at every sign-in.');
@@ -100,6 +102,7 @@ export function MfaSettings() {
               if (!window.confirm('Turn off two-factor authentication?')) return;
               void run(async () => {
                 for (const f of factors ?? []) await unenrollTotp(f.id);
+                logClientEvent('mfa.disabled');
                 setInfo('Two-factor authentication is off.');
                 await refresh();
               });

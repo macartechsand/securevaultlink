@@ -7,10 +7,11 @@ import {
   type Transfer,
   type UserKeyPair,
   type VaultFile,
-  MAX_FILE_BYTES,
-  QUOTA_BYTES,
-  TRANSFER_MAX_DAYS,
+  FREE_LIMITS,
+  type PlanLimits,
   createTransfer,
+  expiryFromHours,
+  fetchPlanLimits,
   deleteFile,
   downloadOwnFile,
   downloadSharedFile,
@@ -41,6 +42,27 @@ export function formatBytes(n: number) {
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.');
 
+/** Durations offered for shares and transfers; the server enforces the plan limit regardless. */
+export function durationOptions(maxHours: number) {
+  const all = [
+    { hours: 1, label: '1 hour' },
+    { hours: 24, label: '24 hours' },
+    { hours: 48, label: '48 hours' },
+    { hours: 72, label: '3 days' },
+    { hours: 24 * 7, label: '7 days' },
+    { hours: 24 * 30, label: '30 days' },
+  ];
+  return all.filter((o) => o.hours <= maxHours);
+}
+
+export function formatExpiry(iso: string | null) {
+  if (!iso) return 'no expiry';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return 'expired';
+  const hours = Math.round(ms / 3_600_000);
+  return hours < 48 ? `expires in ${Math.max(hours, 1)} h` : `expires ${new Date(iso).toLocaleDateString()}`;
+}
+
 export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
   const [tab, setTab] = useState<Tab>('vault');
   const [own, setOwn] = useState<VaultFile[]>([]);
@@ -52,6 +74,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [sharing, setSharing] = useState<VaultFile | null>(null);
+  const [limits, setLimits] = useState<PlanLimits>(FREE_LIMITS);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +82,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
     try {
       const ctx = getKeyContext();
       const keys = await getKeyPair();
+      setLimits(await fetchPlanLimits());
       const [mine, sharedWithMe] = await Promise.all([listOwnFiles(ctx), listSharedWithMe(ctx, keys)]);
       setOwn(mine.files);
       setShared(sharedWithMe.files);
@@ -96,7 +120,8 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
     event.target.value = '';
     if (!file) return;
     void run(`Encrypting and uploading ${file.name}…`, async () => {
-      if (used + file.size > QUOTA_BYTES) throw new Error('Not enough space left on the free plan.');
+      if (file.size > limits.maxFileBytes) throw new Error(`Files can have at most ${formatBytes(limits.maxFileBytes)}.`);
+      if (used + file.size > limits.quotaBytes) throw new Error('Not enough space left on your plan.');
       const added = await uploadVaultFile(getKeyContext(), file);
       setOwn((list) => [added, ...list]);
     });
@@ -110,11 +135,11 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
           <h3>Files</h3>
         </div>
         <span className="mini-tag">
-          {formatBytes(used)} of {formatBytes(QUOTA_BYTES)} used
+          {formatBytes(used)} of {formatBytes(limits.quotaBytes)} used
         </span>
       </div>
       <div className="progress-bar" aria-hidden="true">
-        <span className={`usage-${Math.min(10, Math.ceil((used / QUOTA_BYTES) * 10))}`} />
+        <span className={`usage-${Math.min(10, Math.ceil((used / limits.quotaBytes) * 10))}`} />
       </div>
 
       <div className="tab-row" role="tablist">
@@ -139,7 +164,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
       {!loading && tab === 'vault' && (
         <>
           <label className="primary-button file-pick">
-            Upload file (max {formatBytes(MAX_FILE_BYTES)})
+            Upload file (max {formatBytes(limits.maxFileBytes)})
             <input type="file" onChange={onUpload} disabled={Boolean(busy)} hidden />
           </label>
           <p className="subheadline">Files are encrypted on this device before upload. Only you (and people you share with) can open them.</p>
@@ -183,7 +208,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
           <FileList
             files={shared}
             empty="Nothing has been shared with you yet."
-            detail={(file) => `from ${(file as SharedFile).ownerEmail}`}
+            detail={(file) => `from ${(file as SharedFile).ownerEmail} · ${formatExpiry((file as SharedFile).shareExpiresAt)}`}
             actions={(file) => (
               <>
                 <button
@@ -216,11 +241,13 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
       {!loading && tab === 'transfers' && (
         <TransfersTab
           transfers={transfers}
+          limits={limits}
           busy={Boolean(busy)}
           onCreate={async (file, options) => {
             let link = '';
             await run(`Encrypting and uploading ${file.name}…`, async () => {
-              if (used + file.size > QUOTA_BYTES) throw new Error('Not enough space left on the free plan.');
+              if (file.size > limits.maxFileBytes) throw new Error(`Files can have at most ${formatBytes(limits.maxFileBytes)}.`);
+              if (used + file.size > limits.quotaBytes) throw new Error('Not enough space left on your plan.');
               const result = await createTransfer(getKeyContext(), file, options);
               link = result.link;
               setTransfers((list) => [result.transfer, ...list]);
@@ -237,7 +264,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
         />
       )}
 
-      {sharing && <ShareDialog file={sharing} getKeyContext={getKeyContext} onClose={() => setSharing(null)} />}
+      {sharing && <ShareDialog file={sharing} limits={limits} getKeyContext={getKeyContext} onClose={() => setSharing(null)} />}
     </div>
   );
 }
@@ -283,8 +310,21 @@ function FileList({
   );
 }
 
-function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKeyContext: () => KeyContext; onClose: () => void }) {
+function ShareDialog({
+  file,
+  limits,
+  getKeyContext,
+  onClose,
+}: {
+  file: VaultFile;
+  limits: PlanLimits;
+  getKeyContext: () => KeyContext;
+  onClose: () => void;
+}) {
   const [email, setEmail] = useState('');
+  const options = durationOptions(limits.maxShareHours);
+  // 0 = no expiry (premium only).
+  const [hours, setHours] = useState(Math.min(48, limits.maxShareHours));
   const [candidate, setCandidate] = useState<{ userId: string; publicKey: string; fingerprint: string } | null>(null);
   const [shares, setShares] = useState<FileShare[]>([]);
   const [error, setError] = useState('');
@@ -344,6 +384,18 @@ function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKey
               Recipient email (must have a SecureVault account)
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </label>
+            <label>
+              Access expires after
+              <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+                {options.map((o) => (
+                  <option key={o.hours} value={o.hours}>
+                    {o.label}
+                  </option>
+                ))}
+                {limits.plan === 'premium' && <option value={0}>No expiry</option>}
+              </select>
+            </label>
+            {limits.plan === 'free' && <p className="subheadline">Free plan: shares last up to 48 hours. Premium allows custom durations.</p>}
             <div className="form-actions">
               <button type="submit" className="primary-button" disabled={busy}>
                 Find
@@ -364,8 +416,8 @@ function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKey
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
-                    await shareFile(getKeyContext(), file, candidate);
-                    setInfo(`Shared with ${email}.`);
+                    await shareFile(getKeyContext(), file, candidate, hours === 0 ? null : expiryFromHours(hours));
+                    setInfo(`Shared with ${email} (${hours === 0 ? 'no expiry' : options.find((o) => o.hours === hours)?.label}).`);
                     setCandidate(null);
                     setEmail('');
                     await refresh();
@@ -391,7 +443,9 @@ function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKey
           <ul className="share-list">
             {shares.map((s) => (
               <li key={s.id}>
-                {s.recipientEmail ?? s.recipientId}
+                <span>
+                  {s.recipientEmail ?? s.recipientId} <small className="file-detail">{formatExpiry(s.expiresAt)}</small>
+                </span>
                 <button
                   type="button"
                   className="ghost-button"
@@ -417,17 +471,20 @@ function ShareDialog({ file, getKeyContext, onClose }: { file: VaultFile; getKey
 
 function TransfersTab({
   transfers,
+  limits,
   busy,
   onCreate,
   onRevoke,
 }: {
   transfers: Transfer[];
+  limits: PlanLimits;
   busy: boolean;
-  onCreate: (file: File, options: { days: number; maxDownloads: number; password: string | null }) => Promise<string>;
+  onCreate: (file: File, options: { hours: number; maxDownloads: number; password: string | null }) => Promise<string>;
   onRevoke: (t: Transfer) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const [days, setDays] = useState(3);
+  const options = durationOptions(limits.maxTransferHours);
+  const [hours, setHours] = useState(Math.min(48, limits.maxTransferHours));
   const [maxDownloads, setMaxDownloads] = useState(3);
   const [password, setPassword] = useState('');
   const [link, setLink] = useState('');
@@ -437,7 +494,7 @@ function TransfersTab({
     event.preventDefault();
     if (!file) return;
     setLink('');
-    const result = await onCreate(file, { days, maxDownloads, password: password || null });
+    const result = await onCreate(file, { hours, maxDownloads, password: password || null });
     if (result) {
       setLink(result);
       setFile(null);
@@ -450,12 +507,19 @@ function TransfersTab({
     <>
       <form className="form-grid" onSubmit={submit}>
         <label>
-          File to send (max {formatBytes(MAX_FILE_BYTES)})
+          File to send (max {formatBytes(limits.maxFileBytes)})
           <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
         </label>
         <label>
-          Expires after (days, max {TRANSFER_MAX_DAYS})
-          <input type="number" min={1} max={TRANSFER_MAX_DAYS} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+          Link expires after
+          <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+            {options.map((o) => (
+              <option key={o.hours} value={o.hours}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {limits.plan === 'free' && <small className="file-detail">Free plan: up to 48 hours. Premium allows longer links.</small>}
         </label>
         <label>
           Maximum downloads (1–20)

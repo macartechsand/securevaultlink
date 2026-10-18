@@ -158,10 +158,11 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     created.push(other)
 
     // B cannot create a share for A's file.
-    const forged = await b.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, owner_id: a.userId, sealed_key: 'x' })
+    const inOneHour = new Date(Date.now() + 3600_000).toISOString()
+    const forged = await b.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, owner_id: a.userId, sealed_key: 'x', expires_at: inOneHour })
     expect(forged.error).not.toBeNull()
 
-    const share = await a.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, sealed_key: 'c2VhbGVk' }).select('id, owner_email, recipient_email').single()
+    const share = await a.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, sealed_key: 'c2VhbGVk', expires_at: inOneHour }).select('id, owner_email, recipient_email').single()
     expect(share.error).toBeNull()
     expect(share.data?.owner_email).toBe(env.TEST_USER_A_EMAIL)
     expect(share.data?.recipient_email).toBe(env.TEST_USER_B_EMAIL)
@@ -206,13 +207,13 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     expect((await a.client.rpc('claim_transfer_download', { p_id: id })).error).not.toBeNull()
     expect((await newClient().rpc('claim_transfer_download', { p_id: id })).error).not.toBeNull()
 
-    // Expiry longer than 7 days is refused.
+    // Free plan: transfers longer than 48 hours are refused.
     const tooLong = await a.client.from('transfers').insert({
       id: crypto.randomUUID(),
       file_id: file.id,
       wrapped_key: 'x',
       max_downloads: 1,
-      expires_at: new Date(Date.now() + 8 * 24 * 3600_000).toISOString(),
+      expires_at: new Date(Date.now() + 49 * 3600_000).toISOString(),
     })
     expect(tooLong.error).not.toBeNull()
   })
@@ -222,5 +223,52 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     expect(self.data ?? []).toEqual([])
     const anon = await newClient().rpc('find_share_recipient', { p_email: env.TEST_USER_A_EMAIL })
     expect(anon.error).not.toBeNull()
+  })
+
+  it('free plan: shares must expire within 48 hours, and users cannot change their own plan', async () => {
+    const file = created[0]
+    const noExpiry = await a.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, sealed_key: 'x', expires_at: null })
+    expect(noExpiry.error).not.toBeNull()
+    const tooLong = await a.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, sealed_key: 'x', expires_at: new Date(Date.now() + 49 * 3600_000).toISOString() })
+    expect(tooLong.error).not.toBeNull()
+
+    const limits = await a.client.rpc('my_plan_limits')
+    expect(limits.data?.[0]).toMatchObject({ plan: 'free', max_share_hours: 48, max_transfer_hours: 48 })
+
+    expect((await a.client.from('user_plans').insert({ user_id: a.userId, plan: 'premium' })).error).not.toBeNull()
+    expect((await a.client.from('user_plans').update({ plan: 'premium' }).eq('user_id', a.userId)).error).not.toBeNull()
+  })
+
+  it('audit log: events are recorded server-side, private per user, and append-only', async () => {
+    const file = created[0]
+    const inOneHour = new Date(Date.now() + 3600_000).toISOString()
+    const share = await a.client.from('file_shares').insert({ file_id: file.id, recipient_id: b.userId, sealed_key: 'x', expires_at: inOneHour }).select('id').single()
+    expect(share.error).toBeNull()
+
+    const own = await a.client.from('audit_events').select('event, user_id, source, details').eq('target_id', file.id).eq('event', 'file.shared')
+    expect(own.data?.length).toBeGreaterThan(0)
+    expect(own.data?.[0]).toMatchObject({ user_id: a.userId, source: 'server' })
+    expect(JSON.stringify(own.data)).not.toContain('sealed')
+
+    const received = await b.client.from('audit_events').select('event').eq('target_id', file.id).eq('event', 'file.received')
+    expect(received.data?.length).toBeGreaterThan(0)
+
+    // B cannot see A's events.
+    const peek = await b.client.from('audit_events').select('id').eq('user_id', a.userId)
+    expect(peek.data ?? []).toEqual([])
+
+    // No direct writes, edits or deletes.
+    expect((await a.client.from('audit_events').insert({ user_id: a.userId, event: 'vault.created' })).error).not.toBeNull()
+    await a.client.from('audit_events').delete().eq('user_id', a.userId)
+    expect((await a.client.from('audit_events').select('id').eq('user_id', a.userId)).data?.length).toBeGreaterThan(0)
+
+    // Client events: allow-listed only, attributed to the caller, marked as client.
+    expect((await a.client.rpc('log_client_event', { p_event: 'vault.unlocked' })).error).toBeNull()
+    expect((await a.client.rpc('log_client_event', { p_event: 'admin.everything_ok' })).error).not.toBeNull()
+    expect((await newClient().rpc('log_client_event', { p_event: 'vault.unlocked' })).error).not.toBeNull()
+    const clientEvent = await a.client.from('audit_events').select('source, user_id').eq('event', 'vault.unlocked').order('created_at', { ascending: false }).limit(1)
+    expect(clientEvent.data?.[0]).toEqual({ source: 'client', user_id: a.userId })
+
+    await a.client.from('file_shares').delete().eq('id', share.data!.id)
   })
 })

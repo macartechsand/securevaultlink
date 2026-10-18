@@ -1,14 +1,26 @@
 import { type FormEvent, useState } from 'react';
 import { MfaSettings } from './MfaSettings';
+import { RecoverySettings } from './RecoverySettings';
 
 type SettingsProps = {
   email: string;
   idleMinutes: number;
   onChangePassword: (current: string, next: string) => Promise<void>;
   onLock: () => void;
+  recoveryEnabled: boolean;
+  onEnableRecovery: (masterPassword: string) => Promise<string>;
+  onDisableRecovery: (masterPassword: string) => Promise<void>;
 };
 
-export function Settings({ email, idleMinutes, onChangePassword, onLock }: SettingsProps) {
+export function Settings({
+  email,
+  idleMinutes,
+  onChangePassword,
+  onLock,
+  recoveryEnabled,
+  onEnableRecovery,
+  onDisableRecovery,
+}: SettingsProps) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [error, setError] = useState('');
@@ -35,6 +47,7 @@ export function Settings({ email, idleMinutes, onChangePassword, onLock }: Setti
   return (
     <div className="settings-grid">
       <MfaSettings />
+      <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
       <div className="panel">
         <div className="panel-head">
           <div>
@@ -74,7 +87,9 @@ export function Settings({ email, idleMinutes, onChangePassword, onLock }: Setti
           </div>
         </form>
         <p className="notice warning">
-          There is no recovery: if you forget your master password, your vault cannot be decrypted by anyone.
+          {recoveryEnabled
+            ? 'If you forget your master password, use your recovery key on the unlock screen.'
+            : 'Without a recovery key, a forgotten master password means nobody can decrypt your vault.'}
         </p>
       </div>
     </div>

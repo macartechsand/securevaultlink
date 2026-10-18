@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import './App.css';
+import { ActivityView } from './components/ActivityView';
 import { AuthScreen } from './components/AuthScreen';
 import { EntryForm } from './components/EntryForm';
 import { FilesView } from './components/FilesView';
@@ -155,6 +156,8 @@ function VaultApp() {
               email={user?.email ?? ''}
               onSetup={session.setupVault}
               onUnlock={session.unlock}
+              hasRecovery={session.hasRecovery}
+              onRecover={session.recover}
               onSignOut={() => void session.signOut()}
             />
           )}
@@ -326,12 +329,17 @@ function VaultApp() {
 
         {activeView === 'generator' && <Generator />}
 
+        {activeView === 'activity' && <ActivityView />}
+
         {activeView === 'settings' && (
           <Settings
             email={user?.email ?? ''}
             idleMinutes={IDLE_LOCK_MS / 60000}
             onChangePassword={session.changePassword}
             onLock={session.lock}
+            recoveryEnabled={session.hasRecovery}
+            onEnableRecovery={session.enableRecovery}
+            onDisableRecovery={session.disableRecovery}
           />
         )}
       </main>

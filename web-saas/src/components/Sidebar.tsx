@@ -8,6 +8,7 @@ const navItems = [
   { key: 'vault', label: 'Vault' },
   { key: 'files', label: 'Files' },
   { key: 'generator', label: 'Generator' },
+  { key: 'activity', label: 'Activity' },
   { key: 'settings', label: 'Settings' },
 ];
 
