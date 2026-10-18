@@ -91,3 +91,32 @@ export const resetUserMfa = (userId: string) => callAdmin<{ ok: boolean; removed
 export const suspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ action: 'suspend', userId });
 export const unsuspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ action: 'unsuspend', userId });
 export const systemHealth = () => callAdmin<{ checks: Record<string, boolean | null> }>({ action: 'health' });
+
+/* ------------------------------------------------------------------ closed beta */
+
+export type BetaSettings = {
+  settings: Record<string, string>;
+  users: number;
+  invites: { email: string; note: string | null; created_at: string; registered: boolean }[];
+};
+
+export async function fetchBetaSettings(): Promise<BetaSettings> {
+  const { data, error } = await supabase.rpc('admin_get_settings');
+  if (error) throw new Error(error.message);
+  return data as BetaSettings;
+}
+
+export async function setSetting(key: string, value: string) {
+  const { error } = await supabase.rpc('admin_set_setting', { p_key: key, p_value: value });
+  if (error) throw new Error(error.message);
+}
+
+export async function inviteEmail(email: string, note: string) {
+  const { error } = await supabase.rpc('admin_invite', { p_email: email, p_note: note || null });
+  if (error) throw new Error(error.message);
+}
+
+export async function uninviteEmail(email: string) {
+  const { error } = await supabase.rpc('admin_uninvite', { p_email: email });
+  if (error) throw new Error(error.message);
+}

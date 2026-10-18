@@ -60,7 +60,7 @@ async function createReadyFile(owner: { client: SupabaseClient; userId: string }
   if (insert.error) throw new Error(`insert failed: ${insert.error.message}`)
   const upload = await owner.client.storage
     .from(BUCKET)
-    .upload(path, new Blob([BODY], { type: 'application/octet-stream' }), { contentType: 'application/octet-stream' })
+    .upload(path, new Blob([BODY], { type: 'application/octet-stream' }), { contentType: 'application/octet-stream', cacheControl: '0' })
   if (upload.error) throw new Error(`upload failed: ${upload.error.message}`)
   const fin = await owner.client.rpc('finalize_vault_file', { p_file_id: id })
   if (fin.error || fin.data !== 'ready') throw new Error(`finalize failed: ${fin.error?.message ?? fin.data}`)
@@ -108,11 +108,11 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
   it("a user cannot upload into someone else's folder or skip the pending row", async () => {
     const foreign = await b.client.storage
       .from(BUCKET)
-      .upload(`${a.userId}/${crypto.randomUUID()}`, new Blob([BODY]), { contentType: 'application/octet-stream' })
+      .upload(`${a.userId}/${crypto.randomUUID()}`, new Blob([BODY]), { contentType: 'application/octet-stream', cacheControl: '0' })
     expect(foreign.error).not.toBeNull()
     const orphan = await b.client.storage
       .from(BUCKET)
-      .upload(`${b.userId}/${crypto.randomUUID()}`, new Blob([BODY]), { contentType: 'application/octet-stream' })
+      .upload(`${b.userId}/${crypto.randomUUID()}`, new Blob([BODY]), { contentType: 'application/octet-stream', cacheControl: '0' })
     expect(orphan.error).not.toBeNull()
   })
 
@@ -147,7 +147,7 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     const path = `${a.userId}/${id}`
     created.push({ id, path })
     await a.client.from('vault_files').insert({ id, kind: 'vault', chunk_size: 1048576, size_bytes: 16, encrypted_meta: 'x', wrapped_key: 'x', storage_path: path })
-    await a.client.storage.from(BUCKET).upload(path, new Blob([BODY]), { contentType: 'application/octet-stream' })
+    await a.client.storage.from(BUCKET).upload(path, new Blob([BODY]), { contentType: 'application/octet-stream', cacheControl: '0' })
     const fin = await a.client.rpc('finalize_vault_file', { p_file_id: id })
     expect(fin.data).toBe('rejected')
   })
@@ -179,8 +179,12 @@ describe.skipIf(!configured)('file vault isolation (dev project)', () => {
     await b.client.storage.from(BUCKET).remove([file.path])
     expect((await a.client.storage.from(BUCKET).download(file.path)).error).toBeNull()
 
-    await a.client.from('file_shares').delete().eq('id', share.data!.id)
-    expect((await b.client.storage.from(BUCKET).download(file.path)).data).toBeNull()
+    const revoke = await a.client.from('file_shares').delete().eq('id', share.data!.id).select('id')
+    expect(revoke.error).toBeNull()
+    expect(revoke.data).toEqual([{ id: share.data!.id }])
+    // The app downloads through freshly signed URLs; after revoking, signing must fail immediately.
+    const afterRevoke = await b.client.storage.from(BUCKET).createSignedUrl(file.path, 60)
+    expect(afterRevoke.data?.signedUrl).toBeUndefined()
   })
 
   it('transfers are private to the owner and downloads are only claimable by the backend', async () => {

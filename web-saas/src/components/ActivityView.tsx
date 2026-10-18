@@ -41,6 +41,9 @@ const LABELS: Record<string, string> = {
   'admin.sessions_revoked': 'Sessões encerradas por um administrador',
   'admin.user_suspended': 'Conta suspensa por um administrador',
   'admin.user_unsuspended': 'Conta reativada por um administrador',
+  'admin.setting_changed': 'Configuração da plataforma alterada',
+  'admin.invited': 'E-mail convidado para o beta',
+  'admin.uninvited': 'Convite do beta removido',
 };
 
 const SENSITIVE = new Set(['admin.mfa_reset', 'admin.user_suspended', 'admin.sessions_revoked', 'vault.unlock_failed', 'vault.recovered', 'vault.recovery_disabled', 'mfa.disabled', 'file.upload_rejected']);

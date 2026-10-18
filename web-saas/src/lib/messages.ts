@@ -6,6 +6,9 @@ const EXACT: Record<string, string> = {
   'Invalid login credentials': 'E-mail ou senha da conta incorretos.',
   'Email not confirmed': 'Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).',
   'User already registered': 'Já existe uma conta com este e-mail.',
+  // The closed-beta trigger rejects the insert; Supabase Auth reports it generically.
+  'Database error saving new user':
+    'Cadastro indisponível: o acesso está restrito a convidados ou as vagas do beta acabaram. Fale com o administrador.',
   'Wrong master password': 'Senha mestra incorreta.',
   'Wrong recovery key': 'Chave de recuperação incorreta.',
   'Invalid recovery key': 'Chave de recuperação inválida. Confira se copiou todos os grupos.',

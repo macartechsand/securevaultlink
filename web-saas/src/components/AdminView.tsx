@@ -15,6 +15,7 @@ import {
   unsuspendUser,
   userEvents,
 } from '../services/adminService';
+import { BetaAdminTab } from './BetaAdminTab';
 import { StatCard } from './StatCard';
 import { Icon } from './ui/Icon';
 
@@ -32,7 +33,7 @@ const HEALTH_LABELS: Record<string, string> = {
 };
 
 export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
-  const [tab, setTab] = useState<'overview' | 'users' | 'health'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'beta' | 'health'>('overview');
   const [error, setError] = useState('');
 
   if (!status.mfaOk) {
@@ -59,6 +60,7 @@ export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
           [
             ['overview', 'Visão geral'],
             ['users', 'Usuários'],
+            ['beta', 'Beta e limites'],
             ['health', 'Saúde do sistema'],
           ] as const
         ).map(([key, label]) => (
@@ -70,6 +72,7 @@ export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
       {error && <div className="alert alert--error">{error}</div>}
       {tab === 'overview' && <OverviewTab onError={setError} />}
       {tab === 'users' && <UsersTab canAct={status.role === 'admin'} onError={setError} />}
+      {tab === 'beta' && <BetaAdminTab canAct={status.role === 'admin'} />}
       {tab === 'health' && <HealthTab onError={setError} />}
     </div>
   );

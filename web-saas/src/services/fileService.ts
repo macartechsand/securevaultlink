@@ -195,9 +195,14 @@ async function downloadObject(file: { id: string; storagePath: string; backend: 
     if (!res.ok) fail('Falha ao baixar o arquivo', { message: `HTTP ${res.status}` });
     return new Uint8Array(await res.arrayBuffer());
   }
-  const { data, error } = await supabase.storage.from(BUCKET).download(file.storagePath);
-  if (error || !data) fail('Falha ao baixar o arquivo', error);
-  return new Uint8Array(await data!.arrayBuffer());
+  // Always through a fresh signed URL: the permission check happens when the URL is signed. The plain
+  // authenticated download endpoint can keep serving a cached response for a few seconds after a share
+  // is revoked (measured on Supabase Storage), so it is not used.
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(file.storagePath, 60);
+  if (error || !data?.signedUrl) fail('Falha ao baixar o arquivo', error);
+  const res = await fetch(data!.signedUrl, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
+  if (!res.ok) fail('Falha ao baixar o arquivo', { message: `HTTP ${res.status}` });
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 async function putObject(backend: StorageBackend, id: string, storagePath: string, ciphertext: Uint8Array<ArrayBuffer>) {
@@ -208,7 +213,10 @@ async function putObject(backend: StorageBackend, id: string, storagePath: strin
     if (!res.ok) fail('Falha ao enviar o arquivo', { message: `HTTP ${res.status}` });
     return;
   }
-  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, blob, { contentType: 'application/octet-stream', upsert: false });
+  // No caching anywhere: revoking a share must take effect immediately (default would be max-age=3600).
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, blob, { contentType: 'application/octet-stream', upsert: false, cacheControl: '0' });
   if (error) fail('Falha ao enviar o arquivo', error);
 }
 

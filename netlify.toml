@@ -16,3 +16,5 @@
     Referrer-Policy = "no-referrer"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     Cross-Origin-Opener-Policy = "same-origin"
+    # Closed beta: keep the app out of search engines.
+    X-Robots-Tag = "noindex, nofollow"
