@@ -66,6 +66,8 @@ const fail = (action: string, error?: { message: string } | null): never => {
 export type KeyContext = { dek: CryptoKey; userId: string };
 export type UserKeyPair = { publicKey: string; privateKey: CryptoKey };
 
+export type StorageBackend = 'supabase' | 'r2';
+
 type FileRow = {
   id: string;
   owner_id: string;
@@ -76,6 +78,7 @@ type FileRow = {
   encrypted_meta: string;
   wrapped_key: string;
   storage_path: string;
+  storage_backend: StorageBackend;
   expires_at: string | null;
   created_at: string;
 };
@@ -87,6 +90,7 @@ export type VaultFile = {
   sizeBytes: number;
   chunkSize: number;
   storagePath: string;
+  backend: StorageBackend;
   createdAt: string;
   expiresAt: string | null;
 };
@@ -113,7 +117,7 @@ export type Transfer = {
 };
 
 const FILE_COLUMNS =
-  'id, owner_id, kind, status, chunk_size, size_bytes, encrypted_meta, wrapped_key, storage_path, expires_at, created_at';
+  'id, owner_id, kind, status, chunk_size, size_bytes, encrypted_meta, wrapped_key, storage_path, storage_backend, expires_at, created_at';
 
 /* ------------------------------------------------------------------ key pair */
 
@@ -145,15 +149,83 @@ function toVaultFile(row: FileRow, meta: FileMetadata): VaultFile {
     sizeBytes: row.size_bytes,
     chunkSize: row.chunk_size,
     storagePath: row.storage_path,
+    backend: row.storage_backend ?? 'supabase',
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   };
 }
 
-async function downloadObject(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+/* ------------------------------------------------------------------ storage backends */
+
+async function callR2<T>(body: { action: string; fileId?: string }): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('storage-r2', { body });
+  if (error) {
+    let message = 'O armazenamento Premium (R2) não respondeu.';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const payload = ctx ? await ctx.json() : null;
+      if (payload?.error) message = payload.error;
+    } catch {
+      /* keep default */
+    }
+    throw new FileServiceError(message);
+  }
+  return data as T;
+}
+
+let r2Available: Promise<boolean> | null = null;
+/** Whether the R2 backend is configured on the server (cached per page load). */
+export function isR2Available() {
+  r2Available ??= callR2<{ available: boolean }>({ action: 'status' })
+    .then((r) => Boolean(r.available))
+    .catch(() => false);
+  return r2Available;
+}
+
+/** Premium users store new files on Cloudflare R2 when it is configured; everyone else on Supabase Storage. */
+async function preferredBackend(): Promise<StorageBackend> {
+  const limits = await fetchPlanLimits();
+  return limits.plan === 'premium' && (await isR2Available()) ? 'r2' : 'supabase';
+}
+
+async function downloadObject(file: { id: string; storagePath: string; backend: StorageBackend }): Promise<Uint8Array<ArrayBuffer>> {
+  if (file.backend === 'r2') {
+    const { url } = await callR2<{ url: string }>({ action: 'download-url', fileId: file.id });
+    const res = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer' });
+    if (!res.ok) fail('Falha ao baixar o arquivo', { message: `HTTP ${res.status}` });
+    return new Uint8Array(await res.arrayBuffer());
+  }
+  const { data, error } = await supabase.storage.from(BUCKET).download(file.storagePath);
   if (error || !data) fail('Falha ao baixar o arquivo', error);
   return new Uint8Array(await data!.arrayBuffer());
+}
+
+async function putObject(backend: StorageBackend, id: string, storagePath: string, ciphertext: Uint8Array<ArrayBuffer>) {
+  const blob = new Blob([ciphertext], { type: 'application/octet-stream' });
+  if (backend === 'r2') {
+    const { url } = await callR2<{ url: string }>({ action: 'upload-url', fileId: id });
+    const res = await fetch(url, { method: 'PUT', body: blob, headers: { 'Content-Type': 'application/octet-stream' }, credentials: 'omit' });
+    if (!res.ok) fail('Falha ao enviar o arquivo', { message: `HTTP ${res.status}` });
+    return;
+  }
+  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, blob, { contentType: 'application/octet-stream', upsert: false });
+  if (error) fail('Falha ao enviar o arquivo', error);
+}
+
+async function finalizeObject(backend: StorageBackend, id: string): Promise<string> {
+  if (backend === 'r2') return (await callR2<{ status: string }>({ action: 'finalize', fileId: id })).status;
+  const { data, error } = await supabase.rpc('finalize_vault_file', { p_file_id: id });
+  if (error) fail('Falha ao verificar o envio', error);
+  return String(data);
+}
+
+async function removeObject(file: { id: string; storagePath: string; backend: StorageBackend }) {
+  if (file.backend === 'r2') {
+    await callR2({ action: 'delete', fileId: file.id });
+    return;
+  }
+  const { error } = await supabase.storage.from(BUCKET).remove([file.storagePath]);
+  if (error) fail('Falha ao excluir o arquivo', error);
 }
 
 /** Replaces path separators, reserved and control characters in a (decrypted, untrusted) file name. */
@@ -189,6 +261,7 @@ async function uploadEncrypted(
   const meta: FileMetadata = { name: file.name, type: file.type || 'application/octet-stream', size: file.size };
   const ciphertext = await encryptFileContent(fileKey, id, new Uint8Array(await file.arrayBuffer()));
   const storagePath = `${ctx.userId}/${id}`;
+  const backend = await preferredBackend();
 
   const { error: rowError } = await supabase.from('vault_files').insert({
     id,
@@ -198,26 +271,28 @@ async function uploadEncrypted(
     encrypted_meta: await encryptFileMetadata(fileKey, id, meta),
     wrapped_key: await wrapFileKeyForOwner(ctx.dek, ctx.userId, id, fileKey),
     storage_path: storagePath,
+    storage_backend: backend,
     expires_at: expiresAt,
   });
   if (rowError) fail('Falha ao preparar o envio', rowError);
 
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, new Blob([ciphertext], { type: 'application/octet-stream' }), {
-      contentType: 'application/octet-stream',
-      upsert: false,
-    });
-  if (uploadError) {
+  try {
+    await putObject(backend, id, storagePath, ciphertext);
+  } catch (err) {
     await supabase.from('vault_files').delete().eq('id', id);
-    fail('Falha ao enviar o arquivo', uploadError);
+    throw err;
   }
 
-  const { data: status, error: finalizeError } = await supabase.rpc('finalize_vault_file', { p_file_id: id });
-  if (finalizeError || status !== 'ready') {
-    await supabase.storage.from(BUCKET).remove([storagePath]);
+  let status = '';
+  try {
+    status = await finalizeObject(backend, id);
+  } catch (err) {
+    status = err instanceof Error ? err.message : 'erro';
+  }
+  if (status !== 'ready') {
+    await removeObject({ id, storagePath, backend }).catch(() => undefined);
     await supabase.from('vault_files').delete().eq('id', id);
-    fail('Falha ao verificar o envio', finalizeError ?? { message: 'tamanho divergente' });
+    fail('Falha ao verificar o envio', { message: status === 'rejected' ? 'tamanho divergente' : status });
   }
 
   return {
@@ -228,6 +303,7 @@ async function uploadEncrypted(
       sizeBytes: ciphertext.length,
       chunkSize: FILE_CHUNK_SIZE,
       storagePath,
+      backend,
       createdAt: new Date().toISOString(),
       expiresAt,
     },
@@ -270,14 +346,13 @@ export async function downloadOwnFile(ctx: KeyContext, file: VaultFile) {
     .single<{ wrapped_key: string }>();
   if (error || !data) fail('Falha ao carregar a chave do arquivo', error);
   const key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, file.id, data!.wrapped_key);
-  const plain = await decryptFileContent(key, file.id, await downloadObject(file.storagePath), file.chunkSize);
+  const plain = await decryptFileContent(key, file.id, await downloadObject(file), file.chunkSize);
   saveToDisk(plain, file.meta.name);
   logClientEvent('file.downloaded', { type: file.kind, id: file.id });
 }
 
 export async function deleteFile(file: VaultFile) {
-  const { error: storageError } = await supabase.storage.from(BUCKET).remove([file.storagePath]);
-  if (storageError) fail('Falha ao excluir o arquivo', storageError);
+  await removeObject(file);
   const { error } = await supabase.from('vault_files').delete().eq('id', file.id);
   if (error) fail('Falha ao excluir o registro do arquivo', error);
 }
@@ -372,7 +447,7 @@ export async function listSharedWithMe(ctx: KeyContext, keys: UserKeyPair): Prom
 
 export async function downloadSharedFile(ctx: KeyContext, keys: UserKeyPair, file: SharedFile) {
   const key = await openSealedFileKey(keys.privateKey, keys.publicKey, file.sealedKey, file.id, ctx.userId);
-  const plain = await decryptFileContent(key, file.id, await downloadObject(file.storagePath), file.chunkSize);
+  const plain = await decryptFileContent(key, file.id, await downloadObject(file), file.chunkSize);
   saveToDisk(plain, file.meta.name);
   logClientEvent('file.shared_downloaded', { type: 'file', id: file.id });
 }
@@ -431,7 +506,12 @@ export async function downloadAttachment(ctx: KeyContext, keys: UserKeyPair | nu
     if (shareError || !share) throw new FileServiceError('Anexo não compartilhado com você.');
     key = await openSealedFileKey(keys.privateKey, keys.publicKey, share.sealed_key, data.id, ctx.userId);
   }
-  const plain = await decryptFileContent(key, data.id, await downloadObject(data.storage_path), data.chunk_size);
+  const plain = await decryptFileContent(
+    key,
+    data.id,
+    await downloadObject({ id: data.id, storagePath: data.storage_path, backend: data.storage_backend ?? 'supabase' }),
+    data.chunk_size,
+  );
   saveToDisk(plain, name);
   logClientEvent(data.owner_id === ctx.userId ? 'file.downloaded' : 'file.shared_downloaded', { type: 'attachment', id: data.id });
 }

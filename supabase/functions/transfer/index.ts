@@ -5,6 +5,7 @@
 //
 // Deploy (public, no JWT):  supabase functions deploy transfer --no-verify-jwt
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { r2Presign } from '../_shared/r2.ts'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
 const corsHeaders = {
@@ -82,6 +83,14 @@ Deno.serve(async (req) => {
 
   const { data: path, error } = await admin.rpc('claim_transfer_download', { p_id: id })
   if (error || !path) return unavailable()
+  const { data: file } = await admin.from('vault_files').select('storage_backend').eq('storage_path', path as string).maybeSingle()
+  if (file?.storage_backend === 'r2') {
+    try {
+      return json({ url: await r2Presign('GET', path as string, SIGNED_URL_SECONDS) })
+    } catch {
+      return json({ error: 'Download is temporarily unavailable.' }, 502)
+    }
+  }
   const signed = await admin.storage.from('vault-files').createSignedUrl(path as string, SIGNED_URL_SECONDS)
   if (signed.error || !signed.data) return json({ error: 'Download is temporarily unavailable.' }, 502)
   return json({ url: signed.data.signedUrl })
