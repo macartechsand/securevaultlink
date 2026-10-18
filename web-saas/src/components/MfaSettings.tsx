@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 import { logClientEvent } from '../services/auditService';
 import { enrollTotp, listVerifiedTotpFactors, type TotpFactor, unenrollTotp, verifyTotp } from '../services/mfaService';
 
@@ -14,7 +15,7 @@ export function MfaSettings() {
     try {
       setFactors((await listVerifiedTotpFactors()).filter((f) => f.status === 'verified'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load MFA status.');
+      setError(friendlyError(err, 'Não foi possível carregar o status da verificação em duas etapas.'));
     }
   }, []);
 
@@ -29,7 +30,7 @@ export function MfaSettings() {
     try {
       await action();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(friendlyError(err));
     } finally {
       setBusy(false);
     }
@@ -43,7 +44,7 @@ export function MfaSettings() {
       logClientEvent('mfa.enrolled');
       setEnrollment(null);
       setCode('');
-      setInfo('Two-factor authentication is on. You will need a code from your authenticator at every sign-in.');
+      setInfo('Verificação em duas etapas ativada. O código do autenticador será pedido a cada login.');
       await refresh();
     });
   };
@@ -51,41 +52,46 @@ export function MfaSettings() {
   const enabled = (factors?.length ?? 0) > 0;
 
   return (
-    <div className="panel">
-      <div className="panel-head">
+    <section className="card">
+      <div className="card__header">
         <div>
-          <p className="eyebrow">Account security</p>
-          <h3>Two-factor authentication</h3>
+          <p className="eyebrow">Segurança da conta</p>
+          <h2>Verificação em duas etapas</h2>
         </div>
-        {factors && <span className={`status-pill ${enabled ? 'healthy' : 'review'}`}>{enabled ? 'On' : 'Off'}</span>}
+        {factors && <span className={`badge ${enabled ? 'badge--ok' : 'badge--warn'}`}>{enabled ? 'Ativada' : 'Desativada'}</span>}
       </div>
 
       {!enabled && !enrollment && (
         <>
-          <p>Protect your account with a 6-digit code from an authenticator app (Google Authenticator, Authy, 1Password…).</p>
-          <button type="button" className="primary-button" disabled={busy || !factors} onClick={() => void run(async () => setEnrollment(await enrollTotp()))}>
-            Enable two-factor authentication
-          </button>
+          <p className="muted">
+            Proteja a conta com um código de 6 dígitos de um app autenticador (Google Authenticator, Microsoft
+            Authenticator, Authy, 1Password…).
+          </p>
+          <div>
+            <button type="button" className="btn btn--primary" disabled={busy || !factors} onClick={() => void run(async () => setEnrollment(await enrollTotp()))}>
+              Ativar verificação em duas etapas
+            </button>
+          </div>
         </>
       )}
 
       {enrollment && (
-        <form className="form-grid" onSubmit={confirmEnrollment}>
-          <p>1. Scan this QR code with your authenticator app.</p>
-          <img className="mfa-qr" src={enrollment.qrCode} alt="QR code for authenticator app" width={180} height={180} />
-          <p>
-            Or enter this key manually: <code>{enrollment.secret}</code>
+        <form className="form" onSubmit={confirmEnrollment}>
+          <p>1. Escaneie o QR code com o app autenticador.</p>
+          <img className="qr" src={enrollment.qrCode} alt="QR code para o app autenticador" width={180} height={180} />
+          <p className="subtle">
+            Ou digite esta chave manualmente: <code>{enrollment.secret}</code>
           </p>
-          <label>
-            2. Enter the 6-digit code shown in the app
+          <label className="field">
+            2. Digite o código de 6 dígitos exibido no app
             <input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code} onChange={(e) => setCode(e.target.value)} required />
           </label>
-          <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? 'Verifying…' : 'Confirm'}
+          <div className="form__actions">
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {busy ? 'Verificando…' : 'Confirmar'}
             </button>
-            <button type="button" className="ghost-button" onClick={() => setEnrollment(null)}>
-              Cancel
+            <button type="button" className="btn btn--ghost" onClick={() => setEnrollment(null)}>
+              Cancelar
             </button>
           </div>
         </form>
@@ -93,32 +99,34 @@ export function MfaSettings() {
 
       {enabled && (
         <>
-          <p>Every sign-in requires a code from your authenticator. Your vault data cannot be read without it.</p>
-          <button
-            type="button"
-            className="ghost-button"
-            disabled={busy}
-            onClick={() => {
-              if (!window.confirm('Turn off two-factor authentication?')) return;
-              void run(async () => {
-                for (const f of factors ?? []) await unenrollTotp(f.id);
-                logClientEvent('mfa.disabled');
-                setInfo('Two-factor authentication is off.');
-                await refresh();
-              });
-            }}
-          >
-            Turn off
-          </button>
+          <p className="muted">Todo login exige o código do autenticador. Sem ele, os dados do cofre não podem ser lidos.</p>
+          <div>
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={busy}
+              onClick={() => {
+                if (!window.confirm('Desativar a verificação em duas etapas?')) return;
+                void run(async () => {
+                  for (const f of factors ?? []) await unenrollTotp(f.id);
+                  logClientEvent('mfa.disabled');
+                  setInfo('Verificação em duas etapas desativada.');
+                  await refresh();
+                });
+              }}
+            >
+              Desativar
+            </button>
+          </div>
         </>
       )}
 
-      {info && <div className="notice success">{info}</div>}
-      {error && <div className="form-error">{error}</div>}
-      <p className="notice">
-        Keep access to your authenticator. If you lose it, an administrator must remove the factor before you can
-        sign in again.
+      {info && <div className="alert alert--ok">{info}</div>}
+      {error && <div className="alert alert--error">{error}</div>}
+      <p className="subtle">
+        Mantenha acesso ao autenticador. Se perdê-lo, um administrador precisa remover o fator antes que você consiga
+        entrar de novo.
       </p>
-    </div>
+    </section>
   );
 }

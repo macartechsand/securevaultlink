@@ -1,7 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import type { FileMetadata } from '../lib/crypto';
+import { formatBytes, formatDateTime, friendlyError } from '../lib/messages';
 import { type TransferInfo, downloadTransfer, fetchTransferInfo, unlockTransfer } from '../services/fileService';
-import { formatBytes } from './FilesView';
+import { CenterLayout } from './ui/CenterLayout';
+import { Icon } from './ui/Icon';
 
 type TransferDownloadProps = { transferId: string; linkSecret: string };
 
@@ -16,7 +18,7 @@ export function TransferDownload({ transferId, linkSecret }: TransferDownloadPro
 
   useEffect(() => {
     if (!linkSecret) {
-      setError('This link is incomplete: the decryption key (after #) is missing.');
+      setError('Este link está incompleto: falta a chave de descriptografia (a parte depois do #).');
       return;
     }
     fetchTransferInfo(transferId)
@@ -24,7 +26,7 @@ export function TransferDownload({ transferId, linkSecret }: TransferDownloadPro
         setInfo(data);
         if (!data.passwordSalt) setOpened(await unlockTransfer(transferId, linkSecret, data, null));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'This transfer is not available.'));
+      .catch((err) => setError(friendlyError(err, 'Esta transferência não está disponível.')));
   }, [transferId, linkSecret]);
 
   const unlock = async (event: FormEvent) => {
@@ -35,7 +37,7 @@ export function TransferDownload({ transferId, linkSecret }: TransferDownloadPro
     try {
       setOpened(await unlockTransfer(transferId, linkSecret, info, password));
     } catch {
-      setError('Wrong password.');
+      setError('Senha incorreta.');
     } finally {
       setBusy(false);
     }
@@ -49,60 +51,50 @@ export function TransferDownload({ transferId, linkSecret }: TransferDownloadPro
       await downloadTransfer(transferId, opened.fileKey, info, opened.meta.name);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Download failed.');
+      setError(friendlyError(err, 'Falha no download.'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="app-shell">
-      <main className="main-panel auth-panel">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Secure transfer</p>
-            <h1>SecureLink Vault</h1>
-          </div>
-        </header>
-        <section className="page-panel auth-box">
-          <p className="eyebrow">End-to-end encrypted</p>
-          <h3>{opened ? opened.meta.name : 'Someone sent you a file'}</h3>
-          {opened && info && (
-            <p className="subheadline">
-              {formatBytes(opened.meta.size)} · {info.remainingDownloads} download(s) left · expires{' '}
-              {new Date(info.expiresAt).toLocaleString()}
-            </p>
-          )}
-
-          {info?.passwordSalt && !opened && (
-            <form className="form-grid" onSubmit={unlock}>
-              <label>
-                Password
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
-              </label>
-              <div className="form-actions">
-                <button type="submit" className="primary-button" disabled={busy}>
-                  {busy ? 'Checking…' : 'Unlock'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {opened && !done && (
-            <div className="form-actions">
-              <button type="button" className="primary-button" disabled={busy} onClick={download}>
-                {busy ? 'Downloading and decrypting…' : 'Download'}
-              </button>
-            </div>
-          )}
-          {done && <div className="notice success">Downloaded and decrypted on your device.</div>}
-          {!info && !error && <p className="subheadline">Loading…</p>}
-          {error && <div className="form-error">{error}</div>}
-          <p className="notice">
-            The file is decrypted in your browser. The server never had the key. Only open files from people you trust.
+    <CenterLayout>
+      <div>
+        <p className="eyebrow">Transferência segura</p>
+        <h2>{opened ? opened.meta.name : 'Alguém enviou um arquivo para você'}</h2>
+        {opened && info && (
+          <p className="subtle">
+            {formatBytes(opened.meta.size)} · {info.remainingDownloads} download(s) restante(s) · expira em{' '}
+            {formatDateTime(info.expiresAt)}
           </p>
-        </section>
-      </main>
-    </div>
+        )}
+      </div>
+
+      {info?.passwordSalt && !opened && (
+        <form className="form" onSubmit={unlock}>
+          <label className="field">
+            Senha da transferência
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
+            <span className="field__hint">Quem enviou o arquivo deve ter passado a senha por outro canal.</span>
+          </label>
+          <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
+            {busy ? 'Verificando…' : 'Desbloquear'}
+          </button>
+        </form>
+      )}
+
+      {opened && !done && (
+        <button type="button" className="btn btn--primary btn--block" disabled={busy} onClick={download}>
+          <Icon name="download" />
+          {busy ? 'Baixando e descriptografando…' : 'Baixar arquivo'}
+        </button>
+      )}
+      {done && <div className="alert alert--ok">Arquivo baixado e descriptografado no seu dispositivo.</div>}
+      {!info && !error && <p className="muted">Carregando…</p>}
+      {error && <div className="alert alert--error">{error}</div>}
+      <p className="subtle">
+        O arquivo é descriptografado no seu navegador; o servidor nunca teve a chave. Só abra arquivos de quem você confia.
+      </p>
+    </CenterLayout>
   );
 }

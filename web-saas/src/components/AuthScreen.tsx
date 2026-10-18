@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 import { ACCOUNT_PASSWORD_MIN_LENGTH } from '../services/authService';
 
 type AuthScreenProps = {
@@ -18,7 +19,7 @@ export function AuthScreen({ onSignIn, onSignUp }: AuthScreenProps) {
     setError('');
     setInfo('');
     if (mode === 'sign-up' && form.password.length < ACCOUNT_PASSWORD_MIN_LENGTH) {
-      setError(`Account password must have at least ${ACCOUNT_PASSWORD_MIN_LENGTH} characters.`);
+      setError(`A senha da conta deve ter pelo menos ${ACCOUNT_PASSWORD_MIN_LENGTH} caracteres.`);
       return;
     }
     setLoading(true);
@@ -28,29 +29,28 @@ export function AuthScreen({ onSignIn, onSignUp }: AuthScreenProps) {
       } else {
         const { needsConfirmation } = await onSignUp(form.email, form.password);
         if (needsConfirmation) {
-          setInfo('Account created. Check your email to confirm it, then sign in.');
+          setInfo('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.');
           setMode('sign-in');
         }
       }
       setForm((prev) => ({ ...prev, password: '' }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to authenticate.');
+      setError(friendlyError(err, 'Não foi possível entrar.'));
     } finally {
       setLoading(false);
     }
   };
 
+  const signIn = mode === 'sign-in';
   return (
-    <section className="page-panel auth-box">
-      <div className="panel-head">
-        <div>
-          <p className="eyebrow">Account</p>
-          <h3>{mode === 'sign-in' ? 'Sign in' : 'Create your account'}</h3>
-        </div>
+    <>
+      <div>
+        <p className="eyebrow">Conta</p>
+        <h2>{signIn ? 'Entrar' : 'Criar conta'}</h2>
       </div>
-      <form className="form-grid" onSubmit={submit}>
-        <label>
-          Email
+      <form className="form" onSubmit={submit}>
+        <label className="field">
+          E-mail
           <input
             type="email"
             autoComplete="email"
@@ -59,37 +59,31 @@ export function AuthScreen({ onSignIn, onSignUp }: AuthScreenProps) {
             required
           />
         </label>
-        <label>
-          Account password
+        <label className="field">
+          Senha da conta
           <input
             type="password"
-            autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+            autoComplete={signIn ? 'current-password' : 'new-password'}
             value={form.password}
             onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
             required
           />
         </label>
-        {mode === 'sign-up' && (
-          <p className="notice">
-            This password only signs you in. Next you will create a separate <strong>master password</strong> that
-            encrypts your vault and never leaves your device.
-          </p>
+        {!signIn && (
+          <div className="alert alert--info">
+            Esta senha serve só para entrar. Em seguida você vai criar uma <strong>senha mestra</strong> separada, que
+            criptografa o cofre e nunca sai do seu dispositivo.
+          </div>
         )}
-        {info && <div className="notice success">{info}</div>}
-        {error && <div className="form-error">{error}</div>}
-        <div className="form-actions">
-          <button type="submit" className="primary-button" disabled={loading}>
-            {mode === 'sign-in' ? 'Sign in' : 'Sign up'}
-          </button>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => setMode((m) => (m === 'sign-in' ? 'sign-up' : 'sign-in'))}
-          >
-            {mode === 'sign-in' ? 'Create account' : 'Already have an account?'}
-          </button>
-        </div>
+        {info && <div className="alert alert--ok">{info}</div>}
+        {error && <div className="alert alert--error">{error}</div>}
+        <button type="submit" className="btn btn--primary btn--block" disabled={loading}>
+          {loading ? 'Aguarde…' : signIn ? 'Entrar' : 'Criar conta'}
+        </button>
+        <button type="button" className="btn btn--ghost btn--block" onClick={() => setMode(signIn ? 'sign-up' : 'sign-in')}>
+          {signIn ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
+        </button>
       </form>
-    </section>
+    </>
   );
 }

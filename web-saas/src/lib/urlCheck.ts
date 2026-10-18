@@ -35,35 +35,35 @@ export function analyzeUrl(input: string): { valid: boolean; findings: UrlFindin
   if (scheme && scheme !== 'http' && scheme !== 'https') {
     return {
       valid: false,
-      findings: [{ code: 'bad-scheme', message: `Unsupported scheme "${scheme}:"`, severity: 'high' }],
+      findings: [{ code: 'bad-scheme', message: `Esquema "${scheme}:" não permitido`, severity: 'high' }],
     }
   }
   const url = normalizeUrl(value)
   if (!url) {
-    return { valid: false, findings: [{ code: 'invalid', message: 'Not a valid web address', severity: 'high' }] }
+    return { valid: false, findings: [{ code: 'invalid', message: 'Endereço web inválido', severity: 'high' }] }
   }
 
   const findings: UrlFinding[] = []
   const host = url.hostname.toLowerCase()
 
   if (url.protocol === 'http:') {
-    findings.push({ code: 'no-https', message: 'Connection is not encrypted (http)', severity: 'medium' })
+    findings.push({ code: 'no-https', message: 'Conexão sem criptografia (http)', severity: 'medium' })
   }
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) {
-    findings.push({ code: 'ip-host', message: 'Address uses an IP instead of a domain', severity: 'high' })
+    findings.push({ code: 'ip-host', message: 'O endereço usa um IP em vez de um domínio', severity: 'high' })
   }
   if (host.split('.').some((label) => label.startsWith('xn--'))) {
-    findings.push({ code: 'punycode', message: 'Domain uses look-alike (punycode) characters', severity: 'high' })
+    findings.push({ code: 'punycode', message: 'O domínio usa caracteres parecidos com outros (punycode)', severity: 'high' })
   }
   if (url.username || url.password) {
-    findings.push({ code: 'credentials-in-url', message: 'Address embeds a username or password', severity: 'high' })
+    findings.push({ code: 'credentials-in-url', message: 'O endereço contém usuário ou senha embutidos', severity: 'high' })
   }
   const tld = host.split('.').pop() ?? ''
   if (SUSPICIOUS_TLDS.has(tld)) {
-    findings.push({ code: 'suspicious-tld', message: `Domain ends in ".${tld}", often abused`, severity: 'low' })
+    findings.push({ code: 'suspicious-tld', message: `Domínio termina em ".${tld}", muito usado em golpes`, severity: 'low' })
   }
   if (host.split('.').length > 4) {
-    findings.push({ code: 'many-subdomains', message: 'Unusually many subdomains', severity: 'low' })
+    findings.push({ code: 'many-subdomains', message: 'Quantidade incomum de subdomínios', severity: 'low' })
   }
   return { valid: true, findings }
 }

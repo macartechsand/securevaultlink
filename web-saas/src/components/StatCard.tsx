@@ -6,13 +6,14 @@ type StatCardProps = {
 };
 
 export function StatCard({ label, value, note, tone = 'neutral' }: StatCardProps) {
+  const badge = tone === 'good' ? 'badge--ok' : tone === 'bad' ? 'badge--danger' : '';
   return (
-    <div className="stat-card">
-      <div className="stat-head">
+    <div className="stat">
+      <div className="stat__label">
         <span>{label}</span>
-        {note && <span className={`chip ${tone === 'good' ? 'up' : tone === 'bad' ? 'down' : ''}`}>{note}</span>}
+        {note && <span className={`badge ${badge}`}>{note}</span>}
       </div>
-      <strong>{value}</strong>
+      <div className="stat__value">{value}</div>
     </div>
   );
 }

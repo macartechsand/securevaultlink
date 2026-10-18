@@ -22,7 +22,7 @@ export class VaultServiceError extends Error {}
 
 function fail(action: string, error: { message: string } | null): never {
   // Deliberately generic: never include payloads, and surface the failure to the caller.
-  throw new VaultServiceError(`${action} failed${error ? `: ${error.message}` : ''}`);
+  throw new VaultServiceError(`${action}${error ? `: ${error.message}` : ''}`);
 }
 
 const toRow = (profile: VaultProfile): ProfileRow => ({
@@ -37,7 +37,7 @@ export async function fetchProfile(): Promise<VaultProfile | null> {
     .from('vault_profiles')
     .select('version, kdf, wrapped_dek_password, wrapped_dek_recovery')
     .maybeSingle<ProfileRow>();
-  if (error) fail('Loading vault profile', error);
+  if (error) fail('Falha ao carregar o cofre', error);
   if (!data) return null;
   return {
     version: data.version,
@@ -49,12 +49,12 @@ export async function fetchProfile(): Promise<VaultProfile | null> {
 
 export async function createProfile(profile: VaultProfile): Promise<void> {
   const { error } = await supabase.from('vault_profiles').insert(toRow(profile));
-  if (error) fail('Creating vault profile', error);
+  if (error) fail('Falha ao criar o cofre', error);
 }
 
 export async function updateProfile(userId: string, profile: VaultProfile): Promise<void> {
   const { error } = await supabase.from('vault_profiles').update(toRow(profile)).eq('user_id', userId);
-  if (error) fail('Updating vault profile', error);
+  if (error) fail('Falha ao atualizar o cofre', error);
 }
 
 export async function fetchEntries(): Promise<EntryRow[]> {
@@ -63,7 +63,7 @@ export async function fetchEntries(): Promise<EntryRow[]> {
     .select('id, ciphertext, iv, version, created_at, updated_at')
     .order('created_at', { ascending: false })
     .returns<EntryRow[]>();
-  if (error) fail('Loading vault entries', error);
+  if (error) fail('Falha ao carregar as credenciais', error);
   return data ?? [];
 }
 
@@ -72,7 +72,7 @@ export async function insertEntry(
   blob: { ciphertext: string; iv: string; version: number },
 ): Promise<void> {
   const { error } = await supabase.from('vault_entries').insert({ id, ...blob });
-  if (error) fail('Saving entry', error);
+  if (error) fail('Falha ao salvar a credencial', error);
 }
 
 export async function updateEntry(
@@ -80,11 +80,11 @@ export async function updateEntry(
   blob: { ciphertext: string; iv: string; version: number },
 ): Promise<void> {
   const { data, error } = await supabase.from('vault_entries').update(blob).eq('id', id).select('id');
-  if (error) fail('Updating entry', error);
-  if (!data || data.length === 0) fail('Updating entry', { message: 'entry not found' });
+  if (error) fail('Falha ao atualizar a credencial', error);
+  if (!data || data.length === 0) fail('Falha ao atualizar a credencial', { message: 'credencial não encontrada' });
 }
 
 export async function deleteEntry(id: string): Promise<void> {
   const { error } = await supabase.from('vault_entries').delete().eq('id', id);
-  if (error) fail('Deleting entry', error);
+  if (error) fail('Falha ao excluir a credencial', error);
 }

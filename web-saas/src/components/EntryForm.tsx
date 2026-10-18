@@ -1,11 +1,12 @@
 import { type FormEvent, useState } from 'react';
 import type { VaultItemData } from '../lib/crypto';
-import { analyzeUrl } from '../lib/urlCheck';
 import { passwordStrength } from '../lib/health/passwordHealth';
+import { CATEGORIES, STRENGTH_LABELS, categoryLabel, strengthBadge } from '../lib/labels';
+import { friendlyError } from '../lib/messages';
 import { generatePassword } from '../lib/passwordGenerator';
+import { analyzeUrl } from '../lib/urlCheck';
 import { checkUrlReputation, type UrlReputation } from '../services/urlReputation';
-
-export const CATEGORIES = ['Work', 'Finance', 'Social', 'Personal', 'Other'];
+import { Icon } from './ui/Icon';
 
 type EntryFormProps = {
   initial?: VaultItemData;
@@ -34,7 +35,7 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
     event.preventDefault();
     setError('');
     if (data.url.trim() && !urlReport?.valid) {
-      setError('Enter a valid http(s) address, or leave the site empty.');
+      setError('Informe um endereço http(s) válido ou deixe o site em branco.');
       return;
     }
     setBusy(true);
@@ -52,36 +53,37 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
       }
       await onSubmit({ ...data, title: data.title.trim(), url: data.url.trim() });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save.');
+      setError(friendlyError(err, 'Não foi possível salvar.'));
       setBusy(false);
     }
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="entry-form-title">
       <div className="modal">
-        <div className="modal-head">
+        <div className="card__header">
           <div>
-            <p className="eyebrow">{initial ? 'Edit' : 'New'} credential</p>
-            <h3>{initial ? 'Edit entry' : 'Add an entry'}</h3>
+            <p className="eyebrow">{initial ? 'Editar' : 'Nova'} credencial</p>
+            <h2 id="entry-form-title">{initial ? 'Editar credencial' : 'Adicionar credencial'}</h2>
           </div>
-          <button type="button" className="ghost-button" onClick={onCancel}>
-            Close
+          <button type="button" className="btn btn--ghost icon-btn" onClick={onCancel} aria-label="Fechar">
+            <Icon name="close" />
           </button>
         </div>
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            Title
-            <input value={data.title} onChange={set('title')} required maxLength={120} />
+        <form className="form" onSubmit={submit}>
+          <label className="field">
+            Título
+            <input value={data.title} onChange={set('title')} required maxLength={120} autoFocus />
           </label>
-          <label>
-            Username
+          <label className="field">
+            Usuário ou e-mail
             <input value={data.username} onChange={set('username')} autoComplete="off" maxLength={200} />
           </label>
-          <label>
-            Password
-            <div className="inline-field">
+          <div className="field">
+            <label htmlFor="entry-password">Senha</label>
+            <div className="field__inline">
               <input
+                id="entry-password"
                 type={showPassword ? 'text' : 'password'}
                 value={data.password}
                 onChange={set('password')}
@@ -89,74 +91,100 @@ export function EntryForm({ initial, onSubmit, onCancel }: EntryFormProps) {
                 required
                 maxLength={512}
               />
-              <button type="button" className="ghost-button" onClick={() => setShowPassword((v) => !v)}>
-                {showPassword ? 'Hide' : 'Show'}
+              <button
+                type="button"
+                className="btn icon-btn"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                <Icon name="eye" />
               </button>
               <button
                 type="button"
-                className="ghost-button"
+                className="btn"
                 onClick={() => {
                   setData((p) => ({ ...p, password: generatePassword({ length: 20, uppercase: true, numbers: true, symbols: true }) }));
                   setShowPassword(true);
                 }}
               >
-                Generate
+                <Icon name="wand" />
+                Gerar
               </button>
             </div>
-            {strength && <span className={`strength ${strength.toLowerCase()}`}>{strength}</span>}
-          </label>
-          <label>
-            Site
-            <input value={data.url} onChange={(e) => { set('url')(e); setReputation(null); setConfirmUnsafe(false); }} placeholder="example.com" maxLength={2048} />
-            {urlReport?.valid && (
-              <button
-                type="button"
-                className="ghost-button"
-                disabled={checkingUrl}
-                onClick={async () => {
-                  setCheckingUrl(true);
-                  setReputation(await checkUrlReputation(data.url));
-                  setCheckingUrl(false);
-                }}
-              >
-                {checkingUrl ? 'Checking…' : 'Check site reputation'}
-              </button>
+            {strength && (
+              <span>
+                <span className={`badge ${strengthBadge(strength)}`}>Força: {STRENGTH_LABELS[strength]}</span>
+              </span>
             )}
+          </div>
+          <div className="field">
+            <label htmlFor="entry-url">Site</label>
+            <div className="field__inline">
+              <input
+                id="entry-url"
+                value={data.url}
+                onChange={(e) => {
+                  set('url')(e);
+                  setReputation(null);
+                  setConfirmUnsafe(false);
+                }}
+                placeholder="exemplo.com.br"
+                maxLength={2048}
+              />
+              {urlReport?.valid && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={checkingUrl}
+                  onClick={async () => {
+                    setCheckingUrl(true);
+                    setReputation(await checkUrlReputation(data.url));
+                    setCheckingUrl(false);
+                  }}
+                >
+                  <Icon name="shield" />
+                  {checkingUrl ? 'Verificando…' : 'Verificar'}
+                </button>
+              )}
+            </div>
             {reputation?.status === 'unsafe' && (
-              <span className="url-finding high">
-                Flagged by Safe Browsing as dangerous ({reputation.threats.join(', ')}). Do not enter your password on
-                this site.
+              <span className="finding finding--high">
+                Marcado como perigoso pelo Google Safe Browsing ({reputation.threats.join(', ')}). Não digite sua senha neste
+                site.
               </span>
             )}
             {reputation?.status === 'no-known-threats' && (
-              <span className="url-finding low">No known threats found (this is not a guarantee).</span>
+              <span className="finding finding--low">Nenhuma ameaça conhecida encontrada (isso não é uma garantia).</span>
             )}
-            {reputation?.status === 'error' && <span className="url-finding medium">{reputation.message}</span>}
+            {reputation?.status === 'error' && <span className="finding finding--medium">{reputation.message}</span>}
             {urlReport?.findings.map((f) => (
-              <span key={f.code} className={`url-finding ${f.severity}`}>
+              <span key={f.code} className={`finding finding--${f.severity}`}>
                 {f.message}
               </span>
             ))}
-          </label>
-          <label>
-            Category
+          </div>
+          <label className="field">
+            Categoria
             <select value={data.category} onChange={set('category')}>
               {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+                <option key={c} value={c}>
+                  {categoryLabel(c)}
+                </option>
               ))}
             </select>
           </label>
-          <label>
-            Notes
+          <label className="field">
+            Notas
             <textarea value={data.notes} onChange={set('notes')} rows={3} maxLength={5000} />
           </label>
-          {error && <div className="form-error">{error}</div>}
-          <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? 'Checking & encrypting…' : confirmUnsafe ? 'Save anyway' : 'Save'}
+          {error && <div className="alert alert--error">{error}</div>}
+          <div className="form__actions">
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {busy ? 'Verificando e criptografando…' : confirmUnsafe ? 'Salvar mesmo assim' : 'Salvar'}
             </button>
-            <button type="button" className="ghost-button" onClick={onCancel}>
-              Cancel
+            <button type="button" className="btn btn--ghost" onClick={onCancel}>
+              Cancelar
             </button>
           </div>
         </form>

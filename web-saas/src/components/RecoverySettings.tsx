@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 
 type RecoverySettingsProps = {
   enabled: boolean;
@@ -29,78 +30,80 @@ export function RecoverySettings({ enabled, onEnable, onDisable }: RecoverySetti
       setMode('idle');
       setPassword('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(friendlyError(err));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="panel">
-      <div className="panel-head">
+    <section className="card">
+      <div className="card__header">
         <div>
-          <p className="eyebrow">Recovery</p>
-          <h3>Recovery key</h3>
+          <p className="eyebrow">Recuperação</p>
+          <h2>Chave de recuperação</h2>
         </div>
-        <span className={`status-pill ${enabled ? 'healthy' : 'review'}`}>{enabled ? 'On' : 'Off'}</span>
+        <span className={`badge ${enabled ? 'badge--ok' : 'badge--warn'}`}>{enabled ? 'Ativada' : 'Desativada'}</span>
       </div>
 
       {recoveryKey ? (
         <>
-          <p className="notice warning">
-            Save this key now. It is shown only once and is not stored anywhere. With it you can set a new master password
-            if you forget yours. Anyone who has it (and access to your account) can open your vault.
-          </p>
-          <div className="password-output">
-            <span>{recoveryKey}</span>
-            <button type="button" onClick={() => navigator.clipboard?.writeText(recoveryKey)}>
-              Copy
+          <div className="alert alert--warn">
+            Guarde esta chave agora. Ela aparece só uma vez e não fica armazenada em lugar nenhum. Com ela você define uma
+            nova senha mestra se esquecer a atual. Quem tiver a chave (e acesso à sua conta) consegue abrir o cofre.
+          </div>
+          <div className="secret-box">
+            <code>{recoveryKey}</code>
+            <button type="button" className="btn btn--sm" onClick={() => navigator.clipboard?.writeText(recoveryKey)}>
+              Copiar
             </button>
           </div>
-          <label className="check-row">
-            <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />I stored my recovery key
-            in a safe place (offline or in another password manager)
+          <label className="check">
+            <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
+            Guardei a chave de recuperação em um lugar seguro (offline ou em outro gerenciador de senhas)
           </label>
-          <button type="button" className="primary-button" disabled={!saved} onClick={() => setRecoveryKey('')}>
-            Done
-          </button>
+          <div>
+            <button type="button" className="btn btn--primary" disabled={!saved} onClick={() => setRecoveryKey('')}>
+              Concluir
+            </button>
+          </div>
         </>
       ) : mode === 'idle' ? (
         <>
-          <p>
+          <p className="muted">
             {enabled
-              ? 'Your vault can be recovered with your recovery key if you forget the master password.'
-              : 'Without a recovery key, a forgotten master password means your vault is lost permanently.'}
+              ? 'Se esquecer a senha mestra, você recupera o cofre com a chave de recuperação.'
+              : 'Sem chave de recuperação, uma senha mestra esquecida significa perder o cofre para sempre.'}
           </p>
-          <div className="form-actions">
-            <button type="button" className="primary-button" onClick={() => setMode('enable')}>
-              {enabled ? 'Generate a new key' : 'Turn on recovery key'}
+          <div className="form__actions">
+            <button type="button" className="btn btn--primary" onClick={() => setMode('enable')}>
+              {enabled ? 'Gerar nova chave' : 'Ativar chave de recuperação'}
             </button>
             {enabled && (
-              <button type="button" className="ghost-button" onClick={() => setMode('disable')}>
-                Turn off
+              <button type="button" className="btn btn--danger" onClick={() => setMode('disable')}>
+                Desativar
               </button>
             )}
           </div>
-          {enabled && <p className="subheadline">Generating a new key invalidates the previous one.</p>}
+          {enabled && <p className="subtle">Gerar uma nova chave invalida a anterior.</p>}
         </>
       ) : (
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            Confirm with your master password
+        <form className="form" onSubmit={submit}>
+          <label className="field">
+            Confirme com sua senha mestra
             <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
-          <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? 'Working…' : mode === 'enable' ? 'Create recovery key' : 'Turn off recovery'}
+          <div className="form__actions">
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {busy ? 'Processando…' : mode === 'enable' ? 'Criar chave de recuperação' : 'Desativar recuperação'}
             </button>
-            <button type="button" className="ghost-button" onClick={() => setMode('idle')}>
-              Cancel
+            <button type="button" className="btn btn--ghost" onClick={() => setMode('idle')}>
+              Cancelar
             </button>
           </div>
         </form>
       )}
-      {error && <div className="form-error">{error}</div>}
-    </div>
+      {error && <div className="alert alert--error">{error}</div>}
+    </section>
   );
 }

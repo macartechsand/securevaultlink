@@ -6,7 +6,7 @@ export type UrlReputation =
   | { status: 'no-known-threats' }
   | { status: 'error'; message: string };
 
-const UNAVAILABLE: UrlReputation = { status: 'error', message: 'Reputation check is unavailable right now.' };
+const UNAVAILABLE: UrlReputation = { status: 'error', message: 'A verificação de reputação está indisponível no momento.' };
 const BATCH = 50;
 
 type ResultRow = { url: string; status: string; threats?: string[] };
@@ -46,5 +46,5 @@ export async function checkUrlsReputation(inputs: string[]): Promise<Map<string,
 }
 
 export async function checkUrlReputation(url: string): Promise<UrlReputation> {
-  return (await checkUrlsReputation([url])).get(url) ?? { status: 'error', message: 'Enter a valid http(s) address.' };
+  return (await checkUrlsReputation([url])).get(url) ?? { status: 'error', message: 'Informe um endereço http(s) válido.' };
 }

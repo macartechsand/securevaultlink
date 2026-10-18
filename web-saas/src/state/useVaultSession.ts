@@ -15,6 +15,7 @@ import {
   unlockWithRecoveryKey,
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
+import { friendlyError } from '../lib/messages';
 import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
@@ -37,10 +38,10 @@ export type SessionStatus =
 
 export function validateMasterPassword(password: string): string | null {
   if (password.length < MASTER_PASSWORD_MIN_LENGTH) {
-    return `Master password must have at least ${MASTER_PASSWORD_MIN_LENGTH} characters.`;
+    return `A senha mestra deve ter pelo menos ${MASTER_PASSWORD_MIN_LENGTH} caracteres.`;
   }
   if (passwordStrength(password) === 'Weak') {
-    return 'Master password is too easy to guess. Use a longer passphrase.';
+    return 'A senha mestra é fácil de adivinhar. Use uma frase mais longa.';
   }
   return null;
 }
@@ -108,7 +109,7 @@ export function useVaultSession() {
       } catch (error) {
         // Never fall back to "locked"/"needs-setup" on failure: show the real problem instead.
         profileRef.current = null;
-        setLoadError(message(error, 'Could not load your vault.'));
+        setLoadError(friendlyError(error, 'Não foi possível carregar o cofre.'));
         setStatus('load-error');
       }
     },
@@ -228,7 +229,7 @@ export function useVaultSession() {
       } catch (error) {
         dekRef.current = null;
         logClientEvent('vault.unlock_failed');
-        throw new Error(message(error, 'Could not unlock the vault.'));
+        throw new Error(message(error, 'Não foi possível desbloquear o cofre.'));
       }
       await finishUnlock(dek);
       logClientEvent('vault.unlocked');

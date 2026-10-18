@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 import { MASTER_PASSWORD_MIN_LENGTH, validateMasterPassword } from '../state/useVaultSession';
 
 type VaultGateProps = {
@@ -41,75 +42,71 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
       setConfirm('');
       setRecoveryKey('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(friendlyError(err));
     } finally {
       setBusy(false);
     }
   };
 
+  const title = setup ? 'Crie sua senha mestra' : useRecovery ? 'Recuperar com a chave de recuperação' : 'Desbloquear o cofre';
   return (
-    <section className="page-panel auth-box">
-      <p className="eyebrow">{setup ? 'Create your vault' : 'Vault locked'}</p>
-      <h3>{setup ? 'Choose a master password' : useRecovery ? 'Recover with your recovery key' : 'Unlock your vault'}</h3>
-      <p className="subheadline">Signed in as {email}</p>
+    <>
+      <div>
+        <p className="eyebrow">{setup ? 'Novo cofre' : 'Cofre bloqueado'}</p>
+        <h2>{title}</h2>
+        <p className="subtle">Conectado como {email}</p>
+      </div>
       {setup && (
-        <p className="notice warning">
-          Your master password encrypts everything on this device before it is sent to the server. It is never
-          stored or sent anywhere, so <strong>nobody can reset it for you</strong>. After creating the vault you can turn
-          on an optional recovery key in Settings; without it, a forgotten master password means the vault is lost. Use
-          at least {MASTER_PASSWORD_MIN_LENGTH} characters (a passphrase works well).
-        </p>
+        <div className="alert alert--warn">
+          A senha mestra criptografa tudo neste dispositivo antes de enviar ao servidor. Ela nunca é armazenada nem
+          enviada, então <strong>ninguém consegue redefini-la para você</strong>. Depois de criar o cofre, você pode
+          ativar uma chave de recuperação opcional em Configurações; sem ela, esquecer a senha mestra significa perder o
+          cofre. Use pelo menos {MASTER_PASSWORD_MIN_LENGTH} caracteres (uma frase longa funciona bem).
+        </div>
       )}
-      <form className="form-grid" onSubmit={submit}>
+      <form className="form" onSubmit={submit}>
         {useRecovery && (
-          <label>
-            Recovery key
+          <label className="field">
+            Chave de recuperação
             <input value={recoveryKey} onChange={(e) => setRecoveryKey(e.target.value)} autoComplete="off" spellCheck={false} required />
           </label>
         )}
-        <label>
-          {useRecovery ? 'New master password' : 'Master password'}
+        <label className="field">
+          {useRecovery ? 'Nova senha mestra' : 'Senha mestra'}
           <input
             type="password"
             autoComplete={setup || useRecovery ? 'new-password' : 'current-password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoFocus
             required
           />
         </label>
-        {useRecovery && (
-          <label>
-            Confirm new master password
+        {(setup || useRecovery) && (
+          <label className="field">
+            Confirme a {useRecovery ? 'nova ' : ''}senha mestra
             <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
           </label>
         )}
         {setup && (
-          <>
-            <label>
-              Confirm master password
-              <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-            </label>
-            <label className="check-row">
-              <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />
-              I understand that without a recovery key a forgotten master password cannot be recovered
-            </label>
-          </>
+          <label className="check">
+            <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />
+            Entendo que, sem chave de recuperação, uma senha mestra esquecida não pode ser recuperada.
+          </label>
         )}
-        {error && <div className="form-error">{error}</div>}
-        <div className="form-actions">
-          <button type="submit" className="primary-button" disabled={busy || (setup && !understood)}>
-            {busy ? 'Working…' : setup ? 'Create vault' : useRecovery ? 'Recover vault' : 'Unlock'}
+        {error && <div className="alert alert--error">{error}</div>}
+        <button type="submit" className="btn btn--primary btn--block" disabled={busy || (setup && !understood)}>
+          {busy ? 'Processando…' : setup ? 'Criar cofre' : useRecovery ? 'Recuperar cofre' : 'Desbloquear'}
+        </button>
+        {!setup && hasRecovery && (
+          <button type="button" className="btn btn--ghost btn--block" onClick={() => setUseRecovery((v) => !v)}>
+            {useRecovery ? 'Usar a senha mestra' : 'Esqueci a senha mestra'}
           </button>
-          {!setup && hasRecovery && (
-            <button type="button" className="ghost-button" onClick={() => setUseRecovery((v) => !v)}>
-              {useRecovery ? 'Use master password' : 'Forgot master password?'}
-            </button>
-          )}
-          <button type="button" className="ghost-button" onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
+        )}
+        <button type="button" className="btn btn--ghost btn--block" onClick={onSignOut}>
+          Sair
+        </button>
       </form>
-    </section>
+    </>
   );
 }

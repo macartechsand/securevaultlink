@@ -1,37 +1,41 @@
 import { useState } from 'react';
 import { passwordStrength } from '../lib/health/passwordHealth';
+import { STRENGTH_LABELS, strengthBadge } from '../lib/labels';
 import { generatePassword } from '../lib/passwordGenerator';
+import { Icon } from './ui/Icon';
+
+type Options = { length: number; uppercase: boolean; numbers: boolean; symbols: boolean };
 
 export function Generator() {
-  const [length, setLength] = useState(20);
-  const [uppercase, setUppercase] = useState(true);
-  const [numbers, setNumbers] = useState(true);
-  const [symbols, setSymbols] = useState(true);
-  const [password, setPassword] = useState(() => generatePassword({ length: 20, uppercase: true, numbers: true, symbols: true }));
+  const [options, setOptions] = useState<Options>({ length: 20, uppercase: true, numbers: true, symbols: true });
+  const [password, setPassword] = useState(() => generatePassword(options));
   const [copied, setCopied] = useState(false);
 
-  const regenerate = (next: Partial<{ length: number; uppercase: boolean; numbers: boolean; symbols: boolean }> = {}) => {
-    const options = { length, uppercase, numbers, symbols, ...next };
-    setPassword(generatePassword(options));
+  const update = (next: Partial<Options>) => {
+    const merged = { ...options, ...next };
+    setOptions(merged);
+    setPassword(generatePassword(merged));
     setCopied(false);
   };
 
   const strength = passwordStrength(password);
 
   return (
-    <div className="panel generator-panel">
-      <div className="panel-head">
+    <section className="card">
+      <div className="card__header">
         <div>
-          <p className="eyebrow">Generator</p>
-          <h3>Password builder</h3>
+          <p className="eyebrow">Gerador</p>
+          <h2>Gerador de senhas</h2>
+          <p className="subtle">Gerado no seu navegador com um gerador criptográfico. Nada é enviado ao servidor.</p>
         </div>
-        <span className={`strength ${strength.toLowerCase()}`}>{strength}</span>
+        <span className={`badge ${strengthBadge(strength)}`}>{STRENGTH_LABELS[strength]}</span>
       </div>
 
-      <div className="password-output">
-        <span>{password}</span>
+      <div className="secret-box">
+        <code>{password}</code>
         <button
           type="button"
+          className="btn btn--sm"
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(password);
@@ -41,42 +45,37 @@ export function Generator() {
             }
           }}
         >
-          {copied ? 'Copied' : 'Copy'}
+          <Icon name={copied ? 'check' : 'copy'} size={16} />
+          {copied ? 'Copiada' : 'Copiar'}
         </button>
-        <button type="button" onClick={() => regenerate()}>
-          New
+        <button type="button" className="btn btn--sm" onClick={() => update({})}>
+          <Icon name="refresh" size={16} />
+          Nova
         </button>
       </div>
 
-      <label className="range-row">
-        <span>Length</span>
-        <strong>{length}</strong>
+      <label className="field">
+        <span className="row-between">
+          <span>Tamanho</span>
+          <strong>{options.length} caracteres</strong>
+        </span>
+        <input type="range" min="12" max="64" value={options.length} onChange={(e) => update({ length: Number(e.target.value) })} />
       </label>
-      <input
-        type="range"
-        min="12"
-        max="64"
-        value={length}
-        onChange={(e) => {
-          setLength(Number(e.target.value));
-          regenerate({ length: Number(e.target.value) });
-        }}
-      />
 
-      <div className="toggle-list">
-        <label>
-          <input type="checkbox" checked={uppercase} onChange={() => { setUppercase(!uppercase); regenerate({ uppercase: !uppercase }); }} />
-          Uppercase
+      <div className="row">
+        <label className="check">
+          <input type="checkbox" checked={options.uppercase} onChange={() => update({ uppercase: !options.uppercase })} />
+          Letras maiúsculas
         </label>
-        <label>
-          <input type="checkbox" checked={numbers} onChange={() => { setNumbers(!numbers); regenerate({ numbers: !numbers }); }} />
-          Numbers
+        <label className="check">
+          <input type="checkbox" checked={options.numbers} onChange={() => update({ numbers: !options.numbers })} />
+          Números
         </label>
-        <label>
-          <input type="checkbox" checked={symbols} onChange={() => { setSymbols(!symbols); regenerate({ symbols: !symbols }); }} />
-          Symbols
+        <label className="check">
+          <input type="checkbox" checked={options.symbols} onChange={() => update({ symbols: !options.symbols })} />
+          Símbolos
         </label>
       </div>
-    </div>
+    </section>
   );
 }

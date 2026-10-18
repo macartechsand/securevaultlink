@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react';
-import './App.css';
 import { ActivityView } from './components/ActivityView';
 import { AuthScreen } from './components/AuthScreen';
 import { EntryForm } from './components/EntryForm';
@@ -8,12 +7,16 @@ import { Generator } from './components/Generator';
 import { MfaChallenge } from './components/MfaChallenge';
 import { PasswordTable } from './components/PasswordTable';
 import { Settings } from './components/Settings';
-import { Sidebar } from './components/Sidebar';
+import { NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
 import { TransferDownload } from './components/TransferDownload';
 import { VaultGate } from './components/VaultGate';
+import { CenterLayout } from './components/ui/CenterLayout';
+import { Icon } from './components/ui/Icon';
 import { analyzeHealth, passwordStrength, type Strength } from './lib/health/passwordHealth';
 import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
+import { categoryLabel } from './lib/labels';
+import { friendlyError } from './lib/messages';
 import { isSupabaseConfigured } from './lib/supabase';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultEntry, useVaultSession } from './state/useVaultSession';
@@ -33,6 +36,15 @@ function App() {
   }
   return <VaultApp />;
 }
+
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Visão geral', subtitle: 'Saúde das suas credenciais, calculada só com dados reais.' },
+  vault: { title: 'Cofre', subtitle: 'Credenciais criptografadas no seu dispositivo.' },
+  files: { title: 'Arquivos', subtitle: 'Arquivos, compartilhamentos e transferências temporárias.' },
+  generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
+  activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
+  settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação e sessão.' },
+};
 
 function VaultApp() {
   const session = useVaultSession();
@@ -57,15 +69,16 @@ function VaultApp() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return entries;
     return entries.filter((e) =>
-      [e.title, e.username, e.url, e.category].some((field) => field.toLowerCase().includes(term)),
+      [e.title, e.username, e.url, e.category, categoryLabel(e.category)].some((field) => field.toLowerCase().includes(term)),
     );
   }, [entries, searchTerm]);
 
   const exposedCount = useMemo(
-    () => entries.filter((e) => {
-      const r = pwnedById.get(e.id);
-      return r?.status === 'ok' && r.count > 0;
-    }).length,
+    () =>
+      entries.filter((e) => {
+        const r = pwnedById.get(e.id);
+        return r?.status === 'ok' && r.count > 0;
+      }).length,
     [entries, pwnedById],
   );
   const checkedCount = [...pwnedById.values()].filter((r) => r.status === 'ok').length;
@@ -95,210 +108,206 @@ function VaultApp() {
   }, [entries]);
 
   const handleDelete = async (entry: VaultEntry) => {
-    if (!window.confirm(`Delete "${entry.title}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Excluir "${entry.title}"? Esta ação não pode ser desfeita.`)) return;
     setActionError('');
     try {
       await session.removeEntry(entry.id);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to delete the entry.');
+      setActionError(friendlyError(err, 'Não foi possível excluir a credencial.'));
     }
   };
 
   if (!isSupabaseConfigured) {
     return (
-      <div className="app-shell">
-        <main className="main-panel auth-panel">
-          <section className="page-panel auth-box">
-            <h3>Configuration required</h3>
-            <p>
-              Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (see <code>.env.example</code>)
-              and restart.
-            </p>
-          </section>
-        </main>
-      </div>
+      <CenterLayout>
+        <h2>Configuração necessária</h2>
+        <p className="muted">
+          Defina <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> (veja <code>.env.example</code>) e
+          reinicie a aplicação.
+        </p>
+      </CenterLayout>
     );
   }
 
   if (status !== 'unlocked') {
+    const signOut = () => void session.signOut();
     return (
-      <div className="app-shell">
-        <main className="main-panel auth-panel">
-          <header className="topbar">
+      <CenterLayout>
+        {status === 'loading' && <p className="muted">Carregando…</p>}
+        {status === 'signed-out' && <AuthScreen onSignIn={session.signIn} onSignUp={session.signUp} />}
+        {status === 'load-error' && (
+          <>
             <div>
-              <p className="eyebrow">Welcome</p>
-              <h1>SecureLink Vault</h1>
+              <p className="eyebrow">Algo deu errado</p>
+              <h2>Não foi possível carregar o cofre</h2>
             </div>
-          </header>
-          {status === 'loading' && <p className="subheadline">Loading…</p>}
-          {status === 'signed-out' && <AuthScreen onSignIn={session.signIn} onSignUp={session.signUp} />}
-          {status === 'load-error' && (
-            <section className="page-panel auth-box">
-              <p className="eyebrow">Something went wrong</p>
-              <h3>Could not load your vault</h3>
-              <div className="form-error">{session.loadError}</div>
-              <div className="form-actions">
-                <button type="button" className="primary-button" onClick={session.retry}>
-                  Try again
-                </button>
-                <button type="button" className="ghost-button" onClick={() => void session.signOut()}>
-                  Sign out
-                </button>
-              </div>
-            </section>
-          )}
-          {status === 'needs-mfa' && (
-            <MfaChallenge email={user?.email ?? ''} onVerify={session.verifyMfa} onSignOut={() => void session.signOut()} />
-          )}
-          {(status === 'needs-setup' || status === 'locked') && (
-            <VaultGate
-              mode={status}
-              email={user?.email ?? ''}
-              onSetup={session.setupVault}
-              onUnlock={session.unlock}
-              hasRecovery={session.hasRecovery}
-              onRecover={session.recover}
-              onSignOut={() => void session.signOut()}
-            />
-          )}
-        </main>
-      </div>
+            <div className="alert alert--error">{session.loadError}</div>
+            <button type="button" className="btn btn--primary btn--block" onClick={session.retry}>
+              Tentar novamente
+            </button>
+            <button type="button" className="btn btn--ghost btn--block" onClick={signOut}>
+              Sair
+            </button>
+          </>
+        )}
+        {status === 'needs-mfa' && <MfaChallenge email={user?.email ?? ''} onVerify={session.verifyMfa} onSignOut={signOut} />}
+        {(status === 'needs-setup' || status === 'locked') && (
+          <VaultGate
+            mode={status}
+            email={user?.email ?? ''}
+            onSetup={session.setupVault}
+            onUnlock={session.unlock}
+            hasRecovery={session.hasRecovery}
+            onRecover={session.recover}
+            onSignOut={signOut}
+          />
+        )}
+      </CenterLayout>
     );
   }
 
   const weakCount = health.weak.length;
-  const score = entries.length === 0 ? null : Math.round(((entries.length - weakCount - health.reused.length / 2 - exposedCount) / entries.length) * 100);
+  const score =
+    entries.length === 0
+      ? null
+      : Math.max(0, Math.round(((entries.length - weakCount - health.reused.length / 2 - exposedCount) / entries.length) * 100));
+  const page = PAGE_TITLES[activeView] ?? PAGE_TITLES.dashboard;
+  const pageLabel = NAV_ITEMS.find((n) => n.key === activeView)?.label;
 
   return (
-    <div className="app-shell">
-      <Sidebar activeView={activeView} onSelect={setActiveView} />
+    <div className="shell">
+      <Sidebar activeView={activeView} onSelect={setActiveView} onLock={session.lock} onSignOut={() => void session.signOut()} />
 
-      <main className="main-panel">
+      <main className="main">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">Workspace</p>
-            <h1>Your vault</h1>
-            <p className="subheadline">{user?.email}</p>
-          </div>
-
-          <div className="topbar-actions">
-            <label className="search-box" aria-label="Search vault">
-              <span>⌕</span>
-              <input
-                type="text"
-                placeholder="Search vault"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  if (activeView !== 'vault') setActiveView('vault');
-                }}
-              />
-            </label>
-            <button type="button" className="ghost-button" onClick={session.lock}>
-              Lock
-            </button>
-            <button type="button" className="ghost-button" onClick={() => void session.signOut()}>
-              Sign out
-            </button>
-            <button type="button" className="primary-button" onClick={() => setEditing('new')}>
-              + New entry
+          <label className="search">
+            <Icon name="search" size={16} />
+            <span className="sr-only">Buscar no cofre</span>
+            <input
+              type="search"
+              placeholder="Buscar no cofre"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (activeView !== 'vault') setActiveView('vault');
+              }}
+            />
+          </label>
+          <div className="row">
+            <span className="subtle">{user?.email}</span>
+            <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
+              <Icon name="plus" />
+              Nova credencial
             </button>
           </div>
         </header>
 
-        {editing && (
-          <EntryForm
-            initial={editing === 'new' ? undefined : editing}
-            onCancel={() => setEditing(null)}
-            onSubmit={async (data) => {
-              if (editing === 'new') await session.addEntry(data);
-              else await session.editEntry(editing.id, data);
-              setEditing(null);
-            }}
-          />
-        )}
-
-        {session.undecryptable > 0 && (
-          <div className="notice warning">
-            {session.undecryptable} entr{session.undecryptable === 1 ? 'y' : 'ies'} could not be decrypted
-            (corrupted or modified) and {session.undecryptable === 1 ? 'is' : 'are'} hidden.
+        <div className="page">
+          <div className="page__header">
+            <div>
+              <p className="eyebrow">{pageLabel}</p>
+              <h1>{page.title}</h1>
+              <p className="muted">{page.subtitle}</p>
+            </div>
           </div>
-        )}
-        {actionError && <div className="form-error">{actionError}</div>}
 
-        {activeView === 'dashboard' && (
-          <>
-            <section className="stats-grid">
-              <StatCard label="Entries" value={String(entries.length)} />
-              <StatCard
-                label="Weak passwords"
-                value={String(weakCount)}
-                note={entries.length ? (weakCount ? 'Fix' : 'OK') : undefined}
-                tone={weakCount ? 'bad' : 'good'}
-              />
-              <StatCard
-                label="Reused passwords"
-                value={String(health.reused.length)}
-                note={entries.length ? (health.reused.length ? 'Fix' : 'OK') : undefined}
-                tone={health.reused.length ? 'bad' : 'good'}
-              />
-              <StatCard
-                label="Exposed in breaches"
-                value={checkedCount ? String(exposedCount) : '—'}
-                note={checkedCount ? `${checkedCount} checked` : 'Not checked'}
-                tone={checkedCount ? (exposedCount ? 'bad' : 'good') : 'neutral'}
-              />
-            </section>
+          {editing && (
+            <EntryForm
+              initial={editing === 'new' ? undefined : editing}
+              onCancel={() => setEditing(null)}
+              onSubmit={async (data) => {
+                if (editing === 'new') await session.addEntry(data);
+                else await session.editEntry(editing.id, data);
+                setEditing(null);
+              }}
+            />
+          )}
 
-            <section className="content-grid">
-              <div className="panel large-panel">
-                <div className="panel-head">
+          {session.undecryptable > 0 && (
+            <div className="alert alert--warn">
+              {session.undecryptable} credencial(is) não puderam ser descriptografadas (corrompidas ou alteradas) e estão
+              ocultas.
+            </div>
+          )}
+          {actionError && <div className="alert alert--error">{actionError}</div>}
+
+          {activeView === 'dashboard' && (
+            <>
+              <section className="grid grid--stats">
+                <StatCard label="Credenciais" value={String(entries.length)} />
+                <StatCard
+                  label="Senhas fracas"
+                  value={String(weakCount)}
+                  note={entries.length ? (weakCount ? 'Corrigir' : 'OK') : undefined}
+                  tone={weakCount ? 'bad' : 'good'}
+                />
+                <StatCard
+                  label="Senhas reutilizadas"
+                  value={String(health.reused.length)}
+                  note={entries.length ? (health.reused.length ? 'Corrigir' : 'OK') : undefined}
+                  tone={health.reused.length ? 'bad' : 'good'}
+                />
+                <StatCard
+                  label="Vazadas em incidentes"
+                  value={checkedCount ? String(exposedCount) : '—'}
+                  note={checkedCount ? `${checkedCount} verificadas` : 'Não verificado'}
+                  tone={checkedCount ? (exposedCount ? 'bad' : 'good') : 'neutral'}
+                />
+              </section>
+
+              <section className="card">
+                <div className="card__header">
                   <div>
-                    <p className="eyebrow">Credential health</p>
-                    <h3>{score === null ? 'No data yet' : `${Math.max(score, 0)}% healthy`}</h3>
+                    <p className="eyebrow">Saúde das credenciais</p>
+                    <h2>{score === null ? 'Sem dados ainda' : `${score}% saudável`}</h2>
                   </div>
-                  <button type="button" className="primary-button" onClick={runExposureCheck} disabled={checking || entries.length === 0}>
-                    {checking ? 'Checking…' : 'Run security check'}
+                  <button type="button" className="btn btn--primary" onClick={runExposureCheck} disabled={checking || entries.length === 0}>
+                    <Icon name="shield" />
+                    {checking ? 'Verificando…' : 'Verificar segurança'}
                   </button>
                 </div>
                 {entries.length === 0 ? (
-                  <p className="empty-state">Add entries to see weak, reused and exposed passwords.</p>
+                  <p className="empty">Adicione credenciais para ver senhas fracas, reutilizadas e vazadas.</p>
                 ) : (
                   <>
-                    <p>
-                      Based on your {entries.length} stored credentials. Breach exposure uses the Have I Been Pwned
-                      range API: only the first 5 characters of each password's SHA-1 hash leave your device. Saved
-                      sites are checked against Google Safe Browsing.
+                    {score !== null && (
+                      <div className={`meter ${score < 50 ? 'meter--danger' : score < 80 ? 'meter--warn' : ''}`} aria-hidden="true">
+                        <span className={`w-${Math.round(score / 10)}`} />
+                      </div>
+                    )}
+                    <p className="subtle">
+                      Baseado nas suas {entries.length} credenciais. A verificação de vazamentos usa a API do Have I Been
+                      Pwned com k-anonimato: só os 5 primeiros caracteres do hash SHA-1 de cada senha saem do seu
+                      dispositivo. Os sites salvos são verificados no Google Safe Browsing.
                     </p>
                     {health.reusedGroups.length > 0 && (
-                      <div className="notice warning">
-                        Reused: {health.reusedGroups
+                      <div className="alert alert--warn">
+                        Senhas reutilizadas:{' '}
+                        {health.reusedGroups
                           .map((group) => group.map((id) => entries.find((e) => e.id === id)?.title ?? '?').join(' = '))
                           .join('; ')}
                       </div>
                     )}
                     {unsafeSites.length > 0 && (
-                      <div className="notice warning">
-                        Dangerous site{unsafeSites.length === 1 ? '' : 's'} flagged by Google Safe Browsing:{' '}
-                        {unsafeSites.map((e) => e.title).join(', ')}. Do not sign in there; review these entries.
+                      <div className="alert alert--error">
+                        Site(s) marcado(s) como perigoso(s) pelo Google Safe Browsing: {unsafeSites.map((e) => e.title).join(', ')}.
+                        Não entre nesses sites; revise essas credenciais.
                       </div>
                     )}
                     {siteCheckFailed && (
-                      <div className="notice">Site reputation could not be checked for some entries (service unavailable).</div>
+                      <div className="alert">Não foi possível verificar a reputação de alguns sites (serviço indisponível).</div>
                     )}
                     {exposedCount > 0 && (
-                      <div className="notice warning">
-                        {exposedCount} password{exposedCount === 1 ? ' appears' : 's appear'} in known data breaches.
-                        Change {exposedCount === 1 ? 'it' : 'them'} on the original site.
+                      <div className="alert alert--error">
+                        {exposedCount} senha(s) aparecem em vazamentos conhecidos. Troque-as no site de origem.
                       </div>
                     )}
                   </>
                 )}
-              </div>
-            </section>
+              </section>
 
-            <section className="bottom-grid">
               <PasswordTable
+                title="Credenciais recentes"
                 items={entries.slice(0, 5)}
                 strengthById={strengthById}
                 reusedIds={reusedIds}
@@ -308,40 +317,40 @@ function VaultApp() {
                 onEdit={setEditing}
                 onDelete={handleDelete}
               />
-            </section>
-          </>
-        )}
+            </>
+          )}
 
-        {activeView === 'vault' && (
-          <PasswordTable
-            items={filtered}
-            strengthById={strengthById}
-            reusedIds={reusedIds}
-            pwnedById={pwnedById}
-            siteById={siteById}
-            onAdd={() => setEditing('new')}
-            onEdit={setEditing}
-            onDelete={handleDelete}
-          />
-        )}
+          {activeView === 'vault' && (
+            <PasswordTable
+              items={filtered}
+              strengthById={strengthById}
+              reusedIds={reusedIds}
+              pwnedById={pwnedById}
+              siteById={siteById}
+              onAdd={() => setEditing('new')}
+              onEdit={setEditing}
+              onDelete={handleDelete}
+            />
+          )}
 
-        {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
+          {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
 
-        {activeView === 'generator' && <Generator />}
+          {activeView === 'generator' && <Generator />}
 
-        {activeView === 'activity' && <ActivityView />}
+          {activeView === 'activity' && <ActivityView />}
 
-        {activeView === 'settings' && (
-          <Settings
-            email={user?.email ?? ''}
-            idleMinutes={IDLE_LOCK_MS / 60000}
-            onChangePassword={session.changePassword}
-            onLock={session.lock}
-            recoveryEnabled={session.hasRecovery}
-            onEnableRecovery={session.enableRecovery}
-            onDisableRecovery={session.disableRecovery}
-          />
-        )}
+          {activeView === 'settings' && (
+            <Settings
+              email={user?.email ?? ''}
+              idleMinutes={IDLE_LOCK_MS / 60000}
+              onChangePassword={session.changePassword}
+              onLock={session.lock}
+              recoveryEnabled={session.hasRecovery}
+              onEnableRecovery={session.enableRecovery}
+              onDisableRecovery={session.disableRecovery}
+            />
+          )}
+        </div>
       </main>
     </div>
   );

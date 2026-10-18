@@ -1,6 +1,8 @@
 import { type FormEvent, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
+import { ThemeToggle } from './ui/ThemeToggle';
 
 type SettingsProps = {
   email: string;
@@ -38,60 +40,63 @@ export function Settings({
       setNext('');
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to change the master password.');
+      setError(friendlyError(err, 'Não foi possível trocar a senha mestra.'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="settings-grid">
+    <div className="grid grid--2">
       <MfaSettings />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Session</p>
-            <h3>Vault lock</h3>
-          </div>
-        </div>
-        <p>Signed in as {email}.</p>
-        <p>The vault locks automatically after {idleMinutes} minutes of inactivity. Decrypted data is kept in memory only.</p>
-        <button type="button" className="ghost-button" onClick={onLock}>
-          Lock now
-        </button>
-      </div>
 
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <p className="eyebrow">Encryption</p>
-            <h3>Change master password</h3>
-          </div>
+      <section className="card">
+        <div>
+          <p className="eyebrow">Criptografia</p>
+          <h2>Trocar a senha mestra</h2>
         </div>
-        <form className="form-grid" onSubmit={submit}>
-          <label>
-            Current master password
+        <form className="form" onSubmit={submit}>
+          <label className="field">
+            Senha mestra atual
             <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
           </label>
-          <label>
-            New master password
+          <label className="field">
+            Nova senha mestra
             <input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
           </label>
-          {done && <div className="notice success">Master password changed. Your entries remain intact.</div>}
-          {error && <div className="form-error">{error}</div>}
-          <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={busy}>
-              {busy ? 'Working…' : 'Change password'}
+          {done && <div className="alert alert--ok">Senha mestra trocada. Suas credenciais continuam intactas.</div>}
+          {error && <div className="alert alert--error">{error}</div>}
+          <div className="form__actions">
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {busy ? 'Processando…' : 'Trocar senha mestra'}
             </button>
           </div>
         </form>
-        <p className="notice warning">
+        <p className="subtle">
           {recoveryEnabled
-            ? 'If you forget your master password, use your recovery key on the unlock screen.'
-            : 'Without a recovery key, a forgotten master password means nobody can decrypt your vault.'}
+            ? 'Se esquecer a senha mestra, use a chave de recuperação na tela de desbloqueio.'
+            : 'Sem chave de recuperação, uma senha mestra esquecida significa que ninguém consegue descriptografar o cofre.'}
         </p>
-      </div>
+      </section>
+
+      <section className="card">
+        <div>
+          <p className="eyebrow">Sessão</p>
+          <h2>Bloqueio e aparência</h2>
+        </div>
+        <p className="muted">Conectado como {email}.</p>
+        <p className="muted">
+          O cofre é bloqueado automaticamente após {idleMinutes} minutos sem uso. Os dados descriptografados ficam só na
+          memória deste navegador.
+        </p>
+        <div className="row">
+          <button type="button" className="btn" onClick={onLock}>
+            Bloquear agora
+          </button>
+          <ThemeToggle />
+        </div>
+      </section>
     </div>
   );
 }

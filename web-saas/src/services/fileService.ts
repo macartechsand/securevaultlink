@@ -60,7 +60,7 @@ export function expiryFromHours(hours: number) {
 export class FileServiceError extends Error {}
 
 const fail = (action: string, error?: { message: string } | null): never => {
-  throw new FileServiceError(`${action} failed${error?.message ? `: ${error.message}` : ''}`);
+  throw new FileServiceError(`${action}${error?.message ? `: ${error.message}` : ''}`);
 };
 
 export type KeyContext = { dek: CryptoKey; userId: string };
@@ -123,7 +123,7 @@ export async function ensureUserKeyPair({ dek, userId }: KeyContext): Promise<Us
     .from('user_keys')
     .select('public_key, wrapped_private_key')
     .maybeSingle<{ public_key: string; wrapped_private_key: string }>();
-  if (error) fail('Loading sharing keys', error);
+  if (error) fail('Falha ao carregar as chaves de compartilhamento', error);
   if (data) {
     return { publicKey: data.public_key, privateKey: await unwrapUserPrivateKey(dek, userId, data.wrapped_private_key) };
   }
@@ -131,7 +131,7 @@ export async function ensureUserKeyPair({ dek, userId }: KeyContext): Promise<Us
   const { error: insertError } = await supabase
     .from('user_keys')
     .insert({ public_key: pair.publicKey, wrapped_private_key: pair.wrappedPrivateKey });
-  if (insertError) fail('Creating sharing keys', insertError);
+  if (insertError) fail('Falha ao criar as chaves de compartilhamento', insertError);
   return { publicKey: pair.publicKey, privateKey: await unwrapUserPrivateKey(dek, userId, pair.wrappedPrivateKey) };
 }
 
@@ -152,7 +152,7 @@ function toVaultFile(row: FileRow, meta: FileMetadata): VaultFile {
 
 async function downloadObject(path: string): Promise<Uint8Array<ArrayBuffer>> {
   const { data, error } = await supabase.storage.from(BUCKET).download(path);
-  if (error || !data) fail('Downloading file', error);
+  if (error || !data) fail('Falha ao baixar o arquivo', error);
   return new Uint8Array(await data!.arrayBuffer());
 }
 
@@ -183,7 +183,7 @@ async function uploadEncrypted(
   kind: 'vault' | 'transfer',
   expiresAt: string | null,
 ): Promise<{ file: VaultFile; fileKey: Uint8Array<ArrayBuffer> }> {
-  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('Files can have at most 25 MB on the free plan.');
+  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('No plano gratuito, cada arquivo pode ter até 25 MB.');
   const id = crypto.randomUUID();
   const fileKey = generateFileKey();
   const meta: FileMetadata = { name: file.name, type: file.type || 'application/octet-stream', size: file.size };
@@ -200,7 +200,7 @@ async function uploadEncrypted(
     storage_path: storagePath,
     expires_at: expiresAt,
   });
-  if (rowError) fail('Preparing upload', rowError);
+  if (rowError) fail('Falha ao preparar o envio', rowError);
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -210,14 +210,14 @@ async function uploadEncrypted(
     });
   if (uploadError) {
     await supabase.from('vault_files').delete().eq('id', id);
-    fail('Uploading file', uploadError);
+    fail('Falha ao enviar o arquivo', uploadError);
   }
 
   const { data: status, error: finalizeError } = await supabase.rpc('finalize_vault_file', { p_file_id: id });
   if (finalizeError || status !== 'ready') {
     await supabase.storage.from(BUCKET).remove([storagePath]);
     await supabase.from('vault_files').delete().eq('id', id);
-    fail('Verifying upload', finalizeError ?? { message: 'size mismatch' });
+    fail('Falha ao verificar o envio', finalizeError ?? { message: 'tamanho divergente' });
   }
 
   return {
@@ -248,7 +248,7 @@ export async function listOwnFiles(ctx: KeyContext): Promise<{ files: VaultFile[
     .eq('status', 'ready')
     .order('created_at', { ascending: false })
     .returns<FileRow[]>();
-  if (error) fail('Loading files', error);
+  if (error) fail('Falha ao carregar os arquivos', error);
   const files: VaultFile[] = [];
   let undecryptable = 0;
   for (const row of data ?? []) {
@@ -268,7 +268,7 @@ export async function downloadOwnFile(ctx: KeyContext, file: VaultFile) {
     .select('wrapped_key')
     .eq('id', file.id)
     .single<{ wrapped_key: string }>();
-  if (error || !data) fail('Loading file key', error);
+  if (error || !data) fail('Falha ao carregar a chave do arquivo', error);
   const key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, file.id, data!.wrapped_key);
   const plain = await decryptFileContent(key, file.id, await downloadObject(file.storagePath), file.chunkSize);
   saveToDisk(plain, file.meta.name);
@@ -277,9 +277,9 @@ export async function downloadOwnFile(ctx: KeyContext, file: VaultFile) {
 
 export async function deleteFile(file: VaultFile) {
   const { error: storageError } = await supabase.storage.from(BUCKET).remove([file.storagePath]);
-  if (storageError) fail('Deleting file', storageError);
+  if (storageError) fail('Falha ao excluir o arquivo', storageError);
   const { error } = await supabase.from('vault_files').delete().eq('id', file.id);
-  if (error) fail('Deleting file record', error);
+  if (error) fail('Falha ao excluir o registro do arquivo', error);
 }
 
 export function usedBytes(files: VaultFile[]) {
@@ -290,7 +290,7 @@ export function usedBytes(files: VaultFile[]) {
 
 export async function findRecipient(email: string): Promise<{ userId: string; publicKey: string } | null> {
   const { data, error } = await supabase.rpc('find_share_recipient', { p_email: email });
-  if (error) fail('Looking up recipient', error);
+  if (error) fail('Falha ao buscar o destinatário', error);
   const row = (data as { user_id: string; public_key: string }[] | null)?.[0];
   return row ? { userId: row.user_id, publicKey: row.public_key } : null;
 }
@@ -307,7 +307,7 @@ export async function shareFile(
     .select('wrapped_key')
     .eq('id', file.id)
     .single<{ wrapped_key: string }>();
-  if (error || !data) fail('Loading file key', error);
+  if (error || !data) fail('Falha ao carregar a chave do arquivo', error);
   const key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, file.id, data!.wrapped_key);
   const sealed = await sealFileKeyForRecipient(recipient.publicKey, key, file.id, recipient.userId);
   const { error: insertError } = await supabase
@@ -315,7 +315,7 @@ export async function shareFile(
     .insert({ file_id: file.id, recipient_id: recipient.userId, sealed_key: sealed, expires_at: expiresAt });
   if (insertError) {
     if (insertError.code === '23505') throw new FileServiceError('This file is already shared with that person.');
-    fail('Sharing file', insertError);
+    fail('Falha ao compartilhar o arquivo', insertError);
   }
 }
 
@@ -325,7 +325,7 @@ export async function listSharesForFile(fileId: string): Promise<FileShare[]> {
     .select('id, recipient_id, recipient_email, created_at, expires_at')
     .eq('file_id', fileId)
     .returns<{ id: string; recipient_id: string; recipient_email: string | null; created_at: string; expires_at: string | null }[]>();
-  if (error) fail('Loading shares', error);
+  if (error) fail('Falha ao carregar os compartilhamentos', error);
   return (data ?? []).map((s) => ({
     id: s.id,
     recipientId: s.recipient_id,
@@ -338,7 +338,7 @@ export async function listSharesForFile(fileId: string): Promise<FileShare[]> {
 /** Removes a share (owner revokes, or recipient removes it from their list). */
 export async function removeShare(shareId: string) {
   const { error } = await supabase.from('file_shares').delete().eq('id', shareId);
-  if (error) fail('Removing share', error);
+  if (error) fail('Falha ao remover o compartilhamento', error);
 }
 
 export async function listSharedWithMe(ctx: KeyContext, keys: UserKeyPair): Promise<{ files: SharedFile[]; undecryptable: number }> {
@@ -347,7 +347,7 @@ export async function listSharedWithMe(ctx: KeyContext, keys: UserKeyPair): Prom
     .select(`id, owner_email, sealed_key, expires_at, vault_files!inner(${FILE_COLUMNS})`)
     .eq('recipient_id', ctx.userId)
     .order('created_at', { ascending: false });
-  if (error) fail('Loading shared files', error);
+  if (error) fail('Falha ao carregar os arquivos compartilhados', error);
   const files: SharedFile[] = [];
   let undecryptable = 0;
   for (const share of (data ?? []) as unknown as { id: string; owner_email: string | null; sealed_key: string; expires_at: string | null; vault_files: FileRow }[]) {
@@ -399,7 +399,7 @@ export async function createTransfer(
   });
   if (error) {
     await deleteFile(uploaded).catch(() => undefined);
-    fail('Creating transfer', error);
+    fail('Falha ao criar a transferência', error);
   }
   const link = `${window.location.origin}/?transfer=${id}#k=${keys.linkSecret}`;
   return {
@@ -424,7 +424,7 @@ export async function listTransfers(ownFiles: VaultFile[]): Promise<Transfer[]> 
     .select('id, file_id, max_downloads, download_count, revoked, expires_at, password_salt')
     .order('created_at', { ascending: false })
     .returns<{ id: string; file_id: string; max_downloads: number; download_count: number; revoked: boolean; expires_at: string; password_salt: string | null }[]>();
-  if (error) fail('Loading transfers', error);
+  if (error) fail('Falha ao carregar as transferências', error);
   return (data ?? []).map((t) => ({
     id: t.id,
     fileId: t.file_id,
@@ -439,7 +439,7 @@ export async function listTransfers(ownFiles: VaultFile[]): Promise<Transfer[]> 
 
 export async function revokeTransfer(id: string) {
   const { error } = await supabase.from('transfers').update({ revoked: true }).eq('id', id);
-  if (error) fail('Revoking transfer', error);
+  if (error) fail('Falha ao revogar a transferência', error);
 }
 
 /* ------------------------------------------------------------------ public transfer download */

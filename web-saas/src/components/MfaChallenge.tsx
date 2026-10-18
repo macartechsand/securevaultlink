@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { friendlyError } from '../lib/messages';
 
 type MfaChallengeProps = {
   email: string;
@@ -18,7 +19,7 @@ export function MfaChallenge({ email, onVerify, onSignOut }: MfaChallengeProps) 
     try {
       await onVerify(code);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed.');
+      setError(friendlyError(err, 'Falha na verificação.'));
       setCode('');
     } finally {
       setBusy(false);
@@ -26,13 +27,15 @@ export function MfaChallenge({ email, onVerify, onSignOut }: MfaChallengeProps) 
   };
 
   return (
-    <section className="page-panel auth-box">
-      <p className="eyebrow">Two-factor authentication</p>
-      <h3>Enter your authenticator code</h3>
-      <p className="subheadline">Signed in as {email}</p>
-      <form className="form-grid" onSubmit={submit}>
-        <label>
-          6-digit code
+    <>
+      <div>
+        <p className="eyebrow">Verificação em duas etapas</p>
+        <h2>Digite o código do autenticador</h2>
+        <p className="subtle">Conectado como {email}</p>
+      </div>
+      <form className="form" onSubmit={submit}>
+        <label className="field">
+          Código de 6 dígitos
           <input
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -44,17 +47,15 @@ export function MfaChallenge({ email, onVerify, onSignOut }: MfaChallengeProps) 
             required
           />
         </label>
-        {error && <div className="form-error">{error}</div>}
-        <div className="form-actions">
-          <button type="submit" className="primary-button" disabled={busy}>
-            {busy ? 'Verifying…' : 'Verify'}
-          </button>
-          <button type="button" className="ghost-button" onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
+        {error && <div className="alert alert--error">{error}</div>}
+        <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
+          {busy ? 'Verificando…' : 'Verificar'}
+        </button>
+        <button type="button" className="btn btn--ghost btn--block" onClick={onSignOut}>
+          Sair
+        </button>
       </form>
-      <p className="notice">Lost your authenticator? Contact support: an administrator must remove the factor from your account.</p>
-    </section>
+      <p className="subtle">Perdeu o autenticador? Fale com o suporte: um administrador precisa remover o fator da sua conta.</p>
+    </>
   );
 }
