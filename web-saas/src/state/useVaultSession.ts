@@ -176,6 +176,15 @@ export function useVaultSession() {
       dekRef.current = dek;
       await loadEntries(dek, current.id);
       setStatus('unlocked');
+      // Create (or load) the sharing key pair right away, so others can share files with this user
+      // without them having to open Files first. Best effort: Files retries on demand.
+      if (!keyPairRef.current) {
+        keyPairRef.current = ensureUserKeyPair({ dek, userId: current.id }).catch((error) => {
+          keyPairRef.current = null;
+          throw error;
+        });
+        keyPairRef.current.catch(() => undefined);
+      }
     },
     [loadEntries],
   );

@@ -360,7 +360,7 @@ function ShareDialog({
     event.preventDefault();
     void run(async () => {
       const found = await findRecipient(email);
-      if (!found) throw new Error('No SecureVault user with a sharing key was found for that email. They must sign in and open Files once.');
+      if (!found) throw new Error('No SecureVault user found for that email. Check the address; the person must have an account and have unlocked their vault at least once.');
       setCandidate({ ...found, fingerprint: await publicKeyFingerprint(found.publicKey) });
     });
   };
