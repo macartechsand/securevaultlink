@@ -6,6 +6,7 @@ type SidebarProps = {
   onSelect: (view: string) => void;
   onLock: () => void;
   onSignOut: () => void;
+  showAdmin?: boolean;
 };
 
 export const NAV_ITEMS: { key: string; label: string; icon: IconName }[] = [
@@ -17,7 +18,10 @@ export const NAV_ITEMS: { key: string; label: string; icon: IconName }[] = [
   { key: 'settings', label: 'Configurações', icon: 'settings' },
 ];
 
-export function Sidebar({ activeView, onSelect, onLock, onSignOut }: SidebarProps) {
+export const ADMIN_ITEM = { key: 'admin', label: 'Administração', icon: 'users' as IconName };
+
+export function Sidebar({ activeView, onSelect, onLock, onSignOut, showAdmin = false }: SidebarProps) {
+  const navItems = showAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -31,7 +35,7 @@ export function Sidebar({ activeView, onSelect, onLock, onSignOut }: SidebarProp
       </div>
 
       <nav className="nav" aria-label="Navegação principal">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <button
             key={item.key}
             type="button"

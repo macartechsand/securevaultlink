@@ -36,9 +36,14 @@ const LABELS: Record<string, string> = {
   'session.others_signed_out': 'Outras sessões encerradas',
   'session.revoked': 'Sessão encerrada',
   'client.error': 'Erro do aplicativo registrado',
+  'admin.plan_changed': 'Plano alterado por um administrador',
+  'admin.mfa_reset': 'Verificação em duas etapas removida por um administrador',
+  'admin.sessions_revoked': 'Sessões encerradas por um administrador',
+  'admin.user_suspended': 'Conta suspensa por um administrador',
+  'admin.user_unsuspended': 'Conta reativada por um administrador',
 };
 
-const SENSITIVE = new Set(['vault.unlock_failed', 'vault.recovered', 'vault.recovery_disabled', 'mfa.disabled', 'file.upload_rejected']);
+const SENSITIVE = new Set(['admin.mfa_reset', 'admin.user_suspended', 'admin.sessions_revoked', 'vault.unlock_failed', 'vault.recovered', 'vault.recovery_disabled', 'mfa.disabled', 'file.upload_rejected']);
 
 function describe(e: AuditEvent) {
   const d = e.details;

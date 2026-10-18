@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityView } from './components/ActivityView';
+import { AdminView } from './components/AdminView';
+import { DiagnosticsCard } from './components/DiagnosticsCard';
 import { AuthScreen } from './components/AuthScreen';
 import { FilesView } from './components/FilesView';
 import { Generator } from './components/Generator';
@@ -9,7 +11,7 @@ import { ItemShareDialog } from './components/ItemShareDialog';
 import { MfaChallenge } from './components/MfaChallenge';
 import { PostureCard } from './components/PostureCard';
 import { Settings } from './components/Settings';
-import { NAV_ITEMS, Sidebar } from './components/Sidebar';
+import { ADMIN_ITEM, NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
 import { TransferDownload } from './components/TransferDownload';
 import { VaultGate } from './components/VaultGate';
@@ -23,6 +25,7 @@ import { friendlyError } from './lib/messages';
 import { type PostureInput, computePosture } from './lib/posture';
 import { isSupabaseConfigured } from './lib/supabase';
 import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
+import { type AdminStatus, fetchAdminStatus } from './services/adminService';
 import { listVerifiedTotpFactors } from './services/mfaService';
 import { fetchSessions, fetchSharingExposure } from './services/postureService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
@@ -50,7 +53,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   files: { title: 'Arquivos', subtitle: 'Arquivos, compartilhamentos e transferências temporárias.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
-  settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação e sessão.' },
+  settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
+  admin: { title: 'Administração', subtitle: 'Operação da plataforma: usuários, sinais e saúde do sistema.' },
 };
 
 type Editing = { item?: VaultItem; type?: ItemType } | null;
@@ -73,8 +77,12 @@ function VaultApp() {
   const [securityCheckRan, setSecurityCheckRan] = useState(false);
   const [vaultFilter, setVaultFilter] = useState<{ value?: string; key: number }>({ key: 0 });
 
+  const [adminStatus, setAdminStatus] = useState<AdminStatus>(null);
+
   useEffect(() => {
-    if (status === 'unlocked') void fetchPlanLimits().then(setLimits);
+    if (status !== 'unlocked') return;
+    void fetchPlanLimits().then(setLimits);
+    void fetchAdminStatus().then(setAdminStatus);
   }, [status]);
 
   // Posture inputs: refreshed when the dashboard is shown.
@@ -189,7 +197,7 @@ function VaultApp() {
   const penalty = health.counts.weak + health.counts.reused / 2 + health.counts.exposed;
   const score = checkable === 0 ? null : Math.max(0, Math.round(((checkable - penalty) / checkable) * 100));
   const page = PAGE_TITLES[activeView] ?? PAGE_TITLES.dashboard;
-  const pageLabel = NAV_ITEMS.find((n) => n.key === activeView)?.label;
+  const pageLabel = [...NAV_ITEMS, ADMIN_ITEM].find((n) => n.key === activeView)?.label;
   const titleOf = (id: string) => items.find((i) => i.id === id)?.data.title ?? '?';
   const recent = [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
   const posture = computePosture({
@@ -216,7 +224,13 @@ function VaultApp() {
 
   return (
     <div className="shell">
-      <Sidebar activeView={activeView} onSelect={setActiveView} onLock={session.lock} onSignOut={() => void session.signOut()} />
+      <Sidebar
+        activeView={activeView}
+        onSelect={setActiveView}
+        onLock={session.lock}
+        onSignOut={() => void session.signOut()}
+        showAdmin={Boolean(adminStatus)}
+      />
 
       <main className="main">
         <header className="topbar">
@@ -417,6 +431,16 @@ function VaultApp() {
               onDisableRecovery={session.disableRecovery}
             />
           )}
+          {activeView === 'settings' && (
+            <DiagnosticsCard
+              getKeyContext={session.getKeyContext}
+              getKeyPair={session.getKeyPair}
+              itemCount={items.length}
+              undecryptable={session.undecryptable}
+            />
+          )}
+
+          {activeView === 'admin' && adminStatus && <AdminView status={adminStatus} />}
         </div>
       </main>
     </div>

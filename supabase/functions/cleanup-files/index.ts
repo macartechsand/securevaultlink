@@ -62,5 +62,8 @@ Deno.serve(async (req) => {
     removed += chunk.length
   }
 
+  // Heartbeat for the admin health panel (no user data).
+  await admin.from('audit_events').insert({ user_id: null, event: 'system.cleanup', source: 'server', details: { removed, sharesRemoved, itemSharesRemoved } })
+
   return new Response(JSON.stringify({ removed, sharesRemoved, itemSharesRemoved }), { headers: { 'Content-Type': 'application/json' } })
 })
