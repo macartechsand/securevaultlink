@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { formatDateTime, friendlyError } from '../lib/messages';
-import { type BetaSettings, fetchBetaSettings, inviteEmail, setSetting, uninviteEmail } from '../services/adminService';
+import { type BetaSettings, createInviteLink, fetchBetaSettings, inviteEmail, setSetting, uninviteEmail } from '../services/adminService';
+import { OneTimeLink } from './OneTimeLink';
 import { Icon } from './ui/Icon';
 
 const NUMERIC = [
@@ -18,6 +19,7 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [oneTime, setOneTime] = useState<{ email: string; link: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -114,8 +116,9 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
           <p className="eyebrow">Convites</p>
           <h2>E-mails autorizados ({data.invites.length})</h2>
           <p className="subtle">
-            Só estes e-mails conseguem criar conta. O convite não envia e-mail: avise a pessoa para se cadastrar com
-            exatamente este endereço.
+            Só estes e-mails conseguem criar conta. <strong>Convidar</strong> apenas autoriza o endereço (a pessoa se cadastra e
+            confirma por e-mail). <strong>Gerar link de acesso</strong> cria a conta já confirmada e mostra um link para você
+            enviar por outro canal: use quando os e-mails do Supabase não estiverem chegando.
           </p>
         </div>
         {canAct && (
@@ -136,8 +139,25 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
               <Icon name="plus" size={14} />
               Convidar
             </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={busy || !email}
+              onClick={() =>
+                void run('Conta criada. Envie o link à pessoa.', async () => {
+                  if (note) await inviteEmail(email, note);
+                  setOneTime(await createInviteLink(email));
+                  setEmail('');
+                  setNote('');
+                })
+              }
+            >
+              <Icon name="link" size={14} />
+              Convidar e gerar link
+            </button>
           </form>
         )}
+        {oneTime && <OneTimeLink email={oneTime.email} link={oneTime.link} kind="invite" onClose={() => setOneTime(null)} />}
         {info && <div className="alert alert--ok">{info}</div>}
         {error && <div className="alert alert--error">{error}</div>}
         {data.invites.length === 0 ? (
@@ -154,9 +174,19 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
                   </span>
                 </span>
                 {canAct && !i.registered && (
-                  <button type="button" className="btn btn--sm btn--danger" disabled={busy} onClick={() => void run('Convite removido.', () => uninviteEmail(i.email))}>
-                    Remover
-                  </button>
+                  <span className="row">
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy}
+                      onClick={() => void run('Conta criada. Envie o link à pessoa.', async () => setOneTime(await createInviteLink(i.email)))}
+                    >
+                      Gerar link de acesso
+                    </button>
+                    <button type="button" className="btn btn--sm btn--danger" disabled={busy} onClick={() => void run('Convite removido.', () => uninviteEmail(i.email))}>
+                      Remover
+                    </button>
+                  </span>
                 )}
               </li>
             ))}

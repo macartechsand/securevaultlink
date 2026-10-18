@@ -14,6 +14,7 @@ import {
 import { passwordStrength } from '../lib/health/passwordHealth';
 import type { SecuredItemData } from '../lib/items';
 import { friendlyError } from '../lib/messages';
+import { ARRIVED_TO_SET_PASSWORD, clearAuthParamsFromUrl } from '../lib/authRedirect';
 import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
@@ -60,6 +61,8 @@ export function useVaultSession() {
   const [undecryptable, setUndecryptable] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [hasRecovery, setHasRecovery] = useState(false);
+  // Arrived through an invite or password-reset link: the account password must be set first.
+  const [needsAccountPassword, setNeedsAccountPassword] = useState(ARRIVED_TO_SET_PASSWORD);
   const dekRef = useRef<CryptoKey | null>(null);
   const keyPairRef = useRef<Promise<UserKeyPair> | null>(null);
   const itemKeysRef = useRef<ops.ItemKeys>(new Map());
@@ -126,7 +129,8 @@ export function useVaultSession() {
       if (data.session?.user) void bootstrap(data.session.user);
       else setStatus('signed-out');
     });
-    const { data: listener } = auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setNeedsAccountPassword(true);
       // supabase-js warns against awaiting other Supabase calls inside this callback (it can
       // deadlock the auth lock), so defer the work to the next tick.
       window.setTimeout(() => {
@@ -192,6 +196,23 @@ export function useVaultSession() {
     const { data, error } = await auth.signUp(email, password);
     if (error) throw new Error(error.message);
     return { needsConfirmation: !data.session };
+  }, []);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await auth.requestPasswordReset(email);
+    if (error) throw new Error(error.message);
+  }, []);
+
+  const resendConfirmation = useCallback(async (email: string) => {
+    const { error } = await auth.resendConfirmation(email);
+    if (error) throw new Error(error.message);
+  }, []);
+
+  const setAccountPassword = useCallback(async (password: string) => {
+    const { error } = await auth.setAccountPassword(password);
+    if (error) throw new Error(error.message);
+    setNeedsAccountPassword(false);
+    clearAuthParamsFromUrl();
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -419,6 +440,10 @@ export function useVaultSession() {
     undecryptable,
     signUp,
     signIn,
+    requestPasswordReset,
+    resendConfirmation,
+    needsAccountPassword,
+    setAccountPassword,
     signOut,
     setupVault,
     unlock,

@@ -1,3 +1,5 @@
+// Must run first: reads the auth link type before the Supabase client consumes the URL.
+import './lib/authRedirect'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/theme.css'

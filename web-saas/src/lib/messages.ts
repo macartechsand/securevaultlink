@@ -4,6 +4,9 @@
  */
 const EXACT: Record<string, string> = {
   'Invalid login credentials': 'E-mail ou senha da conta incorretos.',
+  'New password should be different from the old password.': 'A nova senha precisa ser diferente da anterior.',
+  'Email rate limit exceeded': 'Limite de envio de e-mails atingido. Tente mais tarde ou peça um link ao administrador.',
+  'email rate limit exceeded': 'Limite de envio de e-mails atingido. Tente mais tarde ou peça um link ao administrador.',
   'Email not confirmed': 'Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).',
   'User already registered': 'Já existe uma conta com este e-mail.',
   // The closed-beta trigger rejects the insert; Supabase Auth reports it generically.

@@ -16,7 +16,20 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const ACTIONS = ['health', 'reset_mfa', 'suspend', 'unsuspend'] as const
+const ACTIONS = ['health', 'reset_mfa', 'suspend', 'unsuspend', 'invite_link', 'recovery_link'] as const
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+// Where sign-in links may send people back to (comma-separated origins). Falls back to the Site URL.
+const APP_ORIGINS = (Deno.env.get('APP_ORIGINS') ?? '').split(',').map((o) => o.trim()).filter(Boolean)
+function redirectFor(requested: unknown): string | undefined {
+  if (typeof requested !== 'string') return undefined
+  try {
+    const origin = new URL(requested).origin
+    return APP_ORIGINS.includes(origin) ? `${origin}/` : undefined
+  } catch {
+    return undefined
+  }
+}
 type Action = (typeof ACTIONS)[number]
 
 Deno.serve(async (req) => {
@@ -37,12 +50,18 @@ Deno.serve(async (req) => {
 
   let action: Action
   let target = ''
+  let email = ''
+  let redirectTo: string | undefined
   try {
     const body = await req.json()
     action = body.action
     target = String(body.userId ?? '')
+    email = String(body.email ?? '').trim().toLowerCase()
+    redirectTo = redirectFor(body.redirectTo)
     if (!ACTIONS.includes(action)) throw new Error('bad action')
-    if (action !== 'health' && !UUID.test(target)) throw new Error('bad user')
+    if (action === 'invite_link') {
+      if (!EMAIL.test(email)) throw new Error('bad email')
+    } else if (action !== 'health' && !UUID.test(target)) throw new Error('bad user')
   } catch {
     return json({ error: 'invalid request' }, 400)
   }
@@ -52,6 +71,32 @@ Deno.serve(async (req) => {
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
   const audit = (event: string, details: Record<string, unknown> = {}) =>
     admin.from('audit_events').insert({ user_id: target, actor_id: userData.user!.id, event, target_type: 'user', target_id: target, details })
+
+  // One-time sign-in links, generated WITHOUT sending e-mail (for when SMTP is not configured).
+  // The admin delivers them through another channel. They are credentials: shown once, expire, audited.
+  if (action === 'invite_link') {
+    // Inviting implies authorizing the address in the closed beta.
+    await admin.from('beta_allowlist').upsert({ email, note: 'convite com link', invited_by: userData.user.id }, { onConflict: 'email' })
+    const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email, options: redirectTo ? { redirectTo } : undefined })
+    if (error || !data?.properties?.action_link) {
+      const msg = error?.message ?? ''
+      if (/already|registered|exists/i.test(msg)) return json({ error: 'Este e-mail já tem conta. Use "Gerar link de redefinição" no usuário.' }, 409)
+      if (/Database error/i.test(msg)) return json({ error: 'O beta está cheio (limite de contas atingido).' }, 409)
+      return json({ error: 'Não foi possível gerar o convite.' }, 502)
+    }
+    target = data.user?.id ?? ''
+    await audit('admin.invite_link_created', { email })
+    return json({ link: data.properties.action_link, email })
+  }
+
+  if (action === 'recovery_link') {
+    const { data: u, error: userError } = await admin.auth.admin.getUserById(target)
+    if (userError || !u.user?.email) return json({ error: 'Usuário não encontrado.' }, 404)
+    const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email: u.user.email, options: redirectTo ? { redirectTo } : undefined })
+    if (error || !data?.properties?.action_link) return json({ error: 'Não foi possível gerar o link.' }, 502)
+    await audit('admin.recovery_link_created')
+    return json({ link: data.properties.action_link, email: u.user.email })
+  }
 
   if (action === 'health') {
     const bucket = await admin.storage.getBucket('vault-files')

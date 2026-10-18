@@ -12,6 +12,7 @@ import { MfaChallenge } from './components/MfaChallenge';
 import { PostureCard } from './components/PostureCard';
 import { RotateWizard } from './components/RotateWizard';
 import { RotationView } from './components/RotationView';
+import { SetAccountPassword } from './components/SetAccountPassword';
 import { Settings } from './components/Settings';
 import { ADMIN_ITEM, NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
@@ -158,12 +159,28 @@ function VaultApp() {
     );
   }
 
+  // Arrived through an invite or reset link: choose the account password before anything else.
+  if (user && session.needsAccountPassword && status !== 'loading') {
+    return (
+      <CenterLayout>
+        <SetAccountPassword email={user.email ?? ''} onSet={session.setAccountPassword} onSignOut={() => void session.signOut()} />
+      </CenterLayout>
+    );
+  }
+
   if (status !== 'unlocked') {
     const signOut = () => void session.signOut();
     return (
       <CenterLayout>
         {status === 'loading' && <p className="muted">Carregando…</p>}
-        {status === 'signed-out' && <AuthScreen onSignIn={session.signIn} onSignUp={session.signUp} />}
+        {status === 'signed-out' && (
+          <AuthScreen
+            onSignIn={session.signIn}
+            onSignUp={session.signUp}
+            onResetPassword={session.requestPasswordReset}
+            onResendConfirmation={session.resendConfirmation}
+          />
+        )}
         {status === 'load-error' && (
           <>
             <div>

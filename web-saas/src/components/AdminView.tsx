@@ -5,6 +5,7 @@ import {
   type AdminOverview,
   type AdminStatus,
   type AdminUser,
+  createRecoveryLink,
   fetchOverview,
   listUsers,
   resetUserMfa,
@@ -16,6 +17,7 @@ import {
   userEvents,
 } from '../services/adminService';
 import { BetaAdminTab } from './BetaAdminTab';
+import { OneTimeLink } from './OneTimeLink';
 import { StatCard } from './StatCard';
 import { Icon } from './ui/Icon';
 
@@ -237,6 +239,7 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [oneTime, setOneTime] = useState<{ email: string; link: string } | null>(null);
   const suspended = Boolean(user.banned_until && new Date(user.banned_until) > new Date());
 
   useEffect(() => {
@@ -309,6 +312,20 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
               type="button"
               className="btn btn--sm"
               disabled={busy}
+              onClick={() =>
+                void act(
+                  'Link gerado. Envie à pessoa por um canal seguro.',
+                  `Gerar um link de redefinição da senha de ACESSO de ${user.email}? Confirme a identidade da pessoa por outro canal antes. O link não dá acesso ao cofre.`,
+                  async () => setOneTime(await createRecoveryLink(user.user_id)),
+                )
+              }
+            >
+              Gerar link de redefinição
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={busy}
               onClick={() => void act('Sessões encerradas.', `Encerrar todas as sessões de ${user.email}?`, () => revokeUserSessions(user.user_id))}
             >
               Encerrar sessões
@@ -336,6 +353,7 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
           usuário. Sem a senha mestra ou a chave de recuperação dele, os dados não podem ser lidos.
         </div>
         {info && <div className="alert alert--ok">{info}</div>}
+        {oneTime && <OneTimeLink email={oneTime.email} link={oneTime.link} kind="recovery" onClose={() => setOneTime(null)} />}
         {error && <div className="alert alert--error">{error}</div>}
 
         <h3>Eventos recentes</h3>

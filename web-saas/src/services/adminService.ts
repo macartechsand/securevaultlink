@@ -92,6 +92,12 @@ export const suspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ acti
 export const unsuspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ action: 'unsuspend', userId });
 export const systemHealth = () => callAdmin<{ checks: Record<string, boolean | null> }>({ action: 'health' });
 
+/** One-time links generated without e-mail: the admin delivers them through another channel. */
+export const createInviteLink = (email: string) =>
+  callAdmin<{ link: string; email: string }>({ action: 'invite_link', email, redirectTo: window.location.origin });
+export const createRecoveryLink = (userId: string) =>
+  callAdmin<{ link: string; email: string }>({ action: 'recovery_link', userId, redirectTo: window.location.origin });
+
 /* ------------------------------------------------------------------ closed beta */
 
 export type BetaSettings = {
