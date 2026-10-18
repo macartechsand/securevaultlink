@@ -168,7 +168,7 @@ Se surgir "Could not load your vault", anote a mensagem exibida na tela.
 | Fase | Conteúdo | Situação |
 |---|---|---|
 | A. Base de segurança | Recovery key opcional, planos, 48 h no Free, auditoria | ✅ Código; ⏳ migration e testes |
-| B. Novo visual | Design system escuro + claro, interface em português | ⏳ Próxima |
+| B. Novo visual | Design system escuro + claro, interface em português | ✅ Código (2026-10-18); ⏳ revisão visual do responsável |
 | C. Secured Items | Tipos (login, nota segura, segredo/API key, cartão), campos personalizados, anexos por item, pastas, tags, filtros, histórico de senhas, compartilhamento com permissão de ver ou editar | ⏳ |
 | D. Postura e saúde | Score real (senhas, MFA, recovery, sites, compartilhamentos, idade das senhas), sessões e dispositivos, recomendações | ⏳ |
 | E. Admin e troubleshooting | Painel de admin sem acesso ao conteúdo dos cofres; resetar MFA; saúde do sistema; página de diagnóstico do usuário | ⏳ |
