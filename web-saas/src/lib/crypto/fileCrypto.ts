@@ -206,43 +206,60 @@ async function shareKey(privateKey: CryptoKey, publicKey: CryptoKey, salt: Uint8
   )
 }
 
-/** Seals a file key to a recipient's public key. Output: base64(ephemeralPub(65) || iv || ct). */
-export async function sealFileKeyForRecipient(
+/** ECIES-style seal of a symmetric key to a recipient. Output: base64(ephemeralPub(65) || iv || ct). */
+export async function sealKeyForRecipient(
   recipientPublicKey: string,
-  fileKey: Uint8Array<ArrayBuffer>,
-  fileId: string,
-  recipientId: string,
+  keyBytes: Uint8Array<ArrayBuffer>,
+  info: Uint8Array<ArrayBuffer>,
 ): Promise<string> {
   const recipientSpki = fromBase64(recipientPublicKey)
   const recipient = await subtle().importKey('spki', recipientSpki, ECDH, false, [])
   const ephemeral = await subtle().generateKey(ECDH, true, ['deriveBits'])
   const ephemeralRaw = new Uint8Array(await subtle().exportKey('raw', ephemeral.publicKey))
-  const info = shareInfo(fileId, recipientId)
   const key = await shareKey(ephemeral.privateKey, recipient, concat(ephemeralRaw, recipientSpki), info)
   const iv = randomBytes(12)
-  const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: info }, key, fileKey))
+  const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv, additionalData: info }, key, keyBytes))
   return toBase64(concat(ephemeralRaw, iv, ct))
 }
 
-export async function openSealedFileKey(
+export async function openSealedKey(
+  privateKey: CryptoKey,
+  ownPublicKey: string,
+  sealed: string,
+  info: Uint8Array<ArrayBuffer>,
+  what = 'Shared key',
+): Promise<Uint8Array<ArrayBuffer>> {
+  try {
+    const data = fromBase64(sealed)
+    const ephemeralRaw = data.slice(0, 65)
+    const ephemeral = await subtle().importKey('raw', ephemeralRaw, ECDH, false, [])
+    const key = await shareKey(privateKey, ephemeral, concat(ephemeralRaw, fromBase64(ownPublicKey)), info)
+    return new Uint8Array(
+      await subtle().decrypt({ name: 'AES-GCM', iv: data.slice(65, 77), additionalData: info }, key, data.slice(77)),
+    )
+  } catch {
+    throw new VaultCryptoError(`${what} could not be opened`)
+  }
+}
+
+/** Seals a file key to a recipient's public key. */
+export function sealFileKeyForRecipient(
+  recipientPublicKey: string,
+  fileKey: Uint8Array<ArrayBuffer>,
+  fileId: string,
+  recipientId: string,
+): Promise<string> {
+  return sealKeyForRecipient(recipientPublicKey, fileKey, shareInfo(fileId, recipientId))
+}
+
+export function openSealedFileKey(
   privateKey: CryptoKey,
   ownPublicKey: string,
   sealed: string,
   fileId: string,
   recipientId: string,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  try {
-    const data = fromBase64(sealed)
-    const ephemeralRaw = data.slice(0, 65)
-    const ephemeral = await subtle().importKey('raw', ephemeralRaw, ECDH, false, [])
-    const info = shareInfo(fileId, recipientId)
-    const key = await shareKey(privateKey, ephemeral, concat(ephemeralRaw, fromBase64(ownPublicKey)), info)
-    return new Uint8Array(
-      await subtle().decrypt({ name: 'AES-GCM', iv: data.slice(65, 77), additionalData: info }, key, data.slice(77)),
-    )
-  } catch {
-    throw new VaultCryptoError('Shared file key could not be opened')
-  }
+  return openSealedKey(privateKey, ownPublicKey, sealed, shareInfo(fileId, recipientId), 'Shared file key')
 }
 
 /* ------------------------- temporary transfers ------------------------- */

@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
 
   // Expired user-to-user shares (recipients already lose access at expiry through RLS).
   const sharesRemoved = (await admin.from('file_shares').delete().lte('expires_at', now.toISOString()).select('id')).data?.length ?? 0
+  const itemSharesRemoved = (await admin.from('item_shares').delete().lte('expires_at', now.toISOString()).select('id')).data?.length ?? 0
   // Audit retention: 365 days.
   const auditCutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString()
   await admin.from('audit_events').delete().lt('created_at', auditCutoff)
@@ -61,5 +62,5 @@ Deno.serve(async (req) => {
     removed += chunk.length
   }
 
-  return new Response(JSON.stringify({ removed, sharesRemoved }), { headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify({ removed, sharesRemoved, itemSharesRemoved }), { headers: { 'Content-Type': 'application/json' } })
 })

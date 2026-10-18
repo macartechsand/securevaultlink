@@ -1,25 +1,28 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityView } from './components/ActivityView';
 import { AuthScreen } from './components/AuthScreen';
-import { EntryForm } from './components/EntryForm';
 import { FilesView } from './components/FilesView';
 import { Generator } from './components/Generator';
+import { ItemEditor } from './components/ItemEditor';
+import { ItemList } from './components/ItemList';
+import { ItemShareDialog } from './components/ItemShareDialog';
 import { MfaChallenge } from './components/MfaChallenge';
-import { PasswordTable } from './components/PasswordTable';
 import { Settings } from './components/Settings';
 import { NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
 import { TransferDownload } from './components/TransferDownload';
 import { VaultGate } from './components/VaultGate';
+import { VaultView } from './components/VaultView';
 import { CenterLayout } from './components/ui/CenterLayout';
 import { Icon } from './components/ui/Icon';
-import { analyzeHealth, passwordStrength, type Strength } from './lib/health/passwordHealth';
 import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
-import { categoryLabel } from './lib/labels';
+import { computeItemHealth } from './lib/itemHealth';
+import { type ItemType, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
 import { isSupabaseConfigured } from './lib/supabase';
+import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
-import { IDLE_LOCK_MS, type VaultEntry, useVaultSession } from './state/useVaultSession';
+import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -39,81 +42,73 @@ function App() {
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: 'Visão geral', subtitle: 'Saúde das suas credenciais, calculada só com dados reais.' },
-  vault: { title: 'Cofre', subtitle: 'Credenciais criptografadas no seu dispositivo.' },
+  vault: { title: 'Cofre', subtitle: 'Logins, notas seguras, segredos e cartões criptografados no seu dispositivo.' },
   files: { title: 'Arquivos', subtitle: 'Arquivos, compartilhamentos e transferências temporárias.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação e sessão.' },
 };
 
+type Editing = { item?: VaultItem; type?: ItemType } | null;
+
 function VaultApp() {
   const session = useVaultSession();
-  const { status, user, entries } = session;
+  const { status, user, items } = session;
   const [activeView, setActiveView] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
-  const [editing, setEditing] = useState<VaultEntry | 'new' | null>(null);
+  const [editing, setEditing] = useState<Editing>(null);
+  const [sharingItem, setSharingItem] = useState<VaultItem | null>(null);
   const [actionError, setActionError] = useState('');
   const [pwnedById, setPwnedById] = useState<Map<string, PwnedResult>>(new Map());
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
   const [checking, setChecking] = useState(false);
+  const [limits, setLimits] = useState<PlanLimits>(FREE_LIMITS);
 
-  const health = useMemo(() => analyzeHealth(entries), [entries]);
-  const strengthById = useMemo(() => {
-    const map = new Map<string, Strength>();
-    for (const e of entries) map.set(e.id, passwordStrength(e.password, [e.title, e.username]));
-    return map;
-  }, [entries]);
-  const reusedIds = useMemo(() => new Set(health.reused), [health]);
+  useEffect(() => {
+    if (status === 'unlocked') void fetchPlanLimits().then(setLimits);
+  }, [status]);
 
-  const filtered = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return entries;
-    return entries.filter((e) =>
-      [e.title, e.username, e.url, e.category, categoryLabel(e.category)].some((field) => field.toLowerCase().includes(term)),
-    );
-  }, [entries, searchTerm]);
+  const health = useMemo(() => computeItemHealth(items, pwnedById, siteById), [items, pwnedById, siteById]);
 
-  const exposedCount = useMemo(
-    () =>
-      entries.filter((e) => {
-        const r = pwnedById.get(e.id);
-        return r?.status === 'ok' && r.count > 0;
-      }).length,
-    [entries, pwnedById],
-  );
-  const checkedCount = [...pwnedById.values()].filter((r) => r.status === 'ok').length;
-  const unsafeSites = entries.filter((e) => siteById.get(e.id)?.status === 'unsafe');
-  const siteCheckFailed = [...siteById.values()].some((r) => r.status === 'error');
-
-  const runExposureCheck = useCallback(async () => {
+  const runSecurityCheck = useCallback(async () => {
     setChecking(true);
     try {
+      const checkable = items.filter((i) => hasCheckablePassword(i.data));
       const [results, sites] = await Promise.all([
-        checkPwnedMany(entries.map((e) => e.password)),
-        checkUrlsReputation(entries.map((e) => e.url).filter(Boolean)),
+        checkPwnedMany(checkable.map((i) => i.data.password)),
+        checkUrlsReputation(items.map((i) => i.data.url).filter(Boolean)),
       ]);
       const byId = new Map<string, PwnedResult>();
       const siteMap = new Map<string, UrlReputation>();
-      for (const e of entries) {
-        const r = results.get(e.password);
-        if (r) byId.set(e.id, r);
-        const site = sites.get(e.url);
-        if (site) siteMap.set(e.id, site);
+      for (const i of items) {
+        const r = hasCheckablePassword(i.data) ? results.get(i.data.password) : undefined;
+        if (r) byId.set(i.id, r);
+        const site = sites.get(i.data.url);
+        if (site) siteMap.set(i.id, site);
       }
       setPwnedById(byId);
       setSiteById(siteMap);
     } finally {
       setChecking(false);
     }
-  }, [entries]);
+  }, [items]);
 
-  const handleDelete = async (entry: VaultEntry) => {
-    if (!window.confirm(`Excluir "${entry.title}"? Esta ação não pode ser desfeita.`)) return;
+  const handleDelete = async (item: VaultItem) => {
     setActionError('');
     try {
-      await session.removeEntry(entry.id);
+      if (item.access !== 'owner') {
+        if (!window.confirm(`Remover "${item.data.title}" da sua lista? Você perde o acesso a este item compartilhado.`)) return;
+        await session.leaveSharedItem(item);
+        return;
+      }
+      if (!window.confirm(`Excluir "${item.data.title}"? Esta ação não pode ser desfeita.`)) return;
+      const alsoFiles =
+        item.data.attachments.length > 0 &&
+        window.confirm(`Excluir também os ${item.data.attachments.length} anexo(s) deste item? (Cancelar mantém os arquivos em Arquivos.)`);
+      await session.removeItem(item);
+      if (alsoFiles) for (const a of item.data.attachments) await deleteFileById(a.fileId).catch(() => undefined);
     } catch (err) {
-      setActionError(friendlyError(err, 'Não foi possível excluir a credencial.'));
+      setActionError(friendlyError(err, 'Não foi possível excluir o item.'));
     }
   };
 
@@ -166,13 +161,15 @@ function VaultApp() {
     );
   }
 
-  const weakCount = health.weak.length;
-  const score =
-    entries.length === 0
-      ? null
-      : Math.max(0, Math.round(((entries.length - weakCount - health.reused.length / 2 - exposedCount) / entries.length) * 100));
+  const checkable = health.checkable;
+  const checkedCount = [...pwnedById.values()].filter((r) => r.status === 'ok').length;
+  const siteCheckFailed = [...siteById.values()].some((r) => r.status === 'error');
+  const penalty = health.counts.weak + health.counts.reused / 2 + health.counts.exposed;
+  const score = checkable === 0 ? null : Math.max(0, Math.round(((checkable - penalty) / checkable) * 100));
   const page = PAGE_TITLES[activeView] ?? PAGE_TITLES.dashboard;
   const pageLabel = NAV_ITEMS.find((n) => n.key === activeView)?.label;
+  const titleOf = (id: string) => items.find((i) => i.id === id)?.data.title ?? '?';
+  const recent = [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
 
   return (
     <div className="shell">
@@ -185,7 +182,7 @@ function VaultApp() {
             <span className="sr-only">Buscar no cofre</span>
             <input
               type="search"
-              placeholder="Buscar no cofre"
+              placeholder="Buscar no cofre (título, usuário, tags, campos)"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -195,9 +192,9 @@ function VaultApp() {
           </label>
           <div className="row">
             <span className="subtle">{user?.email}</span>
-            <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
+            <button type="button" className="btn btn--primary" onClick={() => setEditing({})}>
               <Icon name="plus" />
-              Nova credencial
+              Novo item
             </button>
           </div>
         </header>
@@ -212,21 +209,46 @@ function VaultApp() {
           </div>
 
           {editing && (
-            <EntryForm
-              initial={editing === 'new' ? undefined : editing}
+            <ItemEditor
+              item={editing.item}
+              initialType={editing.type}
+              folders={session.folders}
+              getKeyContext={session.getKeyContext}
+              getKeyPair={session.getKeyPair}
+              getHistory={session.getHistory}
               onCancel={() => setEditing(null)}
-              onSubmit={async (data) => {
-                if (editing === 'new') await session.addEntry(data);
-                else await session.editEntry(editing.id, data);
+              onSave={async (data) => {
+                if (editing.item) await session.saveItem(editing.item, data);
+                else await session.addItem(data);
                 setEditing(null);
+              }}
+            />
+          )}
+
+          {sharingItem && (
+            <ItemShareDialog
+              item={items.find((i) => i.id === sharingItem.id) ?? sharingItem}
+              limits={limits}
+              onClose={() => setSharingItem(null)}
+              onShare={async (recipient, permission, expiresAt) => {
+                const current = items.find((i) => i.id === sharingItem.id) ?? sharingItem;
+                await session.shareItem(current, recipient, permission, expiresAt);
+              }}
+              onRevoke={async (share) => {
+                const current = items.find((i) => i.id === sharingItem.id) ?? sharingItem;
+                await session.revokeItemShare(current, share);
+              }}
+              onSetPermission={async (share, permission) => {
+                const current = items.find((i) => i.id === sharingItem.id) ?? sharingItem;
+                await session.setSharePermission(current, share, permission);
               }}
             />
           )}
 
           {session.undecryptable > 0 && (
             <div className="alert alert--warn">
-              {session.undecryptable} credencial(is) não puderam ser descriptografadas (corrompidas ou alteradas) e estão
-              ocultas.
+              {session.undecryptable} item(ns) não puderam ser descriptografados (corrompidos, alterados ou com acesso
+              expirado) e estão ocultos.
             </div>
           )}
           {actionError && <div className="alert alert--error">{actionError}</div>}
@@ -234,40 +256,40 @@ function VaultApp() {
           {activeView === 'dashboard' && (
             <>
               <section className="grid grid--stats">
-                <StatCard label="Credenciais" value={String(entries.length)} />
+                <StatCard label="Itens no cofre" value={String(items.length)} />
                 <StatCard
                   label="Senhas fracas"
-                  value={String(weakCount)}
-                  note={entries.length ? (weakCount ? 'Corrigir' : 'OK') : undefined}
-                  tone={weakCount ? 'bad' : 'good'}
+                  value={String(health.counts.weak)}
+                  note={checkable ? (health.counts.weak ? 'Corrigir' : 'OK') : undefined}
+                  tone={health.counts.weak ? 'bad' : 'good'}
                 />
                 <StatCard
                   label="Senhas reutilizadas"
-                  value={String(health.reused.length)}
-                  note={entries.length ? (health.reused.length ? 'Corrigir' : 'OK') : undefined}
-                  tone={health.reused.length ? 'bad' : 'good'}
+                  value={String(health.counts.reused)}
+                  note={checkable ? (health.counts.reused ? 'Corrigir' : 'OK') : undefined}
+                  tone={health.counts.reused ? 'bad' : 'good'}
                 />
                 <StatCard
                   label="Vazadas em incidentes"
-                  value={checkedCount ? String(exposedCount) : '—'}
+                  value={checkedCount ? String(health.counts.exposed) : '—'}
                   note={checkedCount ? `${checkedCount} verificadas` : 'Não verificado'}
-                  tone={checkedCount ? (exposedCount ? 'bad' : 'good') : 'neutral'}
+                  tone={checkedCount ? (health.counts.exposed ? 'bad' : 'good') : 'neutral'}
                 />
               </section>
 
               <section className="card">
                 <div className="card__header">
                   <div>
-                    <p className="eyebrow">Saúde das credenciais</p>
-                    <h2>{score === null ? 'Sem dados ainda' : `${score}% saudável`}</h2>
+                    <p className="eyebrow">Saúde das senhas</p>
+                    <h2>{score === null ? 'Sem logins ainda' : `${score}% saudável`}</h2>
                   </div>
-                  <button type="button" className="btn btn--primary" onClick={runExposureCheck} disabled={checking || entries.length === 0}>
+                  <button type="button" className="btn btn--primary" onClick={runSecurityCheck} disabled={checking || items.length === 0}>
                     <Icon name="shield" />
                     {checking ? 'Verificando…' : 'Verificar segurança'}
                   </button>
                 </div>
-                {entries.length === 0 ? (
-                  <p className="empty">Adicione credenciais para ver senhas fracas, reutilizadas e vazadas.</p>
+                {checkable === 0 ? (
+                  <p className="empty">Adicione logins para ver senhas fracas, reutilizadas e vazadas.</p>
                 ) : (
                   <>
                     {score !== null && (
@@ -276,60 +298,58 @@ function VaultApp() {
                       </div>
                     )}
                     <p className="subtle">
-                      Baseado nas suas {entries.length} credenciais. A verificação de vazamentos usa a API do Have I Been
-                      Pwned com k-anonimato: só os 5 primeiros caracteres do hash SHA-1 de cada senha saem do seu
-                      dispositivo. Os sites salvos são verificados no Google Safe Browsing.
+                      Baseado em {checkable} login(s). A verificação de vazamentos usa a API do Have I Been Pwned com
+                      k-anonimato (só os 5 primeiros caracteres do hash SHA-1 saem do dispositivo). Os sites são verificados no
+                      Google Safe Browsing.
                     </p>
                     {health.reusedGroups.length > 0 && (
                       <div className="alert alert--warn">
-                        Senhas reutilizadas:{' '}
-                        {health.reusedGroups
-                          .map((group) => group.map((id) => entries.find((e) => e.id === id)?.title ?? '?').join(' = '))
-                          .join('; ')}
+                        Senhas reutilizadas: {health.reusedGroups.map((g) => g.map(titleOf).join(' = ')).join('; ')}
                       </div>
                     )}
-                    {unsafeSites.length > 0 && (
+                    {health.counts.unsafe > 0 && (
                       <div className="alert alert--error">
-                        Site(s) marcado(s) como perigoso(s) pelo Google Safe Browsing: {unsafeSites.map((e) => e.title).join(', ')}.
-                        Não entre nesses sites; revise essas credenciais.
+                        {health.counts.unsafe} site(s) marcado(s) como perigoso(s) pelo Google Safe Browsing. Filtre por risco no
+                        Cofre para revisar.
                       </div>
                     )}
-                    {siteCheckFailed && (
-                      <div className="alert">Não foi possível verificar a reputação de alguns sites (serviço indisponível).</div>
+                    {siteCheckFailed && <div className="alert">Não foi possível verificar a reputação de alguns sites (serviço indisponível).</div>}
+                    {health.counts.exposed > 0 && (
+                      <div className="alert alert--error">{health.counts.exposed} senha(s) aparecem em vazamentos conhecidos. Troque-as no site de origem.</div>
                     )}
-                    {exposedCount > 0 && (
-                      <div className="alert alert--error">
-                        {exposedCount} senha(s) aparecem em vazamentos conhecidos. Troque-as no site de origem.
-                      </div>
+                    {health.counts.stale > 0 && (
+                      <div className="alert alert--warn">{health.counts.stale} senha(s) não são trocadas há mais de 1 ano.</div>
                     )}
                   </>
                 )}
               </section>
 
-              <PasswordTable
-                title="Credenciais recentes"
-                items={entries.slice(0, 5)}
-                strengthById={strengthById}
-                reusedIds={reusedIds}
-                pwnedById={pwnedById}
-                siteById={siteById}
-                onAdd={() => setEditing('new')}
-                onEdit={setEditing}
+              <ItemList
+                title="Alterados recentemente"
+                items={recent}
+                health={health}
+                emptyText="Nenhum item ainda."
+                onNew={() => setEditing({})}
+                onOpen={(item) => setEditing({ item })}
+                onShare={setSharingItem}
                 onDelete={handleDelete}
               />
             </>
           )}
 
           {activeView === 'vault' && (
-            <PasswordTable
-              items={filtered}
-              strengthById={strengthById}
-              reusedIds={reusedIds}
-              pwnedById={pwnedById}
-              siteById={siteById}
-              onAdd={() => setEditing('new')}
-              onEdit={setEditing}
+            <VaultView
+              items={items}
+              folders={session.folders}
+              health={health}
+              query={searchTerm}
+              onNew={(type) => setEditing({ type })}
+              onOpen={(item) => setEditing({ item })}
+              onShare={setSharingItem}
               onDelete={handleDelete}
+              onCreateFolder={session.createFolder}
+              onRenameFolder={session.renameFolder}
+              onDeleteFolder={session.deleteFolder}
             />
           )}
 

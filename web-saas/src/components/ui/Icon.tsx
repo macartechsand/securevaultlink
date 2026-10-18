@@ -27,6 +27,12 @@ const PATHS: Record<string, string> = {
   refresh: 'M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
   close: 'M6 6l12 12M18 6 6 18',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z',
+  note: 'M5 3h14v18H5zM8 8h8M8 12h8M8 16h5',
+  card: 'M3 6h18v12H3zM3 10h18M7 15h4',
+  folder: 'M3 6h6l2 2h10v11H3z',
+  tag: 'M3 12V3h9l9 9-9 9zM7.5 7.5h.01',
+  users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
 }
 
 export type IconName = keyof typeof PATHS

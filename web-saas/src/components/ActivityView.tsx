@@ -27,6 +27,10 @@ const LABELS: Record<string, string> = {
   'transfer.downloaded': 'Transferência baixada',
   'transfer.revoked': 'Transferência revogada',
   'keys.sharing_keypair_created': 'Chaves de compartilhamento criadas',
+  'item.shared': 'Item compartilhado',
+  'item.received': 'Item compartilhado com você',
+  'item.share_removed': 'Compartilhamento de item removido',
+  'item.share_permission_changed': 'Permissão de compartilhamento alterada',
   'mfa.enrolled': 'Verificação em duas etapas ativada',
   'mfa.disabled': 'Verificação em duas etapas desativada',
   'session.others_signed_out': 'Outras sessões encerradas',
@@ -41,9 +45,11 @@ function describe(e: AuditEvent) {
   if (typeof d.recipient === 'string') parts.push(`para ${d.recipient}`);
   if (typeof d.from === 'string') parts.push(`de ${d.from}`);
   if (typeof d.expires_at === 'string') parts.push(`expira em ${formatDateTime(d.expires_at)}`);
-  if (d.expires_at === null && (e.event === 'file.shared' || e.event === 'file.received')) parts.push('sem expiração');
+  if (d.expires_at === null && /\.(shared|received)$/.test(e.event)) parts.push('sem expiração');
   if (typeof d.download === 'number') parts.push(`download ${d.download} de ${d.of}`);
   if (d.password === true) parts.push('protegido por senha');
+  if (d.permission === 'edit') parts.push('pode editar');
+  if (d.permission === 'view') parts.push('somente leitura');
   return parts.join(' · ');
 }
 
@@ -75,6 +81,7 @@ export function ActivityView() {
         <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filtrar eventos" className="filter-select">
           <option value="all">Todos os eventos</option>
           <option value="vault.">Cofre</option>
+          <option value="item.">Compartilhamento de itens</option>
           <option value="file.">Arquivos</option>
           <option value="transfer.">Transferências</option>
           <option value="mfa.">Duas etapas</option>

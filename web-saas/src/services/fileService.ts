@@ -377,6 +377,70 @@ export async function downloadSharedFile(ctx: KeyContext, keys: UserKeyPair, fil
   logClientEvent('file.shared_downloaded', { type: 'file', id: file.id });
 }
 
+/* ------------------------------------------------------------------ item attachments */
+
+async function ownFileRow(fileId: string): Promise<FileRow> {
+  const { data, error } = await supabase.from('vault_files').select(FILE_COLUMNS).eq('id', fileId).single<FileRow>();
+  if (error || !data) fail('Falha ao carregar o anexo', error);
+  return data!;
+}
+
+/** Shares each attachment of a shared item with the same recipient and expiry (view only). */
+export async function shareAttachments(
+  ctx: KeyContext,
+  fileIds: string[],
+  recipient: { userId: string; publicKey: string },
+  expiresAt: string | null,
+) {
+  for (const fileId of fileIds) {
+    const row = await ownFileRow(fileId);
+    const key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, row.id, row.wrapped_key);
+    const sealed = await sealFileKeyForRecipient(recipient.publicKey, key, row.id, recipient.userId);
+    const { error } = await supabase
+      .from('file_shares')
+      .upsert(
+        { file_id: row.id, recipient_id: recipient.userId, sealed_key: sealed, expires_at: expiresAt },
+        { onConflict: 'file_id,recipient_id', ignoreDuplicates: true },
+      );
+    if (error) fail('Falha ao compartilhar o anexo', error);
+  }
+}
+
+export async function unshareAttachments(fileIds: string[], recipientId: string) {
+  if (fileIds.length === 0) return;
+  const { error } = await supabase.from('file_shares').delete().in('file_id', fileIds).eq('recipient_id', recipientId);
+  if (error) fail('Falha ao remover o compartilhamento do anexo', error);
+}
+
+/** Downloads an item attachment, as owner or as a recipient of the item. */
+export async function downloadAttachment(ctx: KeyContext, keys: UserKeyPair | null, fileId: string, name: string) {
+  const { data, error } = await supabase.from('vault_files').select(FILE_COLUMNS).eq('id', fileId).maybeSingle<FileRow>();
+  if (error) fail('Falha ao carregar o anexo', error);
+  if (!data) throw new FileServiceError('Anexo indisponível (excluído ou não compartilhado com você).');
+  let key: Uint8Array<ArrayBuffer>;
+  if (data.owner_id === ctx.userId) {
+    key = await unwrapFileKeyForOwner(ctx.dek, ctx.userId, data.id, data.wrapped_key);
+  } else {
+    if (!keys) throw new FileServiceError('Chaves de compartilhamento indisponíveis.');
+    const { data: share, error: shareError } = await supabase
+      .from('file_shares')
+      .select('sealed_key')
+      .eq('file_id', fileId)
+      .eq('recipient_id', ctx.userId)
+      .maybeSingle<{ sealed_key: string }>();
+    if (shareError || !share) throw new FileServiceError('Anexo não compartilhado com você.');
+    key = await openSealedFileKey(keys.privateKey, keys.publicKey, share.sealed_key, data.id, ctx.userId);
+  }
+  const plain = await decryptFileContent(key, data.id, await downloadObject(data.storage_path), data.chunk_size);
+  saveToDisk(plain, name);
+  logClientEvent(data.owner_id === ctx.userId ? 'file.downloaded' : 'file.shared_downloaded', { type: 'attachment', id: data.id });
+}
+
+export async function deleteFileById(fileId: string) {
+  const row = await ownFileRow(fileId);
+  await deleteFile(toVaultFile(row, { name: '', type: '', size: 0 }));
+}
+
 /* ------------------------------------------------------------------ transfers */
 
 export async function createTransfer(

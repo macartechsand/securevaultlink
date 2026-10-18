@@ -1,31 +1,30 @@
 import type { User } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  type VaultItemData,
   type VaultProfile,
   changeMasterPassword,
   createVault,
-  decryptEntry,
   disableRecoveryKey,
   enableRecoveryKey,
-  encryptEntry,
   hasRecoveryKey,
   resetPasswordWithRecoveryKey,
   unlockWithPassword,
   unlockWithRecoveryKey,
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
+import type { SecuredItemData } from '../lib/items';
 import { friendlyError } from '../lib/messages';
 import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
 import * as mfa from '../services/mfaService';
 import * as vault from '../services/vaultService';
+import * as ops from './itemOps';
 
 export const MASTER_PASSWORD_MIN_LENGTH = 12;
 export const IDLE_LOCK_MS = 5 * 60 * 1000;
 
-export type VaultEntry = VaultItemData & { id: string; createdAt: string; updatedAt: string };
+export type { Folder, ItemShareInfo, VaultItem } from './itemOps';
 
 export type SessionStatus =
   | 'loading'
@@ -56,19 +55,23 @@ const message = (error: unknown, fallback: string) =>
 export function useVaultSession() {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
-  const [entries, setEntries] = useState<VaultEntry[]>([]);
+  const [items, setItems] = useState<ops.VaultItem[]>([]);
+  const [folders, setFolders] = useState<ops.Folder[]>([]);
   const [undecryptable, setUndecryptable] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [hasRecovery, setHasRecovery] = useState(false);
   const dekRef = useRef<CryptoKey | null>(null);
   const keyPairRef = useRef<Promise<UserKeyPair> | null>(null);
+  const itemKeysRef = useRef<ops.ItemKeys>(new Map());
   const profileRef = useRef<VaultProfile | null>(null);
   const userRef = useRef<User | null>(null);
 
   const clearSecrets = useCallback(() => {
     dekRef.current = null;
     keyPairRef.current = null;
-    setEntries([]);
+    itemKeysRef.current = new Map();
+    setItems([]);
+    setFolders([]);
     setUndecryptable(0);
   }, []);
 
@@ -154,19 +157,15 @@ export function useVaultSession() {
     };
   }, [status, lock]);
 
-  const loadEntries = useCallback(async (dek: CryptoKey, userId: string) => {
-    const rows = await vault.fetchEntries();
-    const decrypted: VaultEntry[] = [];
-    let failed = 0;
-    for (const row of rows) {
-      try {
-        const data = await decryptEntry(dek, userId, row.id, row);
-        decrypted.push({ ...data, id: row.id, createdAt: row.created_at, updatedAt: row.updated_at });
-      } catch {
-        failed += 1;
-      }
-    }
-    setEntries(decrypted);
+  const loadAll = useCallback(async (ctx: KeyContext, keyPair: UserKeyPair | null) => {
+    const keys: ops.ItemKeys = new Map();
+    const [{ items: loaded, failed }, loadedFolders] = await Promise.all([
+      ops.loadItems(ctx, keyPair, keys),
+      ops.loadFolders(ctx).catch(() => [] as ops.Folder[]),
+    ]);
+    itemKeysRef.current = keys;
+    setItems(loaded);
+    setFolders(loadedFolders);
     setUndecryptable(failed);
   }, []);
 
@@ -175,19 +174,18 @@ export function useVaultSession() {
       const current = userRef.current;
       if (!current) throw new Error('Not signed in.');
       dekRef.current = dek;
-      await loadEntries(dek, current.id);
+      const ctx = { dek, userId: current.id };
+      // The sharing key pair is needed to open items others shared with me; it is also created
+      // here so others can share with this user right away. A failure must not block own items.
+      keyPairRef.current = ensureUserKeyPair(ctx).catch((error) => {
+        keyPairRef.current = null;
+        throw error;
+      });
+      const keyPair = await keyPairRef.current.catch(() => null);
+      await loadAll(ctx, keyPair);
       setStatus('unlocked');
-      // Create (or load) the sharing key pair right away, so others can share files with this user
-      // without them having to open Files first. Best effort: Files retries on demand.
-      if (!keyPairRef.current) {
-        keyPairRef.current = ensureUserKeyPair({ dek, userId: current.id }).catch((error) => {
-          keyPairRef.current = null;
-          throw error;
-        });
-        keyPairRef.current.catch(() => undefined);
-      }
     },
-    [loadEntries],
+    [loadAll],
   );
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -323,26 +321,86 @@ export function useVaultSession() {
     return keyPairRef.current;
   }, []);
 
-  const addEntry = useCallback(async (data: VaultItemData) => {
-    const { dek, userId } = requireKey();
-    const id = crypto.randomUUID();
-    await vault.insertEntry(id, await encryptEntry(dek, userId, id, data));
-    const now = new Date().toISOString();
-    setEntries((list) => [{ ...data, id, createdAt: now, updatedAt: now }, ...list]);
+  const keyPairOrNull = () => (keyPairRef.current ? keyPairRef.current.catch(() => null) : Promise.resolve(null));
+
+  const replaceItem = (item: ops.VaultItem) => setItems((list) => list.map((i) => (i.id === item.id ? item : i)));
+
+  const addItem = useCallback(async (data: SecuredItemData) => {
+    const item = await ops.createItem(requireKey(), itemKeysRef.current, data);
+    setItems((list) => [item, ...list]);
+    return item;
   }, []);
 
-  const editEntry = useCallback(async (id: string, data: VaultItemData) => {
-    const { dek, userId } = requireKey();
-    await vault.updateEntry(id, await encryptEntry(dek, userId, id, data));
-    const now = new Date().toISOString();
-    setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...data, updatedAt: now } : e)));
+  const saveItem = useCallback(async (item: ops.VaultItem, data: SecuredItemData) => {
+    const saved = await ops.saveItem(requireKey(), itemKeysRef.current, item, data);
+    replaceItem(saved);
+    return saved;
   }, []);
 
-  const removeEntry = useCallback(async (id: string) => {
+  const removeItem = useCallback(async (item: ops.VaultItem) => {
     requireKey();
-    await vault.deleteEntry(id);
-    setEntries((list) => list.filter((e) => e.id !== id));
+    if (item.access !== 'owner') throw new Error('Só o dono pode excluir este item.');
+    await vault.deleteEntry(item.id);
+    itemKeysRef.current.delete(item.id);
+    setItems((list) => list.filter((i) => i.id !== item.id));
   }, []);
+
+  /** Recipient removes an item shared with them from their own list. */
+  const leaveSharedItem = useCallback(async (item: ops.VaultItem) => {
+    if (!item.shareId) return;
+    await vault.deleteItemShare(item.shareId);
+    itemKeysRef.current.delete(item.id);
+    setItems((list) => list.filter((i) => i.id !== item.id));
+  }, []);
+
+  const getHistory = useCallback(async (item: ops.VaultItem) => {
+    if (item.access !== 'owner') return [];
+    return ops.loadHistory(requireKey(), item.id);
+  }, []);
+
+  const shareItem = useCallback(
+    async (item: ops.VaultItem, recipient: { userId: string; publicKey: string }, permission: 'view' | 'edit', expiresAt: string | null) => {
+      const ctx = requireKey();
+      const shared = await ops.shareItem(ctx, itemKeysRef.current, item, recipient, permission, expiresAt);
+      // Reload to pick up the new share row (emails are filled in by the server).
+      const keyPair = await keyPairOrNull();
+      await loadAll(ctx, keyPair);
+      return shared;
+    },
+    [loadAll],
+  );
+
+  const revokeItemShare = useCallback(async (item: ops.VaultItem, share: ops.ItemShareInfo) => {
+    const updated = await ops.revokeItemShare(requireKey(), itemKeysRef.current, item, share);
+    replaceItem(updated);
+  }, []);
+
+  const setSharePermission = useCallback(async (item: ops.VaultItem, share: ops.ItemShareInfo, permission: 'view' | 'edit') => {
+    await vault.updateItemShare(share.id, { permission });
+    replaceItem({ ...item, sharedWith: item.sharedWith.map((s) => (s.id === share.id ? { ...s, permission } : s)) });
+  }, []);
+
+  const createFolder = useCallback(async (name: string) => {
+    const folder = await ops.createFolder(requireKey(), name);
+    setFolders((list) => [...list, folder].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+    return folder;
+  }, []);
+
+  const renameFolder = useCallback(async (folder: ops.Folder, name: string) => {
+    const renamed = await ops.renameFolder(requireKey(), folder, name);
+    setFolders((list) => list.map((f) => (f.id === folder.id ? renamed : f)));
+  }, []);
+
+  const deleteFolder = useCallback(async (folder: ops.Folder) => {
+    requireKey();
+    await vault.deleteFolder(folder.id);
+    setFolders((list) => list.filter((f) => f.id !== folder.id));
+  }, []);
+
+  const reload = useCallback(async () => {
+    const ctx = requireKey();
+    await loadAll(ctx, await keyPairOrNull());
+  }, [loadAll]);
 
   const retry = useCallback(() => {
     const current = userRef.current;
@@ -356,7 +414,8 @@ export function useVaultSession() {
     loadError,
     retry,
     user,
-    entries,
+    items,
+    folders,
     undecryptable,
     signUp,
     signIn,
@@ -372,8 +431,17 @@ export function useVaultSession() {
     lock,
     getKeyContext,
     getKeyPair,
-    addEntry,
-    editEntry,
-    removeEntry,
+    addItem,
+    saveItem,
+    removeItem,
+    leaveSharedItem,
+    getHistory,
+    shareItem,
+    revokeItemShare,
+    setSharePermission,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    reload,
   };
 }
