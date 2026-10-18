@@ -9,6 +9,8 @@ import { Icon } from './ui/Icon';
 type SharingFilter = 'all' | 'mine' | 'shared-with-me' | 'shared-by-me';
 
 type VaultViewProps = {
+  /** Preselects a risk flag or 'shared-by-me' (used by dashboard recommendations). */
+  initialFilter?: string;
   items: VaultItem[];
   folders: Folder[];
   health: ItemHealth;
@@ -23,6 +25,7 @@ type VaultViewProps = {
 };
 
 export function VaultView({
+  initialFilter,
   items,
   folders,
   health,
@@ -38,8 +41,8 @@ export function VaultView({
   const [type, setType] = useState<ItemType | 'all'>('all');
   const [folder, setFolder] = useState<string>('all');
   const [tag, setTag] = useState<string>('');
-  const [risk, setRisk] = useState<RiskFlag | ''>('');
-  const [sharing, setSharing] = useState<SharingFilter>('all');
+  const [risk, setRisk] = useState<RiskFlag | ''>(initialFilter && initialFilter in RISK_LABELS ? (initialFilter as RiskFlag) : '');
+  const [sharing, setSharing] = useState<SharingFilter>(initialFilter === 'shared-by-me' ? 'shared-by-me' : 'all');
   const [favorites, setFavorites] = useState(false);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [error, setError] = useState('');

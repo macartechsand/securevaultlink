@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { friendlyError } from '../lib/messages';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
+import { SessionsCard } from './SessionsCard';
 import { ThemeToggle } from './ui/ThemeToggle';
 
 type SettingsProps = {
@@ -50,6 +51,7 @@ export function Settings({
     <div className="grid grid--2">
       <MfaSettings />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
+      <SessionsCard />
 
       <section className="card">
         <div>

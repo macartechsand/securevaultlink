@@ -34,6 +34,7 @@ const LABELS: Record<string, string> = {
   'mfa.enrolled': 'Verificação em duas etapas ativada',
   'mfa.disabled': 'Verificação em duas etapas desativada',
   'session.others_signed_out': 'Outras sessões encerradas',
+  'session.revoked': 'Sessão encerrada',
   'client.error': 'Erro do aplicativo registrado',
 };
 

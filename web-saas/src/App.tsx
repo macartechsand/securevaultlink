@@ -7,6 +7,7 @@ import { ItemEditor } from './components/ItemEditor';
 import { ItemList } from './components/ItemList';
 import { ItemShareDialog } from './components/ItemShareDialog';
 import { MfaChallenge } from './components/MfaChallenge';
+import { PostureCard } from './components/PostureCard';
 import { Settings } from './components/Settings';
 import { NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
@@ -19,8 +20,11 @@ import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
 import { computeItemHealth } from './lib/itemHealth';
 import { type ItemType, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
+import { type PostureInput, computePosture } from './lib/posture';
 import { isSupabaseConfigured } from './lib/supabase';
 import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
+import { listVerifiedTotpFactors } from './services/mfaService';
+import { fetchSessions, fetchSharingExposure } from './services/postureService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
 
@@ -63,10 +67,27 @@ function VaultApp() {
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
   const [checking, setChecking] = useState(false);
   const [limits, setLimits] = useState<PlanLimits>(FREE_LIMITS);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [sessionCount, setSessionCount] = useState(1);
+  const [exposure, setExposure] = useState<PostureInput['exposure']>(null);
+  const [securityCheckRan, setSecurityCheckRan] = useState(false);
+  const [vaultFilter, setVaultFilter] = useState<{ value?: string; key: number }>({ key: 0 });
 
   useEffect(() => {
     if (status === 'unlocked') void fetchPlanLimits().then(setLimits);
   }, [status]);
+
+  // Posture inputs: refreshed when the dashboard is shown.
+  useEffect(() => {
+    if (status !== 'unlocked' || activeView !== 'dashboard') return;
+    void listVerifiedTotpFactors()
+      .then((f) => setMfaEnabled(f.some((x) => x.status === 'verified')))
+      .catch(() => undefined);
+    void fetchSessions()
+      .then((s) => setSessionCount(s.length))
+      .catch(() => undefined);
+    void fetchSharingExposure().then(setExposure);
+  }, [status, activeView, items]);
 
   const health = useMemo(() => computeItemHealth(items, pwnedById, siteById), [items, pwnedById, siteById]);
 
@@ -88,6 +109,7 @@ function VaultApp() {
       }
       setPwnedById(byId);
       setSiteById(siteMap);
+      setSecurityCheckRan(true);
     } finally {
       setChecking(false);
     }
@@ -170,6 +192,27 @@ function VaultApp() {
   const pageLabel = NAV_ITEMS.find((n) => n.key === activeView)?.label;
   const titleOf = (id: string) => items.find((i) => i.id === id)?.data.title ?? '?';
   const recent = [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5);
+  const posture = computePosture({
+    checkable,
+    weak: health.counts.weak,
+    reused: health.counts.reused,
+    exposed: health.counts.exposed,
+    stale: health.counts.stale,
+    unsafeSites: health.counts.unsafe,
+    securityCheckRan,
+    mfaEnabled,
+    recoveryEnabled: session.hasRecovery,
+    sessions: sessionCount,
+    exposure,
+  });
+  const goTo = (view: string, filter?: string) => {
+    if (view === 'dashboard' && !filter) {
+      void runSecurityCheck();
+      return;
+    }
+    if (view === 'vault') setVaultFilter((f) => ({ value: filter, key: f.key + 1 }));
+    setActiveView(view);
+  };
 
   return (
     <div className="shell">
@@ -255,6 +298,8 @@ function VaultApp() {
 
           {activeView === 'dashboard' && (
             <>
+              <PostureCard posture={posture} onAction={goTo} />
+
               <section className="grid grid--stats">
                 <StatCard label="Itens no cofre" value={String(items.length)} />
                 <StatCard
@@ -339,6 +384,8 @@ function VaultApp() {
 
           {activeView === 'vault' && (
             <VaultView
+              key={vaultFilter.key}
+              initialFilter={vaultFilter.value}
               items={items}
               folders={session.folders}
               health={health}
