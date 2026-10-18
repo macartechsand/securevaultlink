@@ -13,6 +13,7 @@ export const NAV_ITEMS: { key: string; label: string; icon: IconName }[] = [
   { key: 'dashboard', label: 'Visão geral', icon: 'dashboard' },
   { key: 'vault', label: 'Cofre', icon: 'key' },
   { key: 'files', label: 'Arquivos', icon: 'file' },
+  { key: 'rotation', label: 'Rotação', icon: 'refresh' },
   { key: 'generator', label: 'Gerador', icon: 'wand' },
   { key: 'activity', label: 'Atividade', icon: 'activity' },
   { key: 'settings', label: 'Configurações', icon: 'settings' },

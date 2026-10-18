@@ -15,6 +15,8 @@ export type SecuredItemData = {
   /** Login password, or the secret value for `secret` items. */
   password: string
   passwordUpdatedAt: string | null
+  /** Scheduled rotation interval in days (0 = off). */
+  rotationIntervalDays: number
   url: string
   notes: string
   category: string
@@ -65,6 +67,7 @@ export function emptyItem(type: ItemType = 'login'): SecuredItemData {
     username: '',
     password: '',
     passwordUpdatedAt: null,
+    rotationIntervalDays: 0,
     url: '',
     notes: '',
     category: 'Personal',
@@ -90,6 +93,10 @@ export function normalizeItem(raw: unknown): SecuredItemData {
     username: str(r.username, 200),
     password: str(r.password, 10_000),
     passwordUpdatedAt: typeof r.passwordUpdatedAt === 'string' ? r.passwordUpdatedAt : null,
+    rotationIntervalDays:
+      typeof r.rotationIntervalDays === 'number' && r.rotationIntervalDays >= 0 && r.rotationIntervalDays <= 3650
+        ? Math.trunc(r.rotationIntervalDays)
+        : 0,
     url: str(r.url, 2048),
     notes: str(r.notes, LIMITS.notes),
     category: str(r.category, 40) || base.category,
@@ -167,6 +174,12 @@ export function passwordAgeDays(d: SecuredItemData, createdAt: string, now = Dat
 }
 
 export const STALE_PASSWORD_DAYS = 365
+
+/** Days until the scheduled rotation (negative = overdue), or null when no schedule is set. */
+export function rotationDueInDays(d: SecuredItemData, createdAt: string, now = Date.now()) {
+  if (!d.rotationIntervalDays) return null
+  return d.rotationIntervalDays - passwordAgeDays(d, createdAt, now)
+}
 
 /** Free-text search over visible fields (never over hidden custom field values or secrets). */
 export function matchesQuery(d: SecuredItemData, query: string) {

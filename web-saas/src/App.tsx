@@ -10,6 +10,8 @@ import { ItemList } from './components/ItemList';
 import { ItemShareDialog } from './components/ItemShareDialog';
 import { MfaChallenge } from './components/MfaChallenge';
 import { PostureCard } from './components/PostureCard';
+import { RotateWizard } from './components/RotateWizard';
+import { RotationView } from './components/RotationView';
 import { Settings } from './components/Settings';
 import { ADMIN_ITEM, NAV_ITEMS, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
@@ -51,6 +53,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: 'Visão geral', subtitle: 'Saúde das suas credenciais, calculada só com dados reais.' },
   vault: { title: 'Cofre', subtitle: 'Logins, notas seguras, segredos e cartões criptografados no seu dispositivo.' },
   files: { title: 'Arquivos', subtitle: 'Arquivos, compartilhamentos e transferências temporárias.' },
+  rotation: { title: 'Rotação', subtitle: 'Fila de correção, trocas programadas e conectores de rotação.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
@@ -66,6 +69,7 @@ function VaultApp() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
   const [sharingItem, setSharingItem] = useState<VaultItem | null>(null);
+  const [rotatingItem, setRotatingItem] = useState<VaultItem | null>(null);
   const [actionError, setActionError] = useState('');
   const [pwnedById, setPwnedById] = useState<Map<string, PwnedResult>>(new Map());
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
@@ -206,6 +210,7 @@ function VaultApp() {
     reused: health.counts.reused,
     exposed: health.counts.exposed,
     stale: health.counts.stale,
+    rotationDue: health.counts.due,
     unsafeSites: health.counts.unsafe,
     securityCheckRan,
     mfaEnabled,
@@ -278,6 +283,18 @@ function VaultApp() {
                 if (editing.item) await session.saveItem(editing.item, data);
                 else await session.addItem(data);
                 setEditing(null);
+              }}
+            />
+          )}
+
+          {rotatingItem && (
+            <RotateWizard
+              item={items.find((i) => i.id === rotatingItem.id) ?? rotatingItem}
+              onClose={() => setRotatingItem(null)}
+              onSave={async (password) => {
+                const current = items.find((i) => i.id === rotatingItem.id) ?? rotatingItem;
+                await session.saveItem(current, { ...current.data, password });
+                setRotatingItem(null);
               }}
             />
           )}
@@ -412,6 +429,10 @@ function VaultApp() {
               onRenameFolder={session.renameFolder}
               onDeleteFolder={session.deleteFolder}
             />
+          )}
+
+          {activeView === 'rotation' && (
+            <RotationView items={items} health={health} onRotate={setRotatingItem} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}

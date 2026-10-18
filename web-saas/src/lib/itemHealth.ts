@@ -1,16 +1,17 @@
 import type { PwnedResult } from './health/pwned'
 import { analyzeHealth, passwordStrength, type Strength } from './health/passwordHealth'
-import { STALE_PASSWORD_DAYS, hasCheckablePassword, passwordAgeDays } from './items'
+import { STALE_PASSWORD_DAYS, hasCheckablePassword, passwordAgeDays, rotationDueInDays } from './items'
 import type { VaultItem } from '../state/itemOps'
 import type { UrlReputation } from '../services/urlReputation'
 
-export type RiskFlag = 'weak' | 'reused' | 'exposed' | 'stale' | 'unsafe'
+export type RiskFlag = 'weak' | 'reused' | 'exposed' | 'stale' | 'due' | 'unsafe'
 
 export const RISK_LABELS: Record<RiskFlag, string> = {
   weak: 'Senha fraca',
   reused: 'Senha reutilizada',
   exposed: 'Senha vazada',
   stale: 'Senha antiga (mais de 1 ano)',
+  due: 'Troca programada vencida',
   unsafe: 'Site perigoso',
 }
 
@@ -36,7 +37,7 @@ export function computeItemHealth(
   const reused = new Set(report.reused)
   const strengthById = new Map<string, Strength>()
   const risksById = new Map<string, RiskFlag[]>()
-  const counts: Record<RiskFlag, number> = { weak: 0, reused: 0, exposed: 0, stale: 0, unsafe: 0 }
+  const counts: Record<RiskFlag, number> = { weak: 0, reused: 0, exposed: 0, stale: 0, due: 0, unsafe: 0 }
 
   for (const item of items) {
     const flags: RiskFlag[] = []
@@ -49,6 +50,8 @@ export function computeItemHealth(
       if (pwned?.status === 'ok' && pwned.count > 0) flags.push('exposed')
       if (passwordAgeDays(item.data, item.createdAt, now) > STALE_PASSWORD_DAYS) flags.push('stale')
     }
+    const due = rotationDueInDays(item.data, item.createdAt, now)
+    if (due !== null && due < 0 && (item.data.type === 'login' || item.data.type === 'secret')) flags.push('due')
     if (siteById.get(item.id)?.status === 'unsafe') flags.push('unsafe')
     flags.forEach((f) => (counts[f] += 1))
     risksById.set(item.id, flags)

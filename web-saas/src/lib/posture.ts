@@ -9,6 +9,8 @@ export type PostureInput = {
   reused: number
   exposed: number
   stale: number
+  /** Items whose scheduled rotation is overdue. */
+  rotationDue?: number
   unsafeSites: number
   /** Whether a breach/site check ran in this session. */
   securityCheckRan: boolean
@@ -51,6 +53,8 @@ export function computePosture(p: PostureInput): Posture {
     recommendations.push({ id: 'reused', severity: 'medium', title: `Elimine ${p.reused} senha(s) reutilizada(s)`, detail: 'Se um site vazar, todas as contas com a mesma senha ficam expostas.', action: { label: 'Ver reutilizadas', view: 'vault', filter: 'reused' } })
   if (p.stale > 0)
     recommendations.push({ id: 'stale', severity: 'low', title: `${p.stale} senha(s) sem troca há mais de 1 ano`, detail: 'Troque primeiro as de contas importantes (e-mail, banco, trabalho).', action: { label: 'Ver senhas antigas', view: 'vault', filter: 'stale' } })
+  if (p.rotationDue)
+    recommendations.push({ id: 'due', severity: 'medium', title: `${p.rotationDue} troca(s) programada(s) vencida(s)`, detail: 'Use a fila de rotação para trocar com a ajuda do app.', action: { label: 'Abrir fila', view: 'rotation' } })
   if (p.checkable > 0 && !p.securityCheckRan)
     recommendations.push({ id: 'check', severity: 'low', title: 'Rode a verificação de segurança', detail: 'Confere vazamentos (Have I Been Pwned) e sites perigosos (Safe Browsing).', action: { label: 'Verificar agora', view: 'dashboard' } })
 

@@ -12,6 +12,7 @@ import {
   normalizeTags,
   validateItem,
 } from '../lib/items';
+import { ROTATION_INTERVALS } from '../lib/connectors';
 import { CATEGORIES, STRENGTH_LABELS, categoryLabel, strengthBadge } from '../lib/labels';
 import { formatBytes, formatDateTime, friendlyError } from '../lib/messages';
 import { generatePassword } from '../lib/passwordGenerator';
@@ -352,6 +353,20 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                   <SecretInput id="card-cvv" value={data.card.cvv} onChange={(v) => set('card', { ...data.card, cvv: v })} readOnly={readOnly} />
                 </div>
               </div>
+            )}
+
+            {(data.type === 'login' || data.type === 'secret') && (
+              <label className="field">
+                Troca programada
+                <select value={data.rotationIntervalDays} onChange={(e) => set('rotationIntervalDays', Number(e.target.value))} disabled={readOnly}>
+                  {ROTATION_INTERVALS.map((r) => (
+                    <option key={r.days} value={r.days}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="field__hint">Você recebe o lembrete na Visão geral e o item entra na fila de Rotação quando vencer.</span>
+              </label>
             )}
 
             {showUrl && (
