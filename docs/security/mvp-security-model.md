@@ -55,6 +55,43 @@ Limitações dos arquivos:
 - O arquivo é cifrado inteiro em memória (limite de 25 MiB no plano gratuito); streaming fica para arquivos grandes do Premium.
 - Os limites por IP/usuário nas Edge Functions são aproximados (por instância).
 
+## Secured Items (Fase C)
+
+| Elemento | Proteção |
+|---|---|
+| Itens v2 | Chave aleatória por item (AES-256-GCM). O conteúdo inteiro (tipo, campos personalizados, tags, pasta, anexos, notas) fica no blob cifrado. A chave do item é embrulhada pela DEK do dono (`vault_entries.wrapped_key`). Itens v1 continuam legíveis e migram na próxima edição |
+| Histórico de senhas | Cifrado só com a DEK do dono (`history_ciphertext`), com as últimas 10. Quem recebe o item compartilhado não vê senhas anteriores |
+| Pastas | Nome cifrado com a DEK. O id da pasta fica dentro do blob do item |
+| Compartilhamento | Chave do item selada para a chave pública ECDH do destinatário (`item_shares.sealed_key`). Permissão `view` ou `edit`. Free: até 48 h; Premium: até 30 dias ou sem expiração. Anexos são compartilhados junto (somente leitura) |
+| Edição por destinatário | O RLS permite `update` só com permissão `edit` ativa. Um trigger impede o destinatário de alterar `wrapped_key`, `history_ciphertext` ou a versão |
+| Revogação | Remove o compartilhamento e os anexos dele, **troca a chave do item**, recifra o item e ressela a chave para os destinatários restantes |
+| Concorrência | Atualizações exigem o `updated_at` lido, para não sobrescrever a edição de outra pessoa |
+
+## Postura, sessões e administração (Fases D e E)
+
+- **Postura:** score de 0 a 100 calculado no navegador a partir de dados reais. Pesos: senhas 40, proteção da conta 30 (MFA e recovery), sites 15, compartilhamentos 10, sessões 5.
+- **Sessões:** `my_sessions()` lista só as sessões do próprio usuário. `revoke_my_session()` encerra uma delas (o token já emitido vale até expirar, cerca de 1 h). Ambas registram auditoria.
+- **Administração:**
+  - O papel fica em `app_admins` e só é concedido pelo SQL Editor.
+  - Toda função administrativa exige papel e sessão `aal2`, ou seja, **MFA obrigatório para administradores**.
+  - O painel mostra **apenas metadados**: contagens, MFA, plano, uso e eventos. **Não existe função que exponha conteúdo de cofre**, e não há como recuperar o cofre de um usuário.
+  - Ações disponíveis: mudar plano, resetar MFA, encerrar sessões, suspender. Todas são auditadas no log do usuário afetado.
+- **Diagnóstico:** relatório copiável sem segredos (identifica a conta só por um hash curto).
+- **Erros do app:** `client.error` com mensagem higienizada (sem e-mails, JWT, tokens longos, UUIDs ou números longos), no máximo 5 por página.
+
+## Armazenamento Premium no Cloudflare R2 (Fase F)
+
+- **O que o R2 guarda:** só o ciphertext, igual ao Supabase Storage.
+- **Credenciais:** ficam apenas nos secrets das Edge Functions. Use um token R2 restrito ao bucket.
+- **URLs assinadas:** de upload duram 5 min, de download 60 s. O `storage-r2` confere o acesso com o **JWT do usuário** (RLS de `vault_files`) antes de assinar.
+- **Conferência de tamanho:** a finalização faz um HEAD e compara com o tamanho declarado; se divergir, rejeita e apaga o objeto.
+- **Quem usa R2:** o RLS só aceita `storage_backend = 'r2'` para usuários Premium.
+
+## Conectores e rotação (Fase F)
+
+- **Troca assistida:** zero-knowledge. O app gera a senha, abre `/.well-known/change-password` e só salva após confirmação; a anterior vai para o histórico.
+- **Conectores automáticos:** especificados em `docs/architecture/connectors-rotation.md` e **ainda não habilitados**. Executores na nuvem exigirão consentimento por item, porque o worker vê a credencial durante a troca. O agente local só fará conexões de saída.
+
 ## MFA (TOTP)
 
 - Opcional por usuário, em Settings: app autenticador (TOTP) via Supabase Auth MFA. Ativar exige escanear o QR code e confirmar um código.

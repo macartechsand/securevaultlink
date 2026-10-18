@@ -1,6 +1,6 @@
 # SecureVault MVP: progresso e retomada
 
-Última atualização: 2026-10-18 · Branch: `dev`
+Última atualização: 2026-10-19 · Branch: `dev`
 
 Este documento reúne tudo o que foi feito até agora, o estado dos testes e como retomar o trabalho.
 
@@ -8,6 +8,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 |---|---|
 | **[`pending-actions.md`](pending-actions.md)** | **Checklist do que o responsável precisa fazer agora** (cofre de arquivos) |
 | [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de criptografia, isolamento, MFA, arquivos e limitações |
+| [`architecture/connectors-rotation.md`](architecture/connectors-rotation.md) | Arquitetura de conectores e rotação de senhas |
 | Este arquivo | Histórico, decisões, inventário, testes e roadmap |
 
 ---
@@ -42,6 +43,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-10 | Usuário validou no navegador: cadastro, cofre de credenciais, MFA e edição. Tudo ok. |
 | 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. |
 | 2026-10-18 | Nova rodada de requisitos, inspirada no CyberArk Identity. Decisões: recovery key **opcional**; Free com compartilhamentos e transferências de até 48 h e Premium customizado; armazenamento pago no **Cloudflare R2**; visual console escuro + tema claro, em português; rotação assistida agora e conectores no servidor depois. **Fase A implementada**: recovery opcional, planos no banco, validade nos compartilhamentos, log de auditoria e tela Activity. Migration `20261018000100` pendente de aplicação. |
+| 2026-10-19 | Visual aprovado. **Fases C a F implementadas**: Secured Items com chave por item, postura e sessões, administração e diagnóstico, catálogo de conectores com troca assistida e programada, e backend Cloudflare R2. Pendente: 4 migrations, deploy de funções e testes (ver `pending-actions.md`). |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---
@@ -168,11 +170,11 @@ Se surgir "Could not load your vault", anote a mensagem exibida na tela.
 | Fase | Conteúdo | Situação |
 |---|---|---|
 | A. Base de segurança | Recovery key opcional, planos, 48 h no Free, auditoria | ✅ Código; ⏳ migration e testes |
-| B. Novo visual | Design system escuro + claro, interface em português | ✅ Código (2026-10-18); ⏳ revisão visual do responsável |
-| C. Secured Items | Tipos (login, nota segura, segredo/API key, cartão), campos personalizados, anexos por item, pastas, tags, filtros, histórico de senhas, compartilhamento com permissão de ver ou editar | ⏳ |
-| D. Postura e saúde | Score real (senhas, MFA, recovery, sites, compartilhamentos, idade das senhas), sessões e dispositivos, recomendações | ⏳ |
-| E. Admin e troubleshooting | Painel de admin sem acesso ao conteúdo dos cofres; resetar MFA; saúde do sistema; página de diagnóstico do usuário | ⏳ |
-| F. Conectores e rotação | Rotação assistida, estrutura de conectores, conectores automáticos no servidor (com consentimento), armazenamento Premium no Cloudflare R2 | ⏳ |
+| B. Novo visual | Design system escuro + claro, interface em português | ✅ Aprovado pelo responsável (2026-10-19) |
+| C. Secured Items | Tipos (login, nota segura, segredo/API key, cartão), campos personalizados, anexos por item, pastas, tags, filtros, histórico de senhas, compartilhamento com permissão de ver ou editar | ✅ Código (2026-10-19); ⏳ migration e testes |
+| D. Postura e saúde | Score real (senhas, MFA, recovery, sites, compartilhamentos, idade das senhas), sessões e dispositivos, recomendações | ✅ Código (2026-10-19); ⏳ migration e testes |
+| E. Admin e troubleshooting | Painel de admin sem acesso ao conteúdo dos cofres; resetar MFA; saúde do sistema; página de diagnóstico do usuário | ✅ Código (2026-10-19); ⏳ migration, deploy e testes |
+| F. Conectores e rotação | Rotação assistida, catálogo de conectores, troca programada, fila de correção, armazenamento Premium no Cloudflare R2. Conectores automáticos especificados ("Planejado") | ✅ Código (2026-10-19); ⏳ migration, deploy, R2 e testes |
 
 ### Itens gerais
 

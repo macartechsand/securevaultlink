@@ -1,6 +1,6 @@
-# Ações pendentes: cofre de arquivos
+# Ações pendentes
 
-Última atualização: 2026-10-18 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-10-19 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
@@ -15,29 +15,77 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 - [ ] Rodar `supabase/migrations/20261009000100_drop_legacy_plaintext_tables.sql` no SQL Editor. Ele apaga `vault_items` e `secure_links` e é irreversível.
 - [ ] Decidir entre publicar a versão atual a partir da `dev` (pedir ao Claude o PR `dev` → `main`) **ou** pausar o site no Netlify até lá.
 
-## Fase A (2026-10-18): recovery key opcional, planos, validade de 48 h e auditoria
+## Fases A a F (2026-10-18 e 2026-10-19): aplicar em ordem
 
-- [ ] SQL Editor: rodar `supabase/migrations/20261018000100_plans_audit_expiry.sql`. Resultado esperado: *Success. No rows returned*.
-- [ ] Republicar a limpeza, que agora também remove compartilhamentos vencidos e eventos de auditoria com mais de 1 ano:
-  ```powershell
-  cd "C:\Users\hiago\Documents\security app\securityvaultclone"
-  npx supabase functions deploy cleanup-files --no-verify-jwt
-  ```
-- [ ] Avisar o Claude para rodar os testes de integração. Esperado: **17 passed** (6 do cofre de senhas e 11 de arquivos, planos e auditoria).
-- [ ] No navegador (`npm run dev` em `web-saas`):
-  - **Settings → Recovery key → Turn on**, confirmar com a senha mestra e guardar a chave. Depois **Lock** → **Forgot master password?** → chave + nova senha mestra. O cofre deve abrir com os itens.
-  - **Generate a new key**: a chave antiga deve deixar de funcionar.
-  - **Files → Share**: as opções de duração vão até **48 hours** (plano Free), e o destinatário vê "expires in …".
-  - **Files → Transfers**: duração de até 48 horas.
-  - **Activity**: devem aparecer os eventos (cofre criado, credencial editada, arquivo compartilhado, desbloqueios…).
+O código de todas as fases está na `dev`. Nada disso funciona no banco até as migrations serem aplicadas **nesta ordem**: cada uma depende da anterior.
 
-## Resumo
+### 1. Migrations (SQL Editor, uma por vez)
+- [ ] `supabase/migrations/20261018000100_plans_audit_expiry.sql`: planos, 48 h, recovery opcional, auditoria (Fase A)
+- [ ] `supabase/migrations/20261019000000_secured_items.sql`: Secured Items, pastas, compartilhamento de itens (Fase C)
+- [ ] `supabase/migrations/20261019000100_posture_sessions.sql`: sessões e exposição (Fase D)
+- [ ] `supabase/migrations/20261019000200_admin_troubleshooting.sql`: administração (Fase E)
+- [ ] `supabase/migrations/20261019000300_r2_storage.sql`: backend R2 para Premium (Fase F)
+
+Resultado esperado em cada uma: *Success. No rows returned*. Se alguma der erro, pare e envie a mensagem ao Claude.
+
+### 2. Edge Functions (terminal, na raiz do repositório)
+```powershell
+cd "C:\Users\hiago\Documents\security app\securityvaultclone"
+npx supabase functions deploy cleanup-files --no-verify-jwt
+npx supabase functions deploy transfer --no-verify-jwt
+npx supabase functions deploy admin
+npx supabase functions deploy storage-r2
+```
+- [ ] As 4 funções publicadas (`admin` e `storage-r2` **com** verificação de JWT, que é o padrão).
+
+### 3. Testes automáticos
+- [ ] Avisar o Claude. Ele roda `rls.integration`, `files.integration` e `items.integration`. Esperado: **22 passed** (6 + 11 + 5).
+
+### 4. Tornar-se administrador (opcional, para o painel de Administração)
+1. Ative a verificação em duas etapas na sua conta (Configurações).
+2. No SQL Editor, troque o e-mail e rode:
+   ```sql
+   insert into public.app_admins (user_id, role)
+   select id, 'admin' from auth.users where email = 'SEU-EMAIL-AQUI';
+   ```
+3. Saia e entre de novo informando o código. O item **Administração** aparece no menu.
+
+- [ ] Administrador configurado.
+
+### 5. Armazenamento Premium no Cloudflare R2 (opcional; sem ele, o Premium usa o Supabase Storage)
+1. No painel da Cloudflare: **R2 → Create bucket**, por exemplo `securevault-premium`, privado.
+2. **R2 → Manage API tokens → Create API token** com *Object Read & Write* **só nesse bucket**. Anote o Account ID, o Access Key ID e o Secret Access Key, sem compartilhar com ninguém.
+3. No bucket, em **Settings → CORS policy**, cole o bloco abaixo, trocando a origem pela do app (e `http://localhost:5173` para testes):
+   ```json
+   [{ "AllowedOrigins": ["http://localhost:5173"], "AllowedMethods": ["PUT", "GET"], "AllowedHeaders": ["Content-Type"], "MaxAgeSeconds": 600 }]
+   ```
+4. No terminal:
+   ```powershell
+   npx supabase secrets set R2_ACCOUNT_ID=<id> R2_ACCESS_KEY_ID=<key> R2_SECRET_ACCESS_KEY=<secret> R2_BUCKET=securevault-premium
+   ```
+5. Para testar, coloque uma conta de teste no plano Premium (Administração → Usuários → Plano Premium) e envie um arquivo. No painel do R2, o objeto aparece cifrado.
+
+- [ ] R2 configurado e testado (ou adiado).
+
+### 6. Roteiro no navegador (`npm run dev` em `web-saas`)
+- **Recovery key:** Configurações → Ativar chave de recuperação → guardar → Bloquear → "Esqueci a senha mestra" → chave + nova senha mestra. O cofre abre com os itens.
+- **Secured Items:** Novo item → criar um de cada tipo (Login, Nota segura, Segredo, Cartão) com um campo personalizado oculto, uma tag, uma pasta e um anexo. Filtrar por tipo, pasta, tag e risco.
+- **Histórico:** editar a senha de um login → aba "Histórico de senhas" → a anterior aparece → Restaurar.
+- **Compartilhar item:** com a conta B, permissão *Visualizar*, por 1 hora. B vê o item (somente leitura) e baixa o anexo. Mude para *Editar*: B consegue editar. Revogar: o item some para B.
+- **Arquivos:** o compartilhamento oferece no máximo 48 horas (plano gratuito).
+- **Postura:** a Visão geral mostra o score e as recomendações. Os botões levam ao filtro certo.
+- **Sessões:** Configurações → Sessões ativas. Abra outra janela anônima com a mesma conta e encerre essa sessão daqui.
+- **Rotação:** defina "Troca programada" em um login; na página Rotação, use "Trocar com assistência".
+- **Diagnóstico:** Configurações → Executar diagnóstico → todos OK (ou anote as falhas).
+- **Atividade:** os eventos novos aparecem (item compartilhado, sessão encerrada etc.).
+
+## Histórico: cofre de arquivos (concluído, exceto o Cron)
 
 | # | Tarefa | Onde | Tempo aprox. | Situação |
 |---|---|---|---|---|
 | 1 | Aplicar as migrations do cofre de arquivos (`20261011000000` e a correção `20261018000000`) | Supabase → SQL Editor | 2 min | ✅ 2026-10-18 |
 | 2 | Publicar as funções `transfer` e `cleanup-files` e definir `CLEANUP_SECRET` | Terminal | 5 min | ✅ 2026-10-18 |
-| 3 | Agendar a limpeza de hora em hora | Supabase → Integrations → Cron | 3 min | ⬜ Não confirmado |
+| 3 | Agendar a limpeza de hora em hora | Supabase → Integrations → Cron | 3 min | ⬜ Não confirmado (o painel de Administração mostra a última execução) |
 | 4 | Criar `web-saas/.env.test.local` e avisar o Claude para rodar os testes | VS Code | 2 min | ✅ 15/15 em 2026-10-18 |
 | 5 | Roteiro de testes no navegador | Navegador | 15 min | ⬜ |
 
