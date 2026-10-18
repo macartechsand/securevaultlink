@@ -8,6 +8,24 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Administrador master e cadastro sem e-mail (2026-10-20)
+
+**Por que os links não chegam:** o e-mail padrão do Supabase só envia para membros da equipe do projeto, com limite de cerca de 2 por hora. Até existir um SMTP próprio, use os **links de acesso** gerados no painel. A função `admin` já foi publicada e `APP_ORIGINS` já foi configurado.
+
+1. [ ] **Administrador master:** siga `supabase/admin/create-master-admin.sql`:
+   - parte A no SQL Editor;
+   - *Add user* no painel, com **Auto Confirm User**;
+   - parte B no SQL Editor;
+   - no app: criar o cofre, ativar a verificação em duas etapas, sair e entrar com o código.
+2. [ ] **Supabase → Authentication → URL Configuration:**
+   - *Site URL* = `https://securelinkvaultdev.netlify.app`
+   - *Redirect URLs* = `https://securelinkvaultdev.netlify.app/**` e `http://localhost:5173/**`
+
+   Sem isso, os links levam ao endereço errado.
+3. **Para cada testador:** Administração → Beta e limites → digite o e-mail → **Convidar e gerar link** → envie o link por mensagem direta. A pessoa abre o link, define a senha da conta e cria o cofre.
+4. **Senha da conta esquecida:** Administração → Usuários → (usuário) → **Gerar link de redefinição**.
+5. **Opcional:** configurar um SMTP próprio, para que cadastro, confirmação e "Esqueci a senha" funcionem por e-mail.
+
 ## Lançamento do beta fechado (10 usuários): fazer agora
 
 Deploy feito em **2026-10-20** em `https://securelinkvaultdev.netlify.app`, a partir do commit `a08ea58`. A versão nova substituiu o protótipo, e os cabeçalhos de segurança e o `noindex` foram verificados de fora.
