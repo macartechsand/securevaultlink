@@ -1,6 +1,6 @@
 # SecureVault MVP: progresso e retomada
 
-Última atualização: 2026-10-11 · Branch: `dev`
+Última atualização: 2026-10-18 · Branch: `dev`
 
 Este documento reúne tudo o que foi feito até agora, o estado dos testes e como retomar o trabalho.
 
@@ -39,7 +39,8 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-09 | RLS validado no projeto de desenvolvimento (6/6). |
 | 2026-10-10 | Chave de recuperação removida; MFA TOTP; Safe Browsing proativo no app; correção do erro de permissão em `mfa_factors`. |
 | 2026-10-10 | Usuário validou no navegador: cadastro, cofre de credenciais, MFA e edição. Tudo ok. |
-| 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. **Pendente de validação** (ver `pending-actions.md`). |
+| 2026-10-11 | Cofre de arquivos: arquivos do cofre, compartilhamento assimétrico, transferências temporárias. |
+| 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---
 
@@ -83,16 +84,17 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo:** apaga `vault_items` e `secure_links` (aprovado) | ⚠️ Não confirmado (opcional) |
 | `20261010000000_mfa_and_remove_recovery_key.sql` | Remove a recuperação; políticas `aal2` | ✅ |
 | `20261010000100_fix_mfa_policy_permissions.sql` | Checagem `aal2` via `private.vault_mfa_satisfied()` | ✅ |
-| `20261011000000_file_vault.sql` | `user_keys`, `vault_files`, `file_shares`, `transfers`, bucket `vault-files`, políticas de storage, cotas, funções | ⏳ Não aplicado → `pending-actions.md` §1 |
+| `20261011000000_file_vault.sql` | `user_keys`, `vault_files`, `file_shares`, `transfers`, bucket `vault-files`, políticas de storage, cotas, funções | ✅ |
+| `20261018000000_fix_file_vault_policies.sql` | Quebra a recursão de RLS (funções `private.*`); revoga os privilégios padrão de `authenticated` e concede só as colunas necessárias (arquivos e cofre de senhas) | ✅ |
 
 ### 3.4 Edge Functions (`supabase/functions/`)
 | Função | Papel | Acesso | Situação |
 |---|---|---|---|
 | `check-url` | Reputação de URLs (Safe Browsing), até 50 por chamada | Usuário logado | Publicada (informado); sem teste de ponta a ponta |
-| `transfer` | Download público de transferências; consome o download e gera URL assinada de 60 s | Público (`--no-verify-jwt`) | ⏳ Não publicada → `pending-actions.md` §2 |
-| `cleanup-files` | Remove transferências vencidas e uploads abandonados | Header `x-cleanup-secret` | ⏳ Não publicada nem agendada → §2 e §3 |
+| `transfer` | Download público de transferências; consome o download e gera URL assinada de 60 s | Público (`--no-verify-jwt`) | ✅ Publicada; sem teste de ponta a ponta |
+| `cleanup-files` | Remove transferências vencidas e uploads abandonados | Header `x-cleanup-secret` | ✅ Publicada; ⏳ agendamento não confirmado (`pending-actions.md` §3) |
 
-Secrets: `SAFE_BROWSING_API_KEY` (definido, informado) e `CLEANUP_SECRET` (pendente).
+Secrets: `SAFE_BROWSING_API_KEY` e `CLEANUP_SECRET` (definidos, informado).
 
 ### 3.5 Infra e repositório
 - `netlify.toml`: CSP, HSTS, `frame-ancestors`/`X-Frame-Options`, nosniff, Referrer-Policy, Permissions-Policy, COOP; build com `npm ci`.
@@ -126,8 +128,8 @@ ec62db0 feat(web): add client-side vault crypto module with real tests
 | Unitários (`npm test` em `web-saas`): criptografia do cofre e de arquivos, ECDH, transferências, gerador, saúde, HIBP, URL | ✅ 41 passaram (2026-10-11) |
 | Typecheck (`tsc -b`), lint (`oxlint`), build (`vite build`) | ✅ Sem erros nem avisos relevantes (2026-10-11) |
 | `npm audit` (web-saas) | ✅ 0 vulnerabilidades (2026-10-09) |
-| RLS do cofre de senhas (`rls.integration`, 6 testes) | ✅ 6/6 em 2026-10-09; ⏳ repetir após as migrations de MFA |
-| Isolamento do cofre de arquivos (`files.integration`, 8 testes) | ⏳ Nunca executado (depende de `pending-actions.md` §1 e §4) |
+| RLS do cofre de senhas (`rls.integration`, 6 testes) | ✅ 6/6 em 2026-10-18 (após as migrations de MFA) |
+| Isolamento do cofre de arquivos (`files.integration`, 9 testes) | ✅ 9/9 em 2026-10-18 (após a correção `20261018000000`) |
 | Políticas `aal2` (MFA no banco) | ⏳ Sem teste automatizado; MFA validado manualmente pelo usuário |
 | Navegador: cadastro, credenciais, MFA, edição | ✅ Validado pelo usuário (2026-10-10) |
 | Navegador: painel, Safe Browsing, troca de senha, auto-lock | ⏳ Não confirmado |
@@ -162,8 +164,7 @@ Se surgir "Could not load your vault", anote a mensagem exibida na tela.
 
 | Item | Prioridade / fase |
 |---|---|
-| Ações de `pending-actions.md` | **Alta, agora** |
-| Repetir os testes de RLS do cofre de senhas | Alta |
+| Ações restantes de `pending-actions.md` (cron e roteiro no navegador) | **Alta, agora** |
 | Revisão externa / pentest antes de guardar dados reais | Alta, antes da produção |
 | Teste automatizado das políticas `aal2` (TOTP de teste) | Média |
 | Exportação e importação cifrada do cofre | MVP 1 |

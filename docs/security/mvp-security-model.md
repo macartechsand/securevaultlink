@@ -27,7 +27,7 @@ Implementação: `web-saas/src/lib/crypto/`. Evolução prevista: Argon2id (os p
 - Migration: `supabase/migrations/20261009000000_vault_e2ee.sql` (`vault_profiles`, `vault_entries`).
 - RLS habilitado e forçado. Políticas `auth.uid() = user_id` em USING e WITH CHECK; `anon` sem acesso.
 - Testes de isolamento: `web-saas/src/services/rls.integration.test.ts` (executam apenas contra um projeto Supabase **de desenvolvimento**, com contas de teste e variáveis de ambiente).
-- **Validado em 2026-10-09** no projeto de desenvolvimento: 6/6 testes passaram (leitura, alteração, exclusão e inserção cruzadas bloqueadas; reatribuição de `user_id` bloqueada; acesso anônimo bloqueado; perfis isolados).
+- **Validado em 2026-10-09 e de novo em 2026-10-18** (após MFA e restrição de privilégios) no projeto de desenvolvimento: 6/6 testes passaram (leitura, alteração, exclusão e inserção cruzadas bloqueadas; reatribuição de `user_id` bloqueada; acesso anônimo bloqueado; perfis isolados).
 
 ## Cofre de arquivos
 
@@ -42,6 +42,8 @@ Controles do servidor (`supabase/migrations/20261011000000_file_vault.sql`):
 - Cota no banco: 25 MiB por arquivo, 100 MiB por usuário, 500 arquivos (funções `private.file_quota_bytes`/`max_file_bytes`, prontas para variar por plano). `finalize_vault_file` confere o tamanho real do objeto com o declarado.
 - Download anônimo só pela Edge Function `transfer` (consome um download atomicamente com `claim_transfer_download`, exclusiva do service role, e devolve URL assinada de 60 s). O contador de downloads não é editável pelo dono.
 - MFA (`aal2`) também exigido em todas as tabelas e no storage de arquivos.
+- Privilégios por coluna (`20261018000000_fix_file_vault_policies.sql`): o papel `authenticated` só pode alterar `vault_files.encrypted_meta`, `transfers.revoked`, as colunas cifradas de `vault_entries` e as do perfil. Status, tamanho, dono e contadores não são editáveis pelo cliente. As checagens entre tabelas usam funções `private.*` (SECURITY DEFINER) para evitar recursão de RLS.
+- Validado em 2026-10-18 no projeto de desenvolvimento: 9/9 testes de isolamento de arquivos (`files.integration.test.ts`).
 - `cleanup-files` (agendada) remove transferências expiradas/esgotadas/revogadas e uploads abandonados ou rejeitados.
 - Preparado para S3: colunas `storage_backend` e `storage_class` (ex.: Standard, Standard-IA, Glacier). Como tudo é cifrado no cliente, migrar de provedor é copiar blobs.
 

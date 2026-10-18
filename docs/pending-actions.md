@@ -1,6 +1,6 @@
 # Ações pendentes: cofre de arquivos
 
-Última atualização: 2026-10-11 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-10-18 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
@@ -12,18 +12,19 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 | # | Tarefa | Onde | Tempo aprox. | Situação |
 |---|---|---|---|---|
-| 1 | Aplicar a migration do cofre de arquivos | Supabase → SQL Editor | 2 min | ⬜ |
-| 2 | Publicar as funções `transfer` e `cleanup-files` e definir `CLEANUP_SECRET` | Terminal | 5 min | ⬜ |
-| 3 | Agendar a limpeza de hora em hora | Supabase → Integrations → Cron | 3 min | ⬜ |
-| 4 | Criar `web-saas/.env.test.local` e avisar o Claude para rodar os testes | VS Code | 2 min | ⬜ |
+| 1 | Aplicar as migrations do cofre de arquivos (`20261011000000` e a correção `20261018000000`) | Supabase → SQL Editor | 2 min | ✅ 2026-10-18 |
+| 2 | Publicar as funções `transfer` e `cleanup-files` e definir `CLEANUP_SECRET` | Terminal | 5 min | ✅ 2026-10-18 |
+| 3 | Agendar a limpeza de hora em hora | Supabase → Integrations → Cron | 3 min | ⬜ Não confirmado |
+| 4 | Criar `web-saas/.env.test.local` e avisar o Claude para rodar os testes | VS Code | 2 min | ✅ 15/15 em 2026-10-18 |
 | 5 | Roteiro de testes no navegador | Navegador | 15 min | ⬜ |
 
 ---
 
 ## 1. Aplicar a migration do cofre de arquivos
 
-- [ ] No Supabase de desenvolvimento, abra **SQL Editor → New query**.
-- [ ] Cole o conteúdo de `supabase/migrations/20261011000000_file_vault.sql` e clique em **Run**.
+- [x] No Supabase de desenvolvimento, abra **SQL Editor → New query**.
+- [x] Cole o conteúdo de `supabase/migrations/20261011000000_file_vault.sql` e clique em **Run**.
+- [x] Aplique também a correção `supabase/migrations/20261018000000_fix_file_vault_policies.sql` (recursão nas políticas de compartilhamento e permissões de colunas; encontrada pelos testes em 2026-10-18).
 - [ ] Resultado esperado: *Success. No rows returned*.
 - [ ] Conferir:
   - **Table Editor:** tabelas `user_keys`, `vault_files`, `file_shares` e `transfers`, todas com RLS ativo.
@@ -60,10 +61,10 @@ npx supabase functions deploy transfer --no-verify-jwt
 npx supabase functions deploy cleanup-files --no-verify-jwt
 ```
 
-- [ ] Secret `CLEANUP_SECRET` definido.
-- [ ] `transfer` publicada.
-- [ ] `cleanup-files` publicada.
-- [ ] Conferir em **Edge Functions** no painel: `check-url`, `transfer` e `cleanup-files` aparecem como ativas.
+- [x] Secret `CLEANUP_SECRET` definido.
+- [x] `transfer` publicada.
+- [x] `cleanup-files` publicada.
+- [x] Conferir em **Edge Functions** no painel: `check-url`, `transfer` e `cleanup-files` aparecem como ativas.
 
 O `--no-verify-jwt` é intencional nessas duas funções. `transfer` atende pessoas sem conta (quem recebe o link), e `cleanup-files` é protegida pelo `CLEANUP_SECRET`. A `check-url` continua exigindo login.
 
@@ -91,18 +92,18 @@ Se a resposta for `forbidden`, o header está errado. Se for `cleanup not config
 
 ## 4. Testes automáticos de isolamento
 
-- [ ] Crie o arquivo `web-saas\.env.test.local` (o git ignora este arquivo) com as **contas de teste descartáveis**:
+- [x] Crie o arquivo `web-saas\.env.test.local` (o git ignora este arquivo) com as **contas de teste descartáveis**:
   ```
   TEST_USER_A_EMAIL=teste-a@exemplo.invalid
   TEST_USER_A_PASSWORD=<senha da conta A>
   TEST_USER_B_EMAIL=teste-b@exemplo.invalid
   TEST_USER_B_PASSWORD=<senha da conta B>
   ```
-- [ ] Avise o Claude. Ele vai rodar:
+- [x] Avise o Claude. Ele vai rodar:
   - `npm test -- rls.integration`: 6 testes do cofre de senhas.
-  - `npm test -- files.integration`: 8 testes do cofre de arquivos.
+  - `npm test -- files.integration`: 9 testes do cofre de arquivos.
 
-  Resultado esperado: **14 passed**.
+  Resultado esperado: **15 passed**. **Resultado em 2026-10-18: 15 passed.**
 - [ ] Opcional: apague o `.env.test.local` depois.
 
 Regras: nunca use credenciais reais nesse arquivo e nunca envie as senhas pelo chat.
@@ -115,6 +116,8 @@ Regras: nunca use credenciais reais nesse arquivo e nunca envie as senhas pelo c
 cd "C:\Users\hiago\Documents\security app\securityvaultclone\web-saas"
 npm run dev
 ```
+
+Antes do roteiro de arquivos, confira rapidamente no cofre de senhas que **editar uma credencial** e **trocar a senha mestra** (Settings) continuam funcionando. As permissões de colunas dessas tabelas foram restringidas na correção de 2026-10-18.
 
 ### 5.1 Upload e download
 - [ ] Entre com a conta A → **Files → My files → Upload file** com um arquivo pequeno (PDF ou imagem).
