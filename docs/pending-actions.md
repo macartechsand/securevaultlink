@@ -8,7 +8,19 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
-## IAM, PAM, suporte e OAuth (2026-10-21)
+## Liberar o MVP para 15 usuários (2026-10-21)
+
+Checklist completo e roteiro de ambiente novo: [`HANDOVER.md`](HANDOVER.md), seção 7. Resumo do que falta:
+
+1. [ ] SQL Editor: `supabase/admin/set-mvp-limits.sql` (15 contas, 60 MB cada).
+2. [ ] **Backups antes de dados reais:** plano Pro do Supabase **ou** `npx supabase db dump -f backup.sql` toda semana.
+3. [ ] Authentication: URL Configuration, "Confirm email" ligado, senha mínima de 10 caracteres, SMTP próprio (ou onboarding só por links do admin).
+4. [ ] Cron da `cleanup-files` (a aba Conformidade mostra se rodou).
+5. [ ] Recomendado: MFA obrigatório para todos (Administração → Beta e limites).
+6. [ ] Revisar o texto do aviso de privacidade (`web-saas/src/components/PrivacyNotice.tsx`).
+7. [ ] Pedir ao Claude o envio da branch `dev` ao GitHub.
+
+## IAM, PAM, suporte e OAuth (2026-10-21) ✅ migration aplicada; 27/27 testes
 
 O código, a função `admin` e o site já estão publicados. Falta o banco:
 
