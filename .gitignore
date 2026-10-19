@@ -1,35 +1,21 @@
-# dependencies
-node_modules/
-
-# expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macos
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
+node_modules
 .env
-
-# typescript
-*.tsbuildinfo
+.env.*
+!.env.example
+# Local Netlify folder
+.netlify
+# Generated output
+coverage/
+dist/
+.expo/
+# Local tooling binaries (SonarQube distribution)
+bin/
+# Mobile service config (restrict keys in the provider console; do not commit)
+GoogleService-Info.plist
+google-services.json
+# Keystores / private keys
+*.keystore
+*.jks
+*.pem
+# Supabase CLI local state
+supabase/.temp/
