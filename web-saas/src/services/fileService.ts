@@ -27,6 +27,8 @@ export type PlanLimits = {
   maxFileBytes: number;
   maxShareHours: number;
   maxTransferHours: number;
+  /** End of a time-limited Premium (from a Premium invite); null when it does not expire. */
+  planExpiresAt: string | null;
 };
 
 /** Free-plan defaults, used until the server answers (the server always enforces its own limits). */
@@ -36,11 +38,16 @@ export const FREE_LIMITS: PlanLimits = {
   maxFileBytes: MAX_FILE_BYTES,
   maxShareHours: 48,
   maxTransferHours: 48,
+  planExpiresAt: null,
 };
 
 export async function fetchPlanLimits(): Promise<PlanLimits> {
   const { data, error } = await supabase.rpc('my_plan_limits');
-  const row = (data as { plan: string; quota_bytes: number; max_file_bytes: number; max_share_hours: number; max_transfer_hours: number }[] | null)?.[0];
+  const row = (
+    data as
+      | { plan: string; quota_bytes: number; max_file_bytes: number; max_share_hours: number; max_transfer_hours: number; plan_expires_at?: string | null }[]
+      | null
+  )?.[0];
   if (error || !row) return FREE_LIMITS;
   return {
     plan: row.plan === 'premium' ? 'premium' : 'free',
@@ -49,6 +56,7 @@ export async function fetchPlanLimits(): Promise<PlanLimits> {
     maxFileBytes: Math.min(MAX_FILE_BYTES, Number(row.max_file_bytes)),
     maxShareHours: row.max_share_hours,
     maxTransferHours: row.max_transfer_hours,
+    planExpiresAt: row.plan_expires_at ?? null,
   };
 }
 

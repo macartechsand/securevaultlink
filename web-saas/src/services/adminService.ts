@@ -49,6 +49,8 @@ export type AdminUser = {
   providers: string[];
   mfa_required: boolean;
   posture_score: number | null;
+  /** Set only for a time-limited Premium. */
+  plan_expires_at?: string | null;
 };
 
 export async function listUsers(search: string, offset = 0, limit = 50): Promise<AdminUser[]> {
@@ -117,7 +119,14 @@ export const createRecoveryLink = (userId: string) =>
 export type BetaSettings = {
   settings: Record<string, string>;
   users: number;
-  invites: { email: string; note: string | null; created_at: string; registered: boolean }[];
+  invites: {
+    email: string;
+    note: string | null;
+    created_at: string;
+    registered: boolean;
+    plan?: 'free' | 'premium';
+    premium_days?: number | null;
+  }[];
 };
 
 export async function fetchBetaSettings(): Promise<BetaSettings> {
@@ -131,8 +140,16 @@ export async function setSetting(key: string, value: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function inviteEmail(email: string, note: string) {
-  const { error } = await supabase.rpc('admin_invite', { p_email: email, p_note: note || null });
+export type InvitePlan = { plan: 'free' | 'premium'; premiumDays: number | null };
+
+/** Authorizes an e-mail; a Premium invite applies the plan at sign-up (or now, if the account exists). */
+export async function inviteEmail(email: string, note: string, invitePlan: InvitePlan = { plan: 'free', premiumDays: null }) {
+  // Free invites send only the original two arguments, so they also work before 20261023000000.
+  const args =
+    invitePlan.plan === 'premium'
+      ? { p_email: email, p_note: note || null, p_plan: 'premium', p_premium_days: invitePlan.premiumDays }
+      : { p_email: email, p_note: note || null };
+  const { error } = await supabase.rpc('admin_invite', args);
   if (error) throw new Error(error.message);
 }
 

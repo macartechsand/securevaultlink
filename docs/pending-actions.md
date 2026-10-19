@@ -18,7 +18,15 @@ Checklist completo e roteiro de ambiente novo: [`HANDOVER.md`](HANDOVER.md), se�
 4. [ ] Cron da `cleanup-files` (a aba Conformidade mostra se rodou).
 5. [ ] Recomendado: MFA obrigatório para todos (Administração → Beta e limites).
 6. [ ] Revisar o texto do aviso de privacidade (`web-saas/src/components/PrivacyNotice.tsx`).
-7. [ ] Pedir ao Claude o envio da branch `dev` ao GitHub.
+7. [x] Branch `dev` enviada ao GitHub; PR #1 (`dev` → `master`) aberto.
+
+## Desbloqueio, reset do cofre e convites Premium (2026-10-19)
+
+Código, funções `account` e `admin` e o site já estão publicados. Falta o banco, **nesta ordem**:
+
+1. [ ] **SQL Editor:** rodar `supabase/migrations/20261022000000_vault_status.sql`. Quem já tem cofre passa a sempre chegar ao desbloqueio, mesmo com a política de MFA.
+2. [ ] **SQL Editor:** rodar `supabase/migrations/20261023000000_premium_invites.sql`. Habilita os convites Premium (com ou sem prazo).
+3. [ ] Teste rápido: Administração → Beta e limites → e-mail de teste → **Premium**, 7 dias → **Convidar e gerar link**. Abra o link numa janela anônima. Em Arquivos deve aparecer "plano Premium até …", e em Usuários, "Premium até …".
 
 ## IAM, PAM, suporte e OAuth (2026-10-21) ✅ migration aplicada; 27/27 testes
 

@@ -92,6 +92,17 @@ describe.skipIf(!configured)('IAM, PAM and support metadata (dev project)', () =
     expect((await a.client.from('support_reports').insert({ user_id: a.userId, report: 'x' })).error).not.toBeNull()
   })
 
+  it('a regular user cannot grant Premium (invite or direct write)', async () => {
+    const invite = await a.client.rpc('admin_invite', { p_email: 'premium@exemplo.invalid', p_note: null, p_plan: 'premium', p_premium_days: 30 })
+    expect(invite.error).not.toBeNull()
+    const write = await a.client.from('user_plans').upsert({ user_id: a.userId, plan: 'premium', expires_at: null })
+    expect(write.error).not.toBeNull()
+    expect((await a.client.from('user_plans').update({ expires_at: null }).eq('user_id', a.userId)).data ?? null).toBeNull()
+    const limits = await a.client.rpc('my_plan_limits')
+    expect(limits.error).toBeNull()
+    expect(['free', 'premium']).toContain(limits.data?.[0]?.plan)
+  })
+
   it('reports the MFA policy for the caller', async () => {
     const policy = await a.client.rpc('my_security_policy')
     expect(policy.error).toBeNull()

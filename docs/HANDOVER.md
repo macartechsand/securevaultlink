@@ -57,7 +57,7 @@ Nenhuma função administrativa devolve conteúdo de cofre.
 | **Acesso privilegiado (PAM)** | Revisão de quem tem privilégio, até quando, por quê e com que MFA; concessão **temporária** (just-in-time) com justificativa. Só o **Administrador master** concede |
 | **Conformidade** | 16 controles marcados como OK, atenção ou falha |
 | **Eventos** | Feed global de auditoria com filtros |
-| **Beta e limites** | Convites, "convidar e gerar link", máximo de contas, cotas, modo de cadastro, MFA obrigatório para todos |
+| **Beta e limites** | Convites (Gratuito ou **Premium com prazo opcional**), "convidar e gerar link", máximo de contas, cotas, modo de cadastro, MFA obrigatório para todos |
 | Saúde do sistema | Bucket, chaves configuradas, limpeza |
 
 Papéis:
@@ -126,7 +126,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado e os papéis. As 13 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261021…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado e os papéis. As 15 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261023…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -177,6 +177,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
 | Tarefa | Como |
 |---|---|
 | Convidar usuário | Administração → Beta e limites → **Convidar e gerar link** → enviar o link por mensagem direta |
+| Convidar já no **Premium** | Mesmo fluxo, escolhendo **Premium** e, se quiser, os dias (vazio = sem prazo). O plano vale a partir do cadastro; se a conta já existir, vale na hora. Conta no limite de usuários. Quando o prazo acaba, a conta volta ao Gratuito sozinha: novos uploads respeitam a cota menor, e os arquivos e links que já existem continuam. Trocar o plano manualmente em Usuários remove o prazo. Eventos: `plan.granted_by_invite`, `admin.plan_changed` |
 | Usuário esqueceu a senha da **conta** | Usuários → ficha → **Gerar link de redefinição** |
 | Usuário esqueceu a **senha mestra** | Ninguém consegue redefini-la (nem o admin). Com a **chave de recuperação**: Desbloquear → "Esqueci a senha mestra" → chave + nova senha, sem perder nada. Sem a chave: Desbloquear → "Esqueci a senha mestra" → digitar `APAGAR COFRE`. Isso apaga o cofre (itens, arquivos, pastas, compartilhamentos enviados e recebidos) e mantém conta, MFA e papéis; a pessoa cria uma nova senha mestra. Registrado como `vault.reset` em Eventos (Edge Function `account`, ação `reset_vault`) |
 | Usuário perdeu o autenticador | Confirmar a identidade por outro canal → Usuários → ficha → **Resetar MFA** |
@@ -222,7 +223,7 @@ npm test -- integration        # integração contra o Supabase de DESENVOLVIMEN
 
 | # | Item | Situação |
 |---|---|---|
-| 1 | Migrations aplicadas e testes de integração passando | ✅ 33/33 integração, 107/107 total |
+| 1 | Migrations aplicadas e testes de integração passando | ✅ 111/111 total (aplicar `20261022…` e `20261023…` no projeto de dev) |
 | 2 | Funcionalidades core validadas de ponta a ponta | ✅ `core.integration` |
 | 3 | Cabeçalhos de segurança no site publicado | ✅ Verificados |
 | 4 | Cadastro só para convidados | ✅ (trigger + painel) |

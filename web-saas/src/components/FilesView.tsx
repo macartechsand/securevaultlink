@@ -141,6 +141,7 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
         <div className="stack-sm usage">
           <span className="subtle">
             {formatBytes(used)} de {formatBytes(limits.quotaBytes)} usados · plano {limits.plan === 'premium' ? 'Premium' : 'Gratuito'}
+            {limits.planExpiresAt && ` até ${formatDate(limits.planExpiresAt)}`}
           </span>
           <div className={`meter ${usage.tone}`} aria-hidden="true">
             <span className={usage.width} />

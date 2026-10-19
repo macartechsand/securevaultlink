@@ -86,7 +86,9 @@ export function IamUsersTab({ canAct }: { canAct: boolean }) {
                     <td>
                       <div className="badges">
                         {u.role && <span className="badge badge--info">{ROLE_LABELS[u.role]}</span>}
-                        <span className={`badge ${u.plan === 'premium' ? 'badge--info' : ''}`}>{u.plan === 'premium' ? 'Premium' : 'Gratuito'}</span>
+                        <span className={`badge ${u.plan === 'premium' ? 'badge--info' : ''}`}>
+                          {u.plan === 'premium' ? (u.plan_expires_at ? `Premium até ${formatDateTime(u.plan_expires_at)}` : 'Premium') : 'Gratuito'}
+                        </span>
                         {u.providers.map((p) => (
                           <span key={p} className="badge">
                             {PROVIDER_LABELS[p] ?? p}

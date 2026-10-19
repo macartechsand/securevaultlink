@@ -83,8 +83,9 @@ Deno.serve(async (req) => {
   // One-time sign-in links, generated WITHOUT sending e-mail (for when SMTP is not configured).
   // The admin delivers them through another channel. They are credentials: shown once, expire, audited.
   if (action === 'invite_link') {
-    // Inviting implies authorizing the address in the closed beta.
-    await admin.from('beta_allowlist').upsert({ email, note: 'convite com link', invited_by: userData.user.id }, { onConflict: 'email' })
+    // Inviting implies authorizing the address in the closed beta. An existing invite (with its
+    // note and plan, e.g. Premium) is kept as is; the plan is applied when the account is created.
+    await admin.from('beta_allowlist').upsert({ email, note: 'convite com link', invited_by: userData.user.id }, { onConflict: 'email', ignoreDuplicates: true })
     const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email, options: redirectTo ? { redirectTo } : undefined })
     if (error || !data?.properties?.hashed_token) {
       const msg = error?.message ?? ''

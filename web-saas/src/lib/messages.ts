@@ -37,6 +37,7 @@ const EXACT: Record<string, string> = {
 }
 
 const PATTERNS: [RegExp, string][] = [
+  [/Could not find the function public\.admin_invite/i, 'Convite Premium ainda indisponível: aplique a migration 20261023000000_premium_invites.sql no SQL Editor.'],
   [/cannot be used as it is not authorized|email_address_not_authorized/i, 'A conta não foi criada: o envio de e-mail do servidor ainda não está liberado para este endereço. Peça ao administrador um link de convite.'],
   [/sending (confirmation|recovery|magic link|invite) email/i, 'Não foi possível enviar o e-mail. Peça ao administrador um link de acesso.'],
   [/Password should be at least (\d+) characters/i, 'A senha da conta deve ter pelo menos $1 caracteres.'],

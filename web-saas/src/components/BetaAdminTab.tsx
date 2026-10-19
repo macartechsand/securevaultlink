@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { formatDateTime, friendlyError } from '../lib/messages';
-import { type BetaSettings, createInviteLink, fetchBetaSettings, inviteEmail, setSetting, uninviteEmail } from '../services/adminService';
+import { type BetaSettings, type InvitePlan, createInviteLink, fetchBetaSettings, inviteEmail, setSetting, uninviteEmail } from '../services/adminService';
 import { OneTimeLink } from './OneTimeLink';
 import { Icon } from './ui/Icon';
 
@@ -16,6 +16,8 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
+  const [plan, setPlan] = useState<'free' | 'premium'>('free');
+  const [premiumDays, setPremiumDays] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,6 +36,20 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const invitePlan = (): InvitePlan => {
+    if (plan === 'free' || premiumDays.trim() === '') return { plan, premiumDays: null };
+    const days = Number(premiumDays);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error('Duração do Premium: de 1 a 3650 dias (ou em branco para sem prazo).');
+    return { plan, premiumDays: days };
+  };
+
+  const clearForm = () => {
+    setEmail('');
+    setNote('');
+    setPlan('free');
+    setPremiumDays('');
+  };
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
     setError('');
@@ -126,7 +142,9 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
           <p className="subtle">
             Só estes e-mails conseguem criar conta. <strong>Convidar</strong> apenas autoriza o endereço (a pessoa se cadastra e
             confirma por e-mail). <strong>Gerar link de acesso</strong> cria a conta já confirmada e mostra um link para você
-            enviar por outro canal: use quando os e-mails do Supabase não estiverem chegando.
+            enviar por outro canal: use quando os e-mails do Supabase não estiverem chegando. Escolha <strong>Premium</strong>{' '}
+            para a pessoa já entrar no plano pago, com ou sem prazo (contado a partir do cadastro; se a conta já existir, vale na
+            hora). Todo convite conta no limite de usuários.
           </p>
         </div>
         {canAct && (
@@ -134,15 +152,30 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
             className="field__inline"
             onSubmit={(e) => {
               e.preventDefault();
-              void run(`${email} convidado.`, async () => {
-                await inviteEmail(email, note);
-                setEmail('');
-                setNote('');
+              void run(`${email} convidado${plan === 'premium' ? ' (Premium)' : ''}.`, async () => {
+                await inviteEmail(email, note, invitePlan());
+                clearForm();
               });
             }}
           >
             <input type="email" placeholder="email@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input placeholder="Observação (opcional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
+            <select aria-label="Plano do convite" value={plan} onChange={(e) => setPlan(e.target.value as 'free' | 'premium')}>
+              <option value="free">Gratuito</option>
+              <option value="premium">Premium</option>
+            </select>
+            {plan === 'premium' && (
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                inputMode="numeric"
+                aria-label="Dias de Premium"
+                placeholder="Dias (vazio = sem prazo)"
+                value={premiumDays}
+                onChange={(e) => setPremiumDays(e.target.value)}
+              />
+            )}
             <button type="submit" className="btn" disabled={busy}>
               <Icon name="plus" size={14} />
               Convidar
@@ -153,10 +186,10 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
               disabled={busy || !email}
               onClick={() =>
                 void run('Conta criada. Envie o link à pessoa.', async () => {
-                  if (note) await inviteEmail(email, note);
+                  // Registers the plan first: the account is created by the link and picks it up at sign-up.
+                  await inviteEmail(email, note, invitePlan());
                   setOneTime(await createInviteLink(email));
-                  setEmail('');
-                  setNote('');
+                  clearForm();
                 })
               }
             >
@@ -176,7 +209,10 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
               <li key={i.email}>
                 <span>
                   <strong>{i.email}</strong>{' '}
-                  <span className={`badge ${i.registered ? 'badge--ok' : ''}`}>{i.registered ? 'cadastrado' : 'aguardando cadastro'}</span>
+                  <span className={`badge ${i.registered ? 'badge--ok' : ''}`}>{i.registered ? 'cadastrado' : 'aguardando cadastro'}</span>{' '}
+                  {i.plan === 'premium' && (
+                    <span className="badge badge--info">{i.premium_days ? `Premium · ${i.premium_days} dias` : 'Premium'}</span>
+                  )}
                   <span className="subtle block">
                     {i.note ? `${i.note} · ` : ''}convidado em {formatDateTime(i.created_at)}
                   </span>
