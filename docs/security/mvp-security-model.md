@@ -74,6 +74,22 @@ Limitações dos arquivos:
 - **CORS das Edge Functions:** fica `*` de propósito. Não há cookies, e toda chamada exige o JWT do usuário no cabeçalho, então restringir a origem não protege nada e quebraria o uso local.
 - **Downloads por URL assinada nova:** o endpoint autenticado do Supabase Storage continuou servindo um objeto por mais de 6 segundos depois da revogação, em 5 de 8 medições. A URL assinada checa a permissão no momento da assinatura (0 em 8 após a revogação). Um ex-destinatário que chame a API diretamente ainda pode obter **ciphertext** por alguns segundos, mas ele já tinha a chave e acesso antes; ninguém mais consegue decifrar.
 
+## IAM, PAM e suporte por metadados (2026-10-21)
+
+- **Papéis:**
+  - `owner` (administrador master, um só);
+  - `admin`: altera usuários e configurações;
+  - `support` e `auditor`: somente leitura.
+- **Concessão de papéis:** só o owner concede, sempre com justificativa e, de preferência, com prazo (acesso **just-in-time** que expira sozinho). Todo papel privilegiado exige MFA (`aal2`).
+- **Política de MFA:** por usuário ou global (`require_mfa_all`). Aplicada em `private.vault_mfa_satisfied()`: quem tem MFA exigido e não tem fator não acessa nenhuma tabela do cofre.
+- **O suporte vê:**
+  - metadados do servidor: provedores, sessões, KDF, versões de itens, uso, compartilhamentos e eventos;
+  - um **resumo numérico** de postura enviado pelo app (`report_posture` aceita só os campos da lista permitida, só números ou booleanos);
+  - os relatórios de diagnóstico que o usuário escolher enviar.
+
+  O usuário desliga o resumo em Configurações → Privacidade e suporte, e isso apaga o que foi enviado. **Nenhuma função administrativa devolve conteúdo de cofre.**
+- **OAuth:** Google e GitHub com Authorization Code + PKCE. Ver `docs/security/oauth.md`.
+
 ## Postura, sessões e administração (Fases D e E)
 
 - **Postura:** score de 0 a 100 calculado no navegador a partir de dados reais. Pesos: senhas 40, proteção da conta 30 (MFA e recovery), sites 15, compartilhamentos 10, sessões 5.

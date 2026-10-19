@@ -8,6 +8,18 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## IAM, PAM, suporte e OAuth (2026-10-21)
+
+O código, a função `admin` e o site já estão publicados. Falta o banco:
+
+1. [ ] **SQL Editor:** rodar `supabase/migrations/20261021000000_iam_pam_support.sql`.
+   - Se você for o único administrador, vira automaticamente **Administrador master** (owner).
+   - Sem esta migration, as novas abas da Administração mostram erro.
+2. [ ] Avisar o Claude para rodar os testes. Esperado: 22 + 5 novos (`iam.integration`).
+3. [ ] **OAuth (opcional):** seguir `docs/security/oauth.md`, seção 3, para criar os apps no Google e no GitHub e ativá-los no Supabase. Os botões aparecem sozinhos.
+4. [ ] No app (Administração): conferir as abas Usuários (IAM), Acesso privilegiado (PAM), Conformidade e Eventos.
+   - Conceder um papel **Suporte** temporário (1 hora) a uma conta de teste e ver que ele expira.
+
 ## Administrador master e cadastro sem e-mail (2026-10-20)
 
 **Por que os links não chegam:** o e-mail padrão do Supabase só envia para membros da equipe do projeto, com limite de cerca de 2 por hora. Até existir um SMTP próprio, use os **links de acesso** gerados no painel. A função `admin` já foi publicada e `APP_ORIGINS` já foi configurado.
