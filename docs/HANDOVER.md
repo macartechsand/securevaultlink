@@ -178,7 +178,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
 |---|---|
 | Convidar usuário | Administração → Beta e limites → **Convidar e gerar link** → enviar o link por mensagem direta |
 | Usuário esqueceu a senha da **conta** | Usuários → ficha → **Gerar link de redefinição** |
-| Usuário esqueceu a **senha mestra** | Só a **chave de recuperação** dele resolve (Desbloquear → "Esqueci a senha mestra"). Sem ela, os dados são irrecuperáveis |
+| Usuário esqueceu a **senha mestra** | Ninguém consegue redefini-la (nem o admin). Com a **chave de recuperação**: Desbloquear → "Esqueci a senha mestra" → chave + nova senha, sem perder nada. Sem a chave: Desbloquear → "Esqueci a senha mestra" → digitar `APAGAR COFRE`. Isso apaga o cofre (itens, arquivos, pastas, compartilhamentos enviados e recebidos) e mantém conta, MFA e papéis; a pessoa cria uma nova senha mestra. Registrado como `vault.reset` em Eventos (Edge Function `account`, ação `reset_vault`) |
 | Usuário perdeu o autenticador | Confirmar a identidade por outro canal → Usuários → ficha → **Resetar MFA** |
 | Conta comprometida | **Encerrar sessões** e **Suspender**; pedir troca da senha da conta |
 | Dar acesso ao suporte | PAM → conceder **Suporte (leitura)** por 1 a 8 horas, com justificativa |

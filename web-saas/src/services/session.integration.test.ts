@@ -2,7 +2,8 @@
 /**
  * Exercises the app's REAL vault session path with its own services (the same calls the browser
  * makes): create/replace a vault for test account A, unlock it with the master password, create and
- * load items (v2), save with history, and the sharing key pair. Test account A only.
+ * load items (v2), save with history, the sharing key pair, and the forgotten-master-password
+ * reset (account Edge Function). Test account A only.
  *
  *   npm test -- session.integration
  */
@@ -12,6 +13,7 @@ import { createVault, unlockWithPassword } from '../lib/crypto'
 import { emptyItem } from '../lib/items'
 import { supabase } from '../lib/supabase'
 import * as ops from '../state/itemOps'
+import { resetMyVault } from './authService'
 import { ensureUserKeyPair } from './fileService'
 import * as vault from './vaultService'
 
@@ -73,5 +75,22 @@ describe.skipIf(!configured)('vault session path (dev project, account A)', () =
     } finally {
       await vault.deleteEntry(item.id)
     }
+  })
+
+  it('"Esqueci a senha mestra" erases the vault and lets the user create a new one', async () => {
+    const profile = (await vault.fetchProfile())!
+    const ctx = { dek: await unlockWithPassword(profile, MASTER), userId }
+    await ops.createItem(ctx, new Map(), { ...emptyItem('login'), title: 'Antes do reset' })
+
+    await resetMyVault()
+    expect(await vault.fetchProfile()).toBeNull()
+    expect((await supabase.from('vault_entries').select('id').eq('user_id', userId)).data ?? []).toEqual([])
+    expect((await supabase.from('user_keys').select('user_id').eq('user_id', userId)).data ?? []).toEqual([])
+
+    // Same account, brand-new vault with a new master password.
+    const fresh = await createVault(`${MASTER}-novo`)
+    await vault.createProfile(fresh.profile)
+    await expect(unlockWithPassword((await vault.fetchProfile())!, `${MASTER}-novo`)).resolves.toBeDefined()
+    expect((await ensureUserKeyPair({ dek: fresh.dek, userId })).publicKey.length).toBeGreaterThan(50)
   })
 })

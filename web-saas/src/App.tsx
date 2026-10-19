@@ -272,6 +272,7 @@ function VaultApp() {
             onUnlock={session.unlock}
             hasRecovery={session.hasRecovery}
             onRecover={session.recover}
+            onResetVault={session.resetVault}
             onSignOut={signOut}
           />
         )}

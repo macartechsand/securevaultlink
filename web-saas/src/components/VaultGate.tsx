@@ -9,10 +9,15 @@ type VaultGateProps = {
   onUnlock: (masterPassword: string) => Promise<void>;
   hasRecovery: boolean;
   onRecover: (recoveryKey: string, newMasterPassword: string) => Promise<void>;
+  onResetVault: () => Promise<void>;
   onSignOut: () => void;
 };
 
-export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecover, onSignOut }: VaultGateProps) {
+const RESET_PHRASE = 'APAGAR COFRE';
+
+export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecover, onResetVault, onSignOut }: VaultGateProps) {
+  const [resetting, setResetting] = useState(false);
+  const [resetTyped, setResetTyped] = useState('');
   const [password, setPassword] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -47,6 +52,58 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
       setBusy(false);
     }
   };
+
+  const confirmReset = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await onResetVault();
+      setResetting(false);
+      setResetTyped('');
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const closeReset = () => {
+    setResetting(false);
+    setResetTyped('');
+    setError('');
+  };
+
+  if (resetting && !setup) {
+    return (
+      <>
+        <div>
+          <p className="eyebrow">Cofre bloqueado</p>
+          <h2>Recomeçar o cofre</h2>
+          <p className="subtle">Conectado como {email}</p>
+        </div>
+        <div className="alert alert--error">
+          A senha mestra nunca sai do seu dispositivo, então <strong>ninguém consegue redefini-la</strong>, nem o
+          administrador.{hasRecovery ? ' Você tem uma chave de recuperação: use-a para trocar a senha sem perder nada.' : ''}{' '}
+          Recomeçar <strong>apaga para sempre</strong> todos os itens, arquivos, pastas e compartilhamentos deste cofre e
+          cria um cofre novo e vazio. Sua conta, a verificação em duas etapas e seus acessos continuam.
+        </div>
+        <form className="form" onSubmit={confirmReset}>
+          <label className="field">
+            Digite {RESET_PHRASE} para confirmar
+            <input value={resetTyped} onChange={(e) => setResetTyped(e.target.value)} autoComplete="off" spellCheck={false} autoFocus />
+          </label>
+          {error && <div className="alert alert--error">{error}</div>}
+          <button type="submit" className="btn btn--danger btn--block" disabled={busy || resetTyped.trim().toUpperCase() !== RESET_PHRASE}>
+            {busy ? 'Apagando…' : 'Apagar o cofre e recomeçar'}
+          </button>
+          <button type="button" className="btn btn--ghost btn--block" onClick={closeReset}>
+            Voltar
+          </button>
+        </form>
+      </>
+    );
+  }
 
   const title = setup ? 'Crie sua senha mestra' : useRecovery ? 'Recuperar com a chave de recuperação' : 'Desbloquear o cofre';
   return (
@@ -101,6 +158,11 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
         {!setup && hasRecovery && (
           <button type="button" className="btn btn--ghost btn--block" onClick={() => setUseRecovery((v) => !v)}>
             {useRecovery ? 'Usar a senha mestra' : 'Esqueci a senha mestra'}
+          </button>
+        )}
+        {!setup && !useRecovery && (
+          <button type="button" className="btn btn--ghost btn--block" onClick={() => setResetting(true)}>
+            {hasRecovery ? 'Perdi a senha mestra e a chave de recuperação' : 'Esqueci a senha mestra'}
           </button>
         )}
         <button type="button" className="btn btn--ghost btn--block" onClick={onSignOut}>

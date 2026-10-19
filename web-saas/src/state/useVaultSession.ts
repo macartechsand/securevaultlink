@@ -309,6 +309,18 @@ export function useVaultSession() {
     [finishUnlock],
   );
 
+  /**
+   * Forgotten master password without a recovery key: erases the vault on the server (nobody can
+   * decrypt it) and keeps the account. The user then creates a new master password.
+   */
+  const resetVault = useCallback(async () => {
+    await auth.resetMyVault();
+    clearSecrets();
+    profileRef.current = null;
+    setHasRecovery(false);
+    setStatus('needs-setup');
+  }, [clearSecrets]);
+
   /** Turns on or regenerates the recovery key. Returns it once; it is never stored. */
   const enableRecovery = useCallback(async (masterPassword: string) => {
     const profile = profileRef.current;
@@ -484,6 +496,7 @@ export function useVaultSession() {
     setupVault,
     unlock,
     recover,
+    resetVault,
     hasRecovery,
     enableRecovery,
     disableRecovery,

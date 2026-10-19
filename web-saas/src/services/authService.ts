@@ -77,3 +77,21 @@ export async function getSession() {
 export function onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
   return supabase.auth.onAuthStateChange(callback);
 }
+
+/**
+ * Forgotten master password without a recovery key: erases the caller's vault on the server
+ * (account, MFA and roles are kept). Irreversible.
+ */
+export async function resetMyVault() {
+  const { data, error } = await supabase.functions.invoke('account', { body: { action: 'reset_vault', confirm: 'APAGAR COFRE' } });
+  if (!error && (data as { ok?: boolean } | null)?.ok) return;
+  let message = 'Não foi possível recomeçar o cofre.';
+  try {
+    const ctx = (error as { context?: Response } | null)?.context;
+    const payload = ctx ? await ctx.json() : null;
+    if (payload?.error) message = payload.error;
+  } catch {
+    /* keep default */
+  }
+  throw new Error(message);
+}
