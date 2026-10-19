@@ -9,6 +9,8 @@ const EXACT: Record<string, string> = {
   'email rate limit exceeded': 'Limite de envio de e-mails atingido. Tente mais tarde ou peça um link ao administrador.',
   'Email not confirmed': 'Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).',
   'User already registered': 'Já existe uma conta com este e-mail.',
+  'Error sending confirmation email':
+    'A conta não foi criada porque o e-mail de confirmação não pôde ser enviado. Peça ao administrador um link de convite.',
   // The closed-beta trigger rejects the insert; Supabase Auth reports it generically.
   'Database error saving new user':
     'Cadastro indisponível: o acesso está restrito a convidados ou as vagas do beta acabaram. Fale com o administrador.',
@@ -35,6 +37,8 @@ const EXACT: Record<string, string> = {
 }
 
 const PATTERNS: [RegExp, string][] = [
+  [/cannot be used as it is not authorized|email_address_not_authorized/i, 'A conta não foi criada: o envio de e-mail do servidor ainda não está liberado para este endereço. Peça ao administrador um link de convite.'],
+  [/sending (confirmation|recovery|magic link|invite) email/i, 'Não foi possível enviar o e-mail. Peça ao administrador um link de acesso.'],
   [/Password should be at least (\d+) characters/i, 'A senha da conta deve ter pelo menos $1 caracteres.'],
   [/Shares on the free plan must expire within (\d+) hours/i, 'No plano gratuito, compartilhamentos expiram em até $1 horas.'],
   [/(Share|Transfer) duration exceeds your plan limit \((\d+) hours\)/i, 'A duração excede o limite do seu plano ($2 horas).'],

@@ -88,6 +88,16 @@ export async function submitSupportReport(report: string) {
   if (error) throw new Error(error.message);
 }
 
+export type VaultStatus = { hasProfile: boolean; mfaSatisfied: boolean; mfaRequired: boolean; hasFactor: boolean };
+
+/** RLS-independent vault status (null if the function is not deployed yet). */
+export async function fetchVaultStatus(): Promise<VaultStatus | null> {
+  const { data, error } = await supabase.rpc('my_vault_status');
+  const row = (data as { has_profile: boolean; mfa_satisfied: boolean; mfa_required: boolean; has_factor: boolean }[] | null)?.[0];
+  if (error || !row) return null;
+  return { hasProfile: row.has_profile, mfaSatisfied: row.mfa_satisfied, mfaRequired: row.mfa_required, hasFactor: row.has_factor };
+}
+
 export async function fetchMfaRequired(): Promise<boolean> {
   const { data } = await supabase.rpc('my_security_policy');
   return Boolean((data as { mfa_required: boolean }[] | null)?.[0]?.mfa_required);

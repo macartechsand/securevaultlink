@@ -19,7 +19,8 @@ import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
 import * as mfa from '../services/mfaService';
-import { fetchMfaRequired } from '../services/supportService';
+import { fetchMfaRequired, fetchVaultStatus } from '../services/supportService';
+import { reportError } from '../lib/errorReporter';
 import * as vault from '../services/vaultService';
 import * as ops from './itemOps';
 
@@ -116,7 +117,17 @@ export function useVaultSession() {
           setStatus('needs-mfa-enrollment');
           return;
         }
+        // A vault the policy hides must never look like "no vault yet" (that would show the
+        // "create master password" screen to an existing user).
+        const vaultStatus = await fetchVaultStatus();
+        if (vaultStatus?.hasProfile && !vaultStatus.mfaSatisfied) {
+          setStatus(vaultStatus.hasFactor ? 'needs-mfa' : 'needs-mfa-enrollment');
+          return;
+        }
         const profile = await vault.fetchProfile();
+        if (!profile && vaultStatus?.hasProfile) {
+          throw new Error('Seu cofre existe, mas não pôde ser lido agora. Saia, entre de novo e tente outra vez.');
+        }
         profileRef.current = profile;
         setHasRecovery(profile ? hasRecoveryKey(profile) : false);
         setStatus(profile ? 'locked' : 'needs-setup');
@@ -267,7 +278,14 @@ export function useVaultSession() {
         logClientEvent('vault.unlock_failed');
         throw new Error(message(error, 'Não foi possível desbloquear o cofre.'));
       }
-      await finishUnlock(dek);
+      try {
+        await finishUnlock(dek);
+      } catch (error) {
+        // The master password was right; loading failed. Say so (and record it for support).
+        dekRef.current = null;
+        reportError(error, 'unlock.load');
+        throw new Error(`Senha mestra correta, mas não foi possível carregar o cofre: ${friendlyError(error)}`);
+      }
       logClientEvent('vault.unlocked');
     },
     [finishUnlock],
