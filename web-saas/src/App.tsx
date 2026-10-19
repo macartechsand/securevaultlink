@@ -3,6 +3,8 @@ import { ActivityView } from './components/ActivityView';
 import { AdminView } from './components/AdminView';
 import { DiagnosticsCard } from './components/DiagnosticsCard';
 import { AuthScreen } from './components/AuthScreen';
+import { BackupCard } from './components/BackupCard';
+import { DeleteAccountCard } from './components/DeleteAccountCard';
 import { FilesView } from './components/FilesView';
 import { Generator } from './components/Generator';
 import { ItemEditor } from './components/ItemEditor';
@@ -535,6 +537,9 @@ function VaultApp() {
             />
           )}
           {activeView === 'settings' && (
+            <BackupCard items={items} folders={session.folders} onAddItem={session.addItem} onCreateFolder={session.createFolder} />
+          )}
+          {activeView === 'settings' && (
             <DiagnosticsCard
               getKeyContext={session.getKeyContext}
               getKeyPair={session.getKeyPair}
@@ -542,6 +547,8 @@ function VaultApp() {
               undecryptable={session.undecryptable}
             />
           )}
+
+          {activeView === 'settings' && <DeleteAccountCard onDeleted={() => void session.signOut()} />}
 
           {activeView === 'admin' && adminStatus && <AdminView status={adminStatus} />}
         </div>

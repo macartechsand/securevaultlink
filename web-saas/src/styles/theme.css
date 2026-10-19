@@ -972,3 +972,11 @@ input[type='range'] {
   height: 1px;
   background: var(--border);
 }
+.center-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.danger-zone {
+  border-color: var(--danger);
+}

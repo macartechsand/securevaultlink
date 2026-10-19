@@ -58,7 +58,11 @@ describe.skipIf(!configured)('IAM, PAM and support metadata (dev project)', () =
   })
 
   it('posture snapshots accept only allow-listed numeric fields and stay private', async () => {
-    expect((await a.client.from('user_preferences').upsert({ user_id: a.userId, share_security_metrics: true })).error).toBeNull()
+    // Same pattern as the app: create the row if missing (duplicate is fine), then update it.
+    // (upsert is intentionally denied: user_id is not an updatable column.)
+    await a.client.from('user_preferences').insert({ share_security_metrics: true })
+    expect((await a.client.from('user_preferences').update({ share_security_metrics: true }).eq('user_id', a.userId)).error).toBeNull()
+    expect((await a.client.from('user_preferences').upsert({ user_id: a.userId, share_security_metrics: true })).error).not.toBeNull()
     expect((await a.client.rpc('report_posture', { p_data: { score: 80, weak: 1, mfa: false } })).error).toBeNull()
     expect((await a.client.rpc('report_posture', { p_data: { title: 'Banco' } })).error).not.toBeNull()
     expect((await a.client.rpc('report_posture', { p_data: { score: 'secret-string' } })).error).not.toBeNull()

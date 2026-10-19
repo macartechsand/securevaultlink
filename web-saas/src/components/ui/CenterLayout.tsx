@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { PrivacyNoticeLink } from '../PrivacyNotice'
 import { Icon } from './Icon'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -20,6 +21,9 @@ export function CenterLayout({ children }: { children: ReactNode }) {
           <ThemeToggle compact />
         </div>
         <section className="card">{children}</section>
+        <div className="center-footer">
+          <PrivacyNoticeLink />
+        </div>
       </div>
     </div>
   )

@@ -48,6 +48,7 @@ const LABELS: Record<string, string> = {
   'admin.role_revoked': 'Papel privilegiado revogado',
   'admin.policy_changed': 'Política de segurança alterada por um administrador',
   'support.report_submitted': 'Relatório de diagnóstico enviado ao suporte',
+  'account.deleted': 'Conta excluída',
   'admin.recovery_link_created': 'Link de redefinição de senha gerado por um administrador',
   'admin.uninvited': 'Convite do beta removido',
 };
