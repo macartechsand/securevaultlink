@@ -87,6 +87,14 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
               <option value="open">Aberto a qualquer pessoa (respeita o máximo de contas)</option>
             </select>
           </label>
+          <label className="field">
+            Verificação em duas etapas para todos
+            <select value={draft.require_mfa_all ?? 'false'} onChange={(e) => setDraft((d) => ({ ...d, require_mfa_all: e.target.value }))} disabled={!canAct}>
+              <option value="false">Opcional (cada administrador pode exigir por usuário)</option>
+              <option value="true">Obrigatória para todos os usuários</option>
+            </select>
+            <span className="field__hint">Quando obrigatória, quem não tiver segundo fator precisa ativar antes de acessar o cofre.</span>
+          </label>
           <div className="grid grid--2">
             {NUMERIC.map((f) => (
               <label key={f.key} className="field">

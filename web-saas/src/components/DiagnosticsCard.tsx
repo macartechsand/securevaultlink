@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { fetchMyAuditEvents } from '../services/auditService';
 import { BUCKET, type KeyContext, type UserKeyPair, fetchPlanLimits } from '../services/fileService';
 import { getAssuranceLevel } from '../services/mfaService';
+import { submitSupportReport } from '../services/supportService';
 import { Icon } from './ui/Icon';
 
 type Check = { label: string; ok: boolean | null; detail: string };
@@ -38,6 +39,7 @@ export function DiagnosticsCard({
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState('');
 
   const run = async () => {
     setRunning(true);
@@ -147,7 +149,23 @@ export function DiagnosticsCard({
             >
               <Icon name={copied ? 'check' : 'copy'} size={14} />
               {copied ? 'Copiado' : 'Copiar relatório'}
+            </button>{' '}
+            <button
+              type="button"
+              className="btn btn--sm btn--primary"
+              onClick={async () => {
+                try {
+                  await submitSupportReport(report);
+                  setSent('Relatório enviado ao suporte.');
+                } catch (err) {
+                  setSent(err instanceof Error ? err.message : 'Não foi possível enviar.');
+                }
+              }}
+            >
+              <Icon name="upload" size={14} />
+              Enviar ao suporte
             </button>
+            {sent && <span className="subtle"> {sent}</span>}
           </div>
         </div>
       )}

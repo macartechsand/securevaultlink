@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { friendlyError } from '../lib/messages';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
+import { PrivacyCard } from './PrivacyCard';
 import { SessionsCard } from './SessionsCard';
 import { ThemeToggle } from './ui/ThemeToggle';
 
@@ -52,6 +53,7 @@ export function Settings({
       <MfaSettings />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
       <SessionsCard />
+      <PrivacyCard />
 
       <section className="card">
         <div>

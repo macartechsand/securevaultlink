@@ -14,11 +14,12 @@ import {
 import { passwordStrength } from '../lib/health/passwordHealth';
 import type { SecuredItemData } from '../lib/items';
 import { friendlyError } from '../lib/messages';
-import { ARRIVED_TO_SET_PASSWORD, clearAuthParamsFromUrl } from '../lib/authRedirect';
+import { ARRIVED_TO_SET_PASSWORD, AUTH_REDIRECT_ERROR, PENDING_OTP, clearAuthParamsFromUrl } from '../lib/authRedirect';
 import { logClientEvent } from '../services/auditService';
 import * as auth from '../services/authService';
 import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../services/fileService';
 import * as mfa from '../services/mfaService';
+import { fetchMfaRequired } from '../services/supportService';
 import * as vault from '../services/vaultService';
 import * as ops from './itemOps';
 
@@ -31,6 +32,7 @@ export type SessionStatus =
   | 'loading'
   | 'signed-out'
   | 'needs-mfa'
+  | 'needs-mfa-enrollment'
   | 'needs-setup'
   | 'locked'
   | 'unlocked'
@@ -63,6 +65,7 @@ export function useVaultSession() {
   const [hasRecovery, setHasRecovery] = useState(false);
   // Arrived through an invite or password-reset link: the account password must be set first.
   const [needsAccountPassword, setNeedsAccountPassword] = useState(ARRIVED_TO_SET_PASSWORD);
+  const [linkError, setLinkError] = useState(AUTH_REDIRECT_ERROR ?? '');
   const dekRef = useRef<CryptoKey | null>(null);
   const keyPairRef = useRef<Promise<UserKeyPair> | null>(null);
   const itemKeysRef = useRef<ops.ItemKeys>(new Map());
@@ -108,6 +111,11 @@ export function useVaultSession() {
           setStatus('needs-mfa');
           return;
         }
+        // Policy set by an administrator: no vault access until a second factor is enrolled.
+        if (level.next !== 'aal2' && (await fetchMfaRequired())) {
+          setStatus('needs-mfa-enrollment');
+          return;
+        }
         const profile = await vault.fetchProfile();
         profileRef.current = profile;
         setHasRecovery(profile ? hasRecoveryKey(profile) : false);
@@ -124,7 +132,16 @@ export function useVaultSession() {
 
   useEffect(() => {
     let active = true;
-    auth.getSession().then(({ data }) => {
+    const start = async () => {
+      // Admin-generated invite / reset link: exchange the one-time token for a session first.
+      if (PENDING_OTP) {
+        const { error } = await auth.redeemOtp(PENDING_OTP.tokenHash, PENDING_OTP.type);
+        if (error) setLinkError('Este link de acesso é inválido ou expirou. Peça um novo ao administrador.');
+        else setNeedsAccountPassword(true);
+      }
+      return auth.getSession();
+    };
+    void start().then(({ data }) => {
       if (!active) return;
       if (data.session?.user) void bootstrap(data.session.user);
       else setStatus('signed-out');
@@ -444,6 +461,7 @@ export function useVaultSession() {
     resendConfirmation,
     needsAccountPassword,
     setAccountPassword,
+    linkError,
     signOut,
     setupVault,
     unlock,

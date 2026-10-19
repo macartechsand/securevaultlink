@@ -44,11 +44,15 @@ const LABELS: Record<string, string> = {
   'admin.setting_changed': 'Configuração da plataforma alterada',
   'admin.invited': 'E-mail convidado para o beta',
   'admin.invite_link_created': 'Link de convite gerado por um administrador',
+  'admin.role_granted': 'Papel privilegiado concedido',
+  'admin.role_revoked': 'Papel privilegiado revogado',
+  'admin.policy_changed': 'Política de segurança alterada por um administrador',
+  'support.report_submitted': 'Relatório de diagnóstico enviado ao suporte',
   'admin.recovery_link_created': 'Link de redefinição de senha gerado por um administrador',
   'admin.uninvited': 'Convite do beta removido',
 };
 
-const SENSITIVE = new Set(['admin.recovery_link_created', 'admin.mfa_reset', 'admin.user_suspended', 'admin.sessions_revoked', 'vault.unlock_failed', 'vault.recovered', 'vault.recovery_disabled', 'mfa.disabled', 'file.upload_rejected']);
+const SENSITIVE = new Set(['admin.role_granted', 'admin.recovery_link_created', 'admin.mfa_reset', 'admin.user_suspended', 'admin.sessions_revoked', 'vault.unlock_failed', 'vault.recovered', 'vault.recovery_disabled', 'mfa.disabled', 'file.upload_rejected']);
 
 function describe(e: AuditEvent) {
   const d = e.details;

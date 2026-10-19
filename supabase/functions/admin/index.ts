@@ -30,6 +30,14 @@ function redirectFor(requested: unknown): string | undefined {
     return undefined
   }
 }
+
+// Links carry a hashed one-time token in the URL FRAGMENT (never sent to web servers or logs).
+// The app redeems it with verifyOtp({ token_hash, type }), which works with the PKCE auth flow.
+function appLink(base: string | undefined, hashedToken: string, type: 'invite' | 'recovery') {
+  const origin = base ?? APP_ORIGINS[0]
+  if (!origin) return null
+  return `${origin.replace(/\/$/, '')}/#sv_token_hash=${encodeURIComponent(hashedToken)}&sv_type=${type}`
+}
 type Action = (typeof ACTIONS)[number]
 
 Deno.serve(async (req) => {
@@ -65,7 +73,7 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: 'invalid request' }, 400)
   }
-  if (action !== 'health' && me.role !== 'admin') return json({ error: 'This action requires the admin role' }, 403)
+  if (action !== 'health' && !['admin', 'owner'].includes(me.role)) return json({ error: 'This action requires the admin role' }, 403)
   if (target === userData.user.id && action === 'suspend') return json({ error: 'You cannot suspend yourself' }, 400)
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
@@ -78,24 +86,28 @@ Deno.serve(async (req) => {
     // Inviting implies authorizing the address in the closed beta.
     await admin.from('beta_allowlist').upsert({ email, note: 'convite com link', invited_by: userData.user.id }, { onConflict: 'email' })
     const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email, options: redirectTo ? { redirectTo } : undefined })
-    if (error || !data?.properties?.action_link) {
+    if (error || !data?.properties?.hashed_token) {
       const msg = error?.message ?? ''
       if (/already|registered|exists/i.test(msg)) return json({ error: 'Este e-mail já tem conta. Use "Gerar link de redefinição" no usuário.' }, 409)
       if (/Database error/i.test(msg)) return json({ error: 'O beta está cheio (limite de contas atingido).' }, 409)
       return json({ error: 'Não foi possível gerar o convite.' }, 502)
     }
     target = data.user?.id ?? ''
+    const link = appLink(redirectTo, data.properties.hashed_token, 'invite')
+    if (!link) return json({ error: 'APP_ORIGINS não configurado.' }, 503)
     await audit('admin.invite_link_created', { email })
-    return json({ link: data.properties.action_link, email })
+    return json({ link, email })
   }
 
   if (action === 'recovery_link') {
     const { data: u, error: userError } = await admin.auth.admin.getUserById(target)
     if (userError || !u.user?.email) return json({ error: 'Usuário não encontrado.' }, 404)
     const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email: u.user.email, options: redirectTo ? { redirectTo } : undefined })
-    if (error || !data?.properties?.action_link) return json({ error: 'Não foi possível gerar o link.' }, 502)
+    if (error || !data?.properties?.hashed_token) return json({ error: 'Não foi possível gerar o link.' }, 502)
+    const link = appLink(redirectTo, data.properties.hashed_token, 'recovery')
+    if (!link) return json({ error: 'APP_ORIGINS não configurado.' }, 503)
     await audit('admin.recovery_link_created')
-    return json({ link: data.properties.action_link, email: u.user.email })
+    return json({ link, email: u.user.email })
   }
 
   if (action === 'health') {

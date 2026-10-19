@@ -1,12 +1,15 @@
 import { type FormEvent, useState } from 'react';
 import { friendlyError } from '../lib/messages';
 import { ACCOUNT_PASSWORD_MIN_LENGTH } from '../services/authService';
+import { OAuthButtons } from './OAuthButtons';
 
 type AuthScreenProps = {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<{ needsConfirmation: boolean }>;
   onResetPassword: (email: string) => Promise<void>;
   onResendConfirmation: (email: string) => Promise<void>;
+  /** Error carried back from an OAuth provider, an expired link or the closed-beta check. */
+  initialError?: string;
 };
 
 type Mode = 'sign-in' | 'sign-up' | 'reset' | 'confirm-sent';
@@ -14,11 +17,11 @@ type Mode = 'sign-in' | 'sign-up' | 'reset' | 'confirm-sent';
 const NO_EMAIL_HINT =
   'Se o e-mail não chegar em alguns minutos (verifique também o spam), peça ao administrador um link de acesso: ele consegue gerar e enviar por outro canal.';
 
-export function AuthScreen({ onSignIn, onSignUp, onResetPassword, onResendConfirmation }: AuthScreenProps) {
+export function AuthScreen({ onSignIn, onSignUp, onResetPassword, onResendConfirmation, initialError = '' }: AuthScreenProps) {
   const [mode, setMode] = useState<Mode>('sign-in');
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => (initialError ? friendlyError(initialError) : ''));
   const [info, setInfo] = useState('');
 
   const go = (next: Mode) => {
@@ -104,6 +107,7 @@ export function AuthScreen({ onSignIn, onSignUp, onResetPassword, onResendConfir
         <p className="eyebrow">Conta</p>
         <h2>{titles[mode]}</h2>
       </div>
+      {mode !== 'reset' && <OAuthButtons />}
       <form className="form" onSubmit={submit}>
         <label className="field">
           E-mail

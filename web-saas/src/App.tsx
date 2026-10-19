@@ -9,6 +9,7 @@ import { ItemEditor } from './components/ItemEditor';
 import { ItemList } from './components/ItemList';
 import { ItemShareDialog } from './components/ItemShareDialog';
 import { MfaChallenge } from './components/MfaChallenge';
+import { MfaSettings } from './components/MfaSettings';
 import { PostureCard } from './components/PostureCard';
 import { RotateWizard } from './components/RotateWizard';
 import { RotationView } from './components/RotationView';
@@ -30,6 +31,7 @@ import { isSupabaseConfigured } from './lib/supabase';
 import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
 import { type AdminStatus, fetchAdminStatus } from './services/adminService';
 import { listVerifiedTotpFactors } from './services/mfaService';
+import { reportPosture } from './services/supportService';
 import { fetchSessions, fetchSharingExposure } from './services/postureService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
@@ -103,6 +105,52 @@ function VaultApp() {
   }, [status, activeView, items]);
 
   const health = useMemo(() => computeItemHealth(items, pwnedById, siteById), [items, pwnedById, siteById]);
+
+  // Numeric posture summary for support (counts only; the user can turn it off in Settings).
+  useEffect(() => {
+    if (status !== 'unlocked') return;
+    const timer = window.setTimeout(() => {
+      const byType = (t: string) => items.filter((i) => i.data.type === t).length;
+      const posture = computePosture({
+        checkable: health.checkable,
+        weak: health.counts.weak,
+        reused: health.counts.reused,
+        exposed: health.counts.exposed,
+        stale: health.counts.stale,
+        rotationDue: health.counts.due,
+        unsafeSites: health.counts.unsafe,
+        securityCheckRan,
+        mfaEnabled,
+        recoveryEnabled: session.hasRecovery,
+        sessions: sessionCount,
+        exposure,
+      });
+      reportPosture({
+        score: posture.score,
+        items: items.length,
+        logins: byType('login'),
+        notes: byType('note'),
+        secrets: byType('secret'),
+        cards: byType('card'),
+        weak: health.counts.weak,
+        reused: health.counts.reused,
+        exposed: health.counts.exposed,
+        stale: health.counts.stale,
+        rotation_due: health.counts.due,
+        rotation_scheduled: items.filter((i) => i.data.rotationIntervalDays > 0).length,
+        unsafe_sites: health.counts.unsafe,
+        attachments: items.reduce((n, i) => n + i.data.attachments.length, 0),
+        folders: session.folders.length,
+        shared_by_me: items.filter((i) => i.access === 'owner' && i.sharedWith.length > 0).length,
+        shared_with_me: items.filter((i) => i.access !== 'owner').length,
+        security_check_ran: securityCheckRan,
+        undecryptable: session.undecryptable,
+        mfa: mfaEnabled,
+        recovery: session.hasRecovery,
+      });
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [status, items, health, securityCheckRan, mfaEnabled, sessionCount, exposure, session.hasRecovery, session.folders.length, session.undecryptable]);
 
   const runSecurityCheck = useCallback(async () => {
     setChecking(true);
@@ -179,6 +227,7 @@ function VaultApp() {
             onSignUp={session.signUp}
             onResetPassword={session.requestPasswordReset}
             onResendConfirmation={session.resendConfirmation}
+            initialError={session.linkError}
           />
         )}
         {status === 'load-error' && (
@@ -190,6 +239,22 @@ function VaultApp() {
             <div className="alert alert--error">{session.loadError}</div>
             <button type="button" className="btn btn--primary btn--block" onClick={session.retry}>
               Tentar novamente
+            </button>
+            <button type="button" className="btn btn--ghost btn--block" onClick={signOut}>
+              Sair
+            </button>
+          </>
+        )}
+        {status === 'needs-mfa-enrollment' && (
+          <>
+            <div>
+              <p className="eyebrow">Política de segurança</p>
+              <h2>Ative a verificação em duas etapas</h2>
+              <p className="subtle">O administrador exige um segundo fator para acessar o cofre. Depois de ativar, clique em continuar.</p>
+            </div>
+            <MfaSettings />
+            <button type="button" className="btn btn--primary btn--block" onClick={session.retry}>
+              Continuar
             </button>
             <button type="button" className="btn btn--ghost btn--block" onClick={signOut}>
               Sair

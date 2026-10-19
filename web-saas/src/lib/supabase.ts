@@ -14,6 +14,9 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       detectSessionInUrl: true,
+      // Authorization Code + PKCE (as in Secora): OAuth and e-mail links return a one-time ?code=
+      // that only the browser holding the code_verifier can exchange.
+      flowType: 'pkce',
     },
   },
 );
