@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { CATEGORY_LABELS, CONNECTORS, type ConnectorCategory, EXECUTOR_LABELS, type Executor } from '../lib/connectors';
+import { CATEGORY_LABELS, CONNECTORS, type ConnectorCategory, EXECUTOR_LABELS, type Executor, connectorById } from '../lib/connectors';
+import { formatDate, formatDateTime } from '../lib/messages';
 import { type ItemHealth, RISK_LABELS, type RiskFlag } from '../lib/itemHealth';
 import { rotationDueInDays, typeLabel } from '../lib/items';
 import type { VaultItem } from '../state/itemOps';
@@ -19,11 +20,48 @@ const EXECUTOR_BADGE: Record<Executor, string> = { assisted: 'badge--ok', cloud:
 type RotationViewProps = {
   items: VaultItem[];
   health: ItemHealth;
+  /** Full step-by-step assisted wizard. */
   onRotate: (item: VaultItem) => void;
+  /** One click: automatic (connector with consent) or quick assisted (logins). */
+  onQuickRotate: (item: VaultItem) => void;
   onOpen: (item: VaultItem) => void;
 };
 
-export function RotationView({ items, health, onRotate, onOpen }: RotationViewProps) {
+/** Which one-click rotation an item supports, if any. */
+export function quickRotateMode(item: VaultItem): 'auto' | 'assisted' | null {
+  if (item.access !== 'owner' && item.data.autoRotation) return null;
+  if (item.access === 'view') return null;
+  if (item.data.type === 'secret' && item.data.autoRotation) return 'auto';
+  if (item.data.type === 'login') return 'assisted';
+  return null;
+}
+
+function RotateButtons({ item, onRotate, onQuickRotate, onOpen, primary }: { item: VaultItem; primary?: boolean } & Pick<RotationViewProps, 'onRotate' | 'onQuickRotate' | 'onOpen'>) {
+  const mode = quickRotateMode(item);
+  if (!mode) {
+    return (
+      <button type="button" className="btn btn--sm" onClick={() => onOpen(item)}>
+        {item.data.type === 'secret' ? 'Configurar rotação automática' : 'Atualizar valor'}
+      </button>
+    );
+  }
+  return (
+    <>
+      <button type="button" className={`btn btn--sm ${primary ? 'btn--primary' : ''}`} onClick={() => onQuickRotate(item)}>
+        <Icon name="refresh" size={14} />
+        {mode === 'auto' ? 'Rotacionar agora' : 'Trocar em 1 clique'}
+      </button>
+      {mode === 'assisted' && (
+        <button type="button" className="btn btn--sm btn--ghost" onClick={() => onRotate(item)}>
+          Passo a passo
+        </button>
+      )}
+    </>
+  );
+}
+
+export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }: RotationViewProps) {
+  const automatic = useMemo(() => items.filter((i) => quickRotateMode(i) === 'auto'), [items]);
   const queue = useMemo(
     () =>
       items
@@ -99,16 +137,7 @@ export function RotationView({ items, health, onRotate, onOpen }: RotationViewPr
                     </td>
                     <td>
                       <div className="row-actions">
-                        {item.data.type === 'login' ? (
-                          <button type="button" className="btn btn--sm btn--primary" onClick={() => onRotate(item)}>
-                            <Icon name="refresh" size={14} />
-                            Trocar com assistência
-                          </button>
-                        ) : (
-                          <button type="button" className="btn btn--sm" onClick={() => onOpen(item)}>
-                            Atualizar valor
-                          </button>
-                        )}
+                        <RotateButtons item={item} onRotate={onRotate} onQuickRotate={onQuickRotate} onOpen={onOpen} primary />
                       </div>
                     </td>
                   </tr>
@@ -116,6 +145,41 @@ export function RotationView({ items, health, onRotate, onOpen }: RotationViewPr
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="card">
+        <div>
+          <p className="eyebrow">Automática</p>
+          <h2>
+            Rotação automática em 1 clique <span className="muted">({automatic.length})</span>
+          </h2>
+          <p className="subtle">
+            Para chaves da AWS, tokens do GitLab e da Cloudflare: edite o segredo, escolha o conector em "Rotação automática" e
+            autorize. Depois, "Rotacionar agora" cria a nova credencial na plataforma, verifica e salva no cofre (a anterior vai
+            para o histórico).
+          </p>
+        </div>
+        {automatic.length === 0 ? (
+          <p className="empty">Nenhum segredo com rotação automática configurada.</p>
+        ) : (
+          <ul className="list">
+            {automatic.map((item) => (
+              <li key={item.id}>
+                <span>
+                  <strong>{item.data.title}</strong>
+                  <span className="subtle block">
+                    {connectorById(item.data.autoRotation!.connectorId)?.name}
+                    {item.data.autoRotation!.lastRotatedAt ? ` · última rotação ${formatDateTime(item.data.autoRotation!.lastRotatedAt)}` : ' · nunca rotacionado'}
+                    {item.data.autoRotation!.expiresAt ? ` · expira em ${formatDate(item.data.autoRotation!.expiresAt)}` : ''}
+                  </span>
+                </span>
+                <span className="row">
+                  <RotateButtons item={item} onRotate={onRotate} onQuickRotate={onQuickRotate} onOpen={onOpen} primary />
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -139,11 +203,7 @@ export function RotationView({ items, health, onRotate, onOpen }: RotationViewPr
                   <span className={`badge ${due < 0 ? 'badge--danger' : due <= 7 ? 'badge--warn' : 'badge--ok'}`}>
                     {due < 0 ? `vencida há ${-due} dia(s)` : due === 0 ? 'vence hoje' : `em ${due} dia(s)`}
                   </span>
-                  {item.data.type === 'login' && item.access !== 'view' && (
-                    <button type="button" className="btn btn--sm" onClick={() => onRotate(item)}>
-                      Trocar
-                    </button>
-                  )}
+                  {quickRotateMode(item) && <RotateButtons item={item} onRotate={onRotate} onQuickRotate={onQuickRotate} onOpen={onOpen} />}
                 </span>
               </li>
             ))}
@@ -180,7 +240,9 @@ export function RotationView({ items, health, onRotate, onOpen }: RotationViewPr
                   </span>
                   <span className="badges nowrap">
                     <span className={`badge ${EXECUTOR_BADGE[c.executor]}`}>{EXECUTOR_LABELS[c.executor].label}</span>
-                    <span className={`badge ${c.status === 'available' ? 'badge--ok' : ''}`}>{c.status === 'available' ? 'Disponível' : 'Planejado'}</span>
+                    <span className={`badge ${c.status === 'available' ? 'badge--ok' : c.status === 'beta' ? 'badge--warn' : ''}`}>
+                      {c.status === 'available' ? 'Disponível' : c.status === 'beta' ? 'Beta (1 clique)' : 'Planejado'}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -188,9 +250,10 @@ export function RotationView({ items, health, onRotate, onOpen }: RotationViewPr
           </div>
         ))}
         <p className="subtle">
-          Conectores automáticos fazem a troca em duas fases (criar ou alterar, verificar e só então revogar a antiga),
-          guardam a anterior no histórico e registram cada passo na auditoria. Eles serão liberados um a um, após testes
-          contra cada plataforma.
+          Conectores automáticos fazem a troca em duas fases (criar ou alterar, verificar e só então revogar a antiga, quando a
+          plataforma permite), guardam a anterior no histórico e registram cada passo na auditoria, sem valores. Os marcados
+          como Beta já funcionam em 1 clique, mas ainda não foram validados contra cada plataforma real: teste primeiro com
+          uma credencial de baixo risco.
         </p>
       </section>
     </div>

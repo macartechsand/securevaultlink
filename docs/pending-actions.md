@@ -20,6 +20,15 @@ Checklist completo e roteiro de ambiente novo: [`HANDOVER.md`](HANDOVER.md), se�
 6. [ ] Revisar o texto do aviso de privacidade (`web-saas/src/components/PrivacyNotice.tsx`).
 7. [x] Branch `dev` enviada ao GitHub; PR #1 (`dev` → `master`) aberto.
 
+## Rotação automática em 1 clique (2026-10-28), em beta
+
+Função `rotate` e site publicados; não há migration. Para validar cada conector, use credenciais **de teste, de baixo risco**:
+
+1. [ ] **GitLab:** crie um PAT de teste com escopo `api`, salve como Segredo, ative "Rotação automática → GitLab" e clique em **Rotacionar agora**. Confira que o antigo foi revogado no GitLab, que o novo está no item e que o antigo aparece no histórico.
+2. [ ] **Cloudflare:** token de **usuário** de teste com a permissão "API Tokens: Edit". Mesmo teste.
+3. [ ] **AWS:** usuário IAM de teste, com só `iam:CreateAccessKey` e `iam:DeleteAccessKey` em si mesmo e **1** chave ativa. Coloque o Access key ID em "Identificador". Depois da rotação, deve sobrar só a chave nova.
+4. [ ] Peça ao Claude para marcar como "Disponível" os conectores aprovados.
+
 ## Desbloqueio, reset do cofre e convites Premium (2026-10-19)
 
 Código, funções `account` e `admin` e o site já estão publicados. Falta o banco, **nesta ordem**:

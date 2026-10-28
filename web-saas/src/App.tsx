@@ -14,7 +14,8 @@ import { MfaChallenge } from './components/MfaChallenge';
 import { MfaSettings } from './components/MfaSettings';
 import { PostureCard } from './components/PostureCard';
 import { RotateWizard } from './components/RotateWizard';
-import { RotationView } from './components/RotationView';
+import { QuickRotate, startAssistedRotation } from './components/QuickRotate';
+import { RotationView, quickRotateMode } from './components/RotationView';
 import { SetAccountPassword } from './components/SetAccountPassword';
 import { Settings } from './components/Settings';
 import { ADMIN_ITEM, NAV_ITEMS, Sidebar } from './components/Sidebar';
@@ -75,6 +76,15 @@ function VaultApp() {
   const [editing, setEditing] = useState<Editing>(null);
   const [sharingItem, setSharingItem] = useState<VaultItem | null>(null);
   const [rotatingItem, setRotatingItem] = useState<VaultItem | null>(null);
+  const [quickRotating, setQuickRotating] = useState<{ item: VaultItem; password?: string } | null>(null);
+  // Runs inside the click (clipboard and new tab need the user gesture).
+  const startQuickRotate = (item: VaultItem) => {
+    if (quickRotateMode(item) === 'assisted') {
+      setQuickRotating({ item, password: startAssistedRotation(item) });
+    } else {
+      setQuickRotating({ item });
+    }
+  };
   const [actionError, setActionError] = useState('');
   const [pwnedById, setPwnedById] = useState<Map<string, PwnedResult>>(new Map());
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
@@ -372,6 +382,18 @@ function VaultApp() {
             />
           )}
 
+          {quickRotating && (
+            <QuickRotate
+              item={items.find((i) => i.id === quickRotating.item.id) ?? quickRotating.item}
+              assistedPassword={quickRotating.password}
+              onSave={async (next) => {
+                const current = items.find((i) => i.id === quickRotating.item.id) ?? quickRotating.item;
+                await session.saveItem(current, next(current.data));
+              }}
+              onClose={() => setQuickRotating(null)}
+            />
+          )}
+
           {rotatingItem && (
             <RotateWizard
               item={items.find((i) => i.id === rotatingItem.id) ?? rotatingItem}
@@ -517,7 +539,7 @@ function VaultApp() {
           )}
 
           {activeView === 'rotation' && (
-            <RotationView items={items} health={health} onRotate={setRotatingItem} onOpen={(item) => setEditing({ item })} />
+            <RotationView items={items} health={health} onRotate={setRotatingItem} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}

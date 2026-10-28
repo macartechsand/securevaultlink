@@ -1,6 +1,31 @@
 # Conectores e rotação de senhas: arquitetura
 
-Status: 2026-10-19. A troca **assistida** está implementada. Os conectores automáticos estão especificados aqui e catalogados no app como "Planejado".
+Status: 2026-10-28. A troca **assistida** está implementada, também em **1 clique**. Três conectores automáticos **sob demanda** estão implementados em **beta**: AWS IAM access key, GitLab PAT e Cloudflare API token (Edge Function `rotate`). Os demais seguem especificados aqui como "Planejado".
+
+## 0. Rotação em 1 clique (implementado)
+
+| Item | O que o clique faz |
+|---|---|
+| Login (qualquer site) | Gera a senha pela política do conector assistido, copia (limpa em 30 s), abre `/.well-known/change-password` e mostra o modal. **Só salva depois de "O site aceitou"**. A anterior vai para o histórico |
+| Segredo com conector e consentimento | O navegador decifra o item e envia a credencial atual à função `rotate` (TLS). A função chama a API, **verifica** a nova e devolve ao navegador, que a **cifra e salva**. A anterior vai para o histórico. A função não guarda nem registra valores |
+
+- **Consentimento por item** (`autoRotation.consentAt`, dentro do item cifrado), dado em Editar → "Rotação automática". Só o dono do item pode rotacionar automaticamente.
+- **AWS IAM access key:**
+  1. `GetCallerIdentity` com a chave atual (recusa root e chaves temporárias `ASIA…`).
+  2. `CreateAccessKey` e espera a propagação; verifica com a **mesma ARN**. Se a verificação falhar, apaga a nova e mantém a atual.
+  3. O app salva no cofre e só então chama `revoke_old`, que apaga a chave antiga assinando com a nova.
+- **GitLab:** `POST /personal_access_tokens/self/rotate` com validade configurável (padrão 90 dias), depois verificação. O GitLab revoga o token antigo na hora.
+- **Cloudflare:** `/user/tokens/verify` (descobre o id) → `PUT /user/tokens/{id}/value` (roll) → verificação. Só tokens de usuário.
+- **Se o cofre não conseguir salvar** depois que a plataforma trocou, o modal não fecha sozinho: mostra "Copiar nova credencial" e "Tentar salvar de novo".
+- **Proteções:**
+  - JWT obrigatório, e `aal2` quando o usuário tem MFA;
+  - limite de 20 rotações por hora por usuário;
+  - GitLab próprio só em HTTPS público (sem IP literal, `localhost` ou nomes internos, contra SSRF);
+  - redirecionamentos bloqueados e timeout de 15 s;
+  - auditoria `rotation.succeeded`, `rotation.failed` (com código) e `rotation.old_revoked`, sem valores.
+- **Assinatura AWS SigV4:** `supabase/functions/_shared/sigv4.ts`, validada contra o exemplo oficial da AWS.
+- **Testes:** `rotate.integration` chama as três APIs reais com credenciais **falsas**: autenticação, validação, SSRF, erros e nenhum valor ecoado.
+- **Para passar de beta a disponível:** rotacionar uma credencial real de baixo risco em cada plataforma e conferir o item, o histórico e a revogação.
 
 ## 1. Problema: diversidade de plataformas
 

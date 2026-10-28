@@ -13,6 +13,7 @@ import {
   validateItem,
 } from '../lib/items';
 import { ROTATION_INTERVALS } from '../lib/connectors';
+import { AutoRotationFields } from './AutoRotationFields';
 import { CATEGORIES, STRENGTH_LABELS, categoryLabel, strengthBadge } from '../lib/labels';
 import { formatBytes, formatDateTime, friendlyError } from '../lib/messages';
 import { generatePassword } from '../lib/passwordGenerator';
@@ -367,6 +368,10 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                 </select>
                 <span className="field__hint">Você recebe o lembrete na Visão geral e o item entra na fila de Rotação quando vencer.</span>
               </label>
+            )}
+
+            {data.type === 'secret' && isOwner && (
+              <AutoRotationFields value={data.autoRotation} onChange={(v) => set('autoRotation', v)} readOnly={readOnly} />
             )}
 
             {showUrl && (

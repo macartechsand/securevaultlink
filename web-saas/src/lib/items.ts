@@ -8,6 +8,24 @@ export type CustomField = { id: string; label: string; value: string; hidden: bo
 export type Attachment = { fileId: string; name: string; size: number }
 export type CardData = { holder: string; number: string; expiry: string; cvv: string }
 
+/** Connectors that can rotate an item in one click through the platform API (Edge Function `rotate`). */
+export const AUTO_CONNECTOR_IDS = ['aws-iam-access-key', 'gitlab-pat', 'cloudflare-api-token'] as const
+export type AutoConnectorId = (typeof AUTO_CONNECTOR_IDS)[number]
+
+/**
+ * Per-item opt-in for automatic rotation. Stored inside the encrypted item. `consentAt` records that
+ * the owner accepted that the current credential is sent to the rotation function during a rotation.
+ */
+export type AutoRotation = {
+  connectorId: AutoConnectorId
+  consentAt: string
+  /** gitlab-pat: baseUrl (default https://gitlab.com) and expiresInDays (default 90). */
+  config: { baseUrl?: string; expiresInDays?: string }
+  lastRotatedAt: string | null
+  /** Expiry reported by the platform for the current credential (GitLab, Cloudflare). */
+  expiresAt: string | null
+}
+
 export type SecuredItemData = {
   type: ItemType
   title: string
@@ -27,6 +45,7 @@ export type SecuredItemData = {
   card: CardData
   customFields: CustomField[]
   attachments: Attachment[]
+  autoRotation: AutoRotation | null
 }
 
 export const LIMITS = {
@@ -78,6 +97,21 @@ export function emptyItem(type: ItemType = 'login'): SecuredItemData {
     card: { holder: '', number: '', expiry: '', cvv: '' },
     customFields: [],
     attachments: [],
+    autoRotation: null,
+  }
+}
+
+function normalizeAutoRotation(raw: unknown): AutoRotation | null {
+  if (!raw || typeof raw !== 'object') return null
+  const a = raw as Record<string, unknown>
+  if (!AUTO_CONNECTOR_IDS.includes(a.connectorId as AutoConnectorId) || typeof a.consentAt !== 'string') return null
+  const config = (a.config && typeof a.config === 'object' ? a.config : {}) as Record<string, unknown>
+  return {
+    connectorId: a.connectorId as AutoConnectorId,
+    consentAt: a.consentAt,
+    config: { baseUrl: str(config.baseUrl, 300) || undefined, expiresInDays: str(config.expiresInDays, 3) || undefined },
+    lastRotatedAt: typeof a.lastRotatedAt === 'string' ? a.lastRotatedAt : null,
+    expiresAt: typeof a.expiresAt === 'string' ? a.expiresAt : null,
   }
 }
 
@@ -123,6 +157,7 @@ export function normalizeItem(raw: unknown): SecuredItemData {
           .filter((a) => typeof a.fileId === 'string')
           .map((a) => ({ fileId: a.fileId as string, name: str(a.name, 200), size: Number(a.size) || 0 }))
       : [],
+    autoRotation: type === 'secret' ? normalizeAutoRotation(r.autoRotation) : null,
   }
 }
 

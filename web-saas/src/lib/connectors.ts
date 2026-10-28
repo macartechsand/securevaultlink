@@ -14,7 +14,8 @@ import type { ItemType } from './items'
 
 export type ConnectorCategory = 'web' | 'cloud' | 'directory' | 'saas_api' | 'database' | 'server' | 'secrets_sync'
 export type Executor = 'assisted' | 'cloud' | 'agent'
-export type ConnectorStatus = 'available' | 'planned'
+/** beta = implemented, but not yet validated against the real platform by the operator. */
+export type ConnectorStatus = 'available' | 'beta' | 'planned'
 export type Capability = 'change' | 'verify' | 'reconcile' | 'rotate_key' | 'sync'
 
 export type PasswordPolicy = { minLength: number; maxLength: number; symbols: boolean; excludeChars?: string }
@@ -50,7 +51,8 @@ export const EXECUTOR_LABELS: Record<Executor, { label: string; detail: string }
   },
   cloud: {
     label: 'Automática na nuvem',
-    detail: 'Um worker chama a API da plataforma. Ele vê a credencial durante a troca; exige seu consentimento por item.',
+    detail:
+      'Em 1 clique, uma função do servidor chama a API da plataforma, verifica a nova credencial e devolve ao seu navegador, que a cifra no cofre. Ela vê a credencial só durante a troca e não guarda nada; exige seu consentimento por item.',
   },
   agent: {
     label: 'Agente local',
@@ -78,11 +80,14 @@ export const CONNECTORS: ConnectorManifest[] = [
     name: 'AWS IAM: chave de acesso',
     category: 'cloud',
     executor: 'cloud',
-    status: 'planned',
+    status: 'beta',
     capabilities: ['rotate_key', 'verify'],
     itemTypes: ['secret'],
-    description: 'Cria uma nova access key, verifica (sts:GetCallerIdentity), desativa e remove a antiga.',
-    requires: ['Permissões iam:CreateAccessKey, iam:UpdateAccessKey, iam:DeleteAccessKey no próprio usuário'],
+    description: 'Cria uma nova access key, verifica (sts:GetCallerIdentity, mesma identidade), salva no cofre e só então remove a antiga.',
+    requires: [
+      'Item do tipo Segredo com o Access key ID (AKIA…) em "Identificador" e a Secret no valor',
+      'Permissões iam:CreateAccessKey e iam:DeleteAccessKey no próprio usuário; no máximo 1 chave ativa antes da troca',
+    ],
     policy: WEB_POLICY,
   },
   {
@@ -150,11 +155,11 @@ export const CONNECTORS: ConnectorManifest[] = [
     name: 'GitLab: token de acesso pessoal',
     category: 'saas_api',
     executor: 'cloud',
-    status: 'planned',
-    capabilities: ['rotate_key'],
+    status: 'beta',
+    capabilities: ['rotate_key', 'verify'],
     itemTypes: ['secret'],
-    description: 'Usa o endpoint de rotação de tokens do GitLab (o token antigo é revogado automaticamente).',
-    requires: ['Token com escopo api'],
+    description: 'Usa o endpoint de rotação de tokens do GitLab (o token antigo é revogado automaticamente) e verifica o novo.',
+    requires: ['Token pessoal com escopo api ou self_rotate', 'gitlab.com ou GitLab próprio com endereço HTTPS público'],
     policy: WEB_POLICY,
   },
   {
@@ -162,11 +167,11 @@ export const CONNECTORS: ConnectorManifest[] = [
     name: 'Cloudflare: token de API',
     category: 'saas_api',
     executor: 'cloud',
-    status: 'planned',
-    capabilities: ['rotate_key'],
+    status: 'beta',
+    capabilities: ['rotate_key', 'verify'],
     itemTypes: ['secret'],
-    description: 'Gera um novo valor para o token ("roll") mantendo as permissões.',
-    requires: ['Permissão de editar tokens de API'],
+    description: 'Gera um novo valor para o token ("roll") mantendo as permissões, e verifica o novo.',
+    requires: ['Token de usuário (não de conta) com a permissão "API Tokens: Edit"'],
     policy: WEB_POLICY,
   },
   {

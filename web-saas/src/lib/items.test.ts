@@ -70,3 +70,19 @@ describe('search and helpers', () => {
     expect(passwordAgeDays({ ...item, passwordUpdatedAt: null }, '2025-10-18T00:00:00Z', now)).toBe(365)
   })
 })
+
+describe('autoRotation (per-item consent)', () => {
+  const consented = { connectorId: 'gitlab-pat', consentAt: '2026-10-28T10:00:00Z', config: { baseUrl: 'https://gitlab.com', expiresInDays: '90' } }
+
+  it('keeps a valid opt-in on secrets', () => {
+    const d = normalizeItem({ type: 'secret', title: 't', password: 'x', autoRotation: consented })
+    expect(d.autoRotation).toEqual({ ...consented, lastRotatedAt: null, expiresAt: null })
+  })
+
+  it('drops it without consent, with an unknown connector, or on non-secret items', () => {
+    expect(normalizeItem({ type: 'secret', autoRotation: { ...consented, consentAt: undefined } }).autoRotation).toBeNull()
+    expect(normalizeItem({ type: 'secret', autoRotation: { ...consented, connectorId: 'evil' } }).autoRotation).toBeNull()
+    expect(normalizeItem({ type: 'login', autoRotation: consented }).autoRotation).toBeNull()
+    expect(emptyItem('secret').autoRotation).toBeNull()
+  })
+})

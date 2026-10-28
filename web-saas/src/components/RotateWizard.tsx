@@ -14,7 +14,8 @@ type RotateWizardProps = {
   onClose: () => void;
 };
 
-async function copy(value: string) {
+/** Copies to the clipboard and clears it after 30 s if it still holds the value. */
+export async function copyWithAutoClear(value: string) {
   try {
     await navigator.clipboard.writeText(value);
     window.setTimeout(async () => {
@@ -54,7 +55,7 @@ export function RotateWizard({ item, onSave, onClose }: RotateWizardProps) {
   const strength = passwordStrength(password, [item.data.title, item.data.username]);
 
   const copyField = async (label: string, value: string) => {
-    if (await copy(value)) {
+    if (await copyWithAutoClear(value)) {
       setCopied(label);
       window.setTimeout(() => setCopied((c) => (c === label ? '' : c)), 2000);
     }
