@@ -30,7 +30,7 @@ describe('quickRotateMode', () => {
 })
 
 describe('rotate button in the item list', () => {
-  it('shows for logins (owner or edit) and for the owner's secrets; never for view-only, notes or cards', () => {
+  it('shows for logins (owner or edit) and for secrets of the owner; never for view-only, notes or cards', () => {
     expect(canRotateFromList(item({ type: 'login' }))).toBe(true)
     expect(canRotateFromList(item({ type: 'login' }, 'edit'))).toBe(true)
     expect(canRotateFromList(item({ type: 'secret' }))).toBe(true)
