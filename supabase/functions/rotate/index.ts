@@ -7,14 +7,21 @@
 // explicit per-item consent (see docs/architecture/connectors-rotation.md).
 //
 // Connectors (status "beta" until tested against each real platform):
-//  - aws-iam-access-key:   CreateAccessKey → verify (sts:GetCallerIdentity, same ARN) → the app saves
-//                          → action "revoke_old" deletes the previous key (signed with the new one).
-//  - gitlab-pat:           POST /personal_access_tokens/self/rotate (GitLab revokes the old token) → verify.
-//  - cloudflare-api-token: /user/tokens/verify → PUT /user/tokens/{id}/value ("roll") → verify.
+//  - aws-iam-access-key:      CreateAccessKey → verify (sts:GetCallerIdentity, same ARN) → the app saves
+//                             → action "revoke_old" deletes the previous key (signed with the new one).
+//  - aws-iam-console:         UpdateLoginProfile, signed with an admin access key the item references
+//                             (another vault item); console sign-in cannot be verified by API.
+//  - gcp-service-account-key: create key → verify (OAuth token with the new key) → save → revoke_old.
+//  - entra-app-secret:        Graph addPassword → verify (client-credentials token) → save → revoke_old.
+//  - gitlab-pat:              POST /personal_access_tokens/self/rotate (GitLab revokes the old token) → verify.
+//  - cloudflare-api-token:    /user/tokens/verify → PUT /user/tokens/{id}/value ("roll") → verify.
 //
 // Deploy (JWT verification ON):  supabase functions deploy rotate
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { sigv4Authorization } from '../_shared/sigv4.ts'
+import { RotationError, type Result, sleep, strongPassword, timedFetch } from './common.ts'
+import { revokeOldEntraSecret, rotateEntraSecret } from './entra.ts'
+import { revokeOldGcpKey, rotateGcpKey } from './google.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -24,18 +31,11 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
-const CONNECTORS = ['aws-iam-access-key', 'gitlab-pat', 'cloudflare-api-token'] as const
+const CONNECTORS = ['aws-iam-access-key', 'aws-iam-console', 'gcp-service-account-key', 'entra-app-secret', 'gitlab-pat', 'cloudflare-api-token'] as const
 type ConnectorId = (typeof CONNECTORS)[number]
+/** Connectors with a second phase (the old credential is removed after the vault saved the new one). */
+const REVOCABLE: ConnectorId[] = ['aws-iam-access-key', 'gcp-service-account-key', 'entra-app-secret']
 const MAX_PER_HOUR = 20
-
-/** A failure with a code (audited) and a message for the user (never contains credential values). */
-class RotationError extends Error {
-  constructor(public code: string, message: string, public status = 422) {
-    super(message)
-  }
-}
-
-type Result = { secret: string; id?: string; expiresAt?: string | null; revokeOldId?: string; identity?: string }
 
 function jwtClaims(authHeader: string): Record<string, unknown> {
   try {
@@ -43,16 +43,6 @@ function jwtClaims(authHeader: string): Record<string, unknown> {
     return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
   } catch {
     return {}
-  }
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-async function timedFetch(url: string, init: RequestInit = {}) {
-  try {
-    return await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15_000) })
-  } catch {
-    throw new RotationError('network', 'A plataforma não respondeu. Nada foi alterado; tente novamente.', 502)
   }
 }
 
@@ -76,6 +66,7 @@ async function awsCall(service: 'iam' | 'sts', params: Record<string, string>, c
   })
   return { ok: res.ok, status: res.status, text: await res.text() }
 }
+const AWS_KEY_ID = /^AKIA[A-Z0-9]{16}$/
 const xmlTag = (xml: string, tag: string) => xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1] ?? null
 
 async function awsIdentity(cred: AwsCred) {
@@ -84,7 +75,7 @@ async function awsIdentity(cred: AwsCred) {
 }
 
 async function rotateAws(cred: AwsCred): Promise<Result> {
-  if (!/^AKIA[A-Z0-9]{16}$/.test(cred.id)) {
+  if (!AWS_KEY_ID.test(cred.id)) {
     throw new RotationError('bad_input', 'Informe o Access key ID (AKIA…) no campo Usuário. Credenciais temporárias (ASIA…) não são rotacionáveis.')
   }
   const arn = await awsIdentity(cred)
@@ -105,7 +96,7 @@ async function rotateAws(cred: AwsCred): Promise<Result> {
   // New IAM keys take a few seconds to propagate.
   for (let attempt = 0; attempt < 8; attempt++) {
     await sleep(attempt === 0 ? 3000 : 2000)
-    if ((await awsIdentity(next)) === arn) return { secret: next.secret, id: next.id, revokeOldId: cred.id, identity: arn }
+    if ((await awsIdentity(next)) === arn) return { secret: next.secret, identifier: next.id, revokeOldId: cred.id, verified: true }
   }
   // Two-phase: verification failed, so undo (remove the new key) and keep the current one.
   await awsCall('iam', { Action: 'DeleteAccessKey', Version: '2010-05-08', AccessKeyId: next.id }, cred).catch(() => null)
@@ -113,11 +104,31 @@ async function rotateAws(cred: AwsCred): Promise<Result> {
 }
 
 async function revokeOldAws(cred: AwsCred, oldId: string) {
-  if (!/^AKIA[A-Z0-9]{16}$/.test(oldId) || oldId === cred.id) throw new RotationError('bad_input', 'Chave antiga inválida.')
+  if (!AWS_KEY_ID.test(oldId) || oldId === cred.id) throw new RotationError('bad_input', 'Chave antiga inválida.')
   const r = await awsCall('iam', { Action: 'DeleteAccessKey', Version: '2010-05-08', AccessKeyId: oldId }, cred)
   if (!r.ok && !/NoSuchEntity/.test(r.text)) {
     throw new RotationError('revoke_failed', `Não foi possível remover a chave antiga ${oldId}. Remova-a no console da AWS.`, 502)
   }
+}
+
+/** Console password of an IAM user, changed with an admin key (iam:UpdateLoginProfile). */
+async function rotateAwsConsole(userName: string, adminCred: AwsCred): Promise<Result> {
+  if (!/^[\w+=,.@-]{1,64}$/.test(userName)) throw new RotationError('bad_input', 'Coloque o nome do usuário IAM em "Usuário".')
+  if (!AWS_KEY_ID.test(adminCred.id) || !adminCred.secret) {
+    throw new RotationError('bad_input', 'Vincule um segredo com uma access key administrativa (AKIA…) em "Rotação automática".')
+  }
+  const arn = await awsIdentity(adminCred)
+  if (!arn) throw new RotationError('current_invalid', 'A AWS recusou a access key administrativa vinculada.')
+  if (/:root$/.test(arn)) throw new RotationError('root_account', 'Por segurança, use uma access key de um usuário IAM, não da conta root.')
+  const password = strongPassword(32)
+  const r = await awsCall('iam', { Action: 'UpdateLoginProfile', Version: '2010-05-08', UserName: userName, Password: password, PasswordResetRequired: 'false' }, adminCred)
+  if (!r.ok) {
+    if (/NoSuchEntity/.test(r.text)) throw new RotationError('not_found', 'Este usuário IAM não existe ou não tem senha de console.')
+    if (/PasswordPolicyViolation/.test(r.text)) throw new RotationError('policy', 'A política de senhas da conta AWS recusou a nova senha (por exemplo, reutilização). Nada foi alterado.')
+    if (/AccessDenied/.test(r.text)) throw new RotationError('permission', 'A access key vinculada precisa de iam:UpdateLoginProfile para este usuário.')
+    throw new RotationError('platform_error', 'A AWS não trocou a senha. Nada foi alterado.', 502)
+  }
+  return { secret: password, verified: false, warning: 'A AWS aplicou a nova senha. O login no console não é verificável por API: confira na próxima entrada.' }
 }
 
 // ------------------------------------------------------------------ GitLab
@@ -154,7 +165,7 @@ async function rotateGitlab(token: string, config: Record<string, string>): Prom
   // GitLab already revoked the old token: from here on the new one MUST reach the user.
   const check = await timedFetch(`${base}/api/v4/personal_access_tokens/self`, { headers: { 'PRIVATE-TOKEN': body.token } }).catch(() => null)
   const verified = Boolean(check?.ok)
-  return { secret: body.token, expiresAt: body.expires_at ?? expires, identity: verified ? 'verificado' : 'não verificado' }
+  return { secret: body.token, expiresAt: body.expires_at ?? expires, verified }
 }
 
 // ------------------------------------------------------------------ Cloudflare
@@ -180,7 +191,7 @@ async function rotateCloudflare(token: string): Promise<Result> {
   }
   // The roll invalidated the old value: from here on the new one MUST reach the user.
   const verified = Boolean(await cfVerify(body.result).catch(() => null))
-  return { secret: body.result, expiresAt: current.expires_on ?? null, identity: verified ? 'verificado' : 'não verificado' }
+  return { secret: body.result, expiresAt: current.expires_on ?? null, verified }
 }
 
 // ------------------------------------------------------------------ handler
@@ -195,7 +206,16 @@ Deno.serve(async (req) => {
   const user = userData.user
   if (!user) return json({ error: 'unauthorized' }, 401)
 
-  let body: { action?: string; connector?: string; credential?: { id?: string; secret?: string }; config?: Record<string, string>; oldId?: string }
+  let body: {
+    action?: string
+    connector?: string
+    credential?: { id?: string; secret?: string }
+    /** aws-iam-console only: the admin access key from the vault item the user linked. */
+    admin?: { id?: string; secret?: string }
+    config?: Record<string, string>
+    oldId?: string
+    newKeyId?: string
+  }
   try {
     body = await req.json()
   } catch {
@@ -205,7 +225,13 @@ Deno.serve(async (req) => {
   const action = body.action ?? 'rotate'
   const secret = String(body.credential?.secret ?? '')
   const id = String(body.credential?.id ?? '').trim()
-  if (!CONNECTORS.includes(connector) || !['rotate', 'revoke_old'].includes(action) || !secret || secret.length > 4096) {
+  const adminCred = { id: String(body.admin?.id ?? '').trim(), secret: String(body.admin?.secret ?? '') }
+  // The console connector does not need (and the app does not send) the current console password.
+  const needsSecret = connector !== 'aws-iam-console'
+  if (
+    !CONNECTORS.includes(connector) || !['rotate', 'revoke_old'].includes(action) ||
+    (needsSecret && !secret) || secret.length > 8192 || adminCred.secret.length > 4096
+  ) {
     return json({ error: 'Pedido inválido.' }, 400)
   }
 
@@ -216,7 +242,7 @@ Deno.serve(async (req) => {
   }
   const since = new Date(Date.now() - 3_600_000).toISOString()
   const { count } = await admin.from('audit_events').select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id).like('event', 'rotation.%').gte('created_at', since)
+    .eq('user_id', user.id).in('event', ['rotation.succeeded', 'rotation.failed']).gte('created_at', since)
   if ((count ?? 0) >= MAX_PER_HOUR) return json({ error: 'Muitas rotações na última hora. Tente mais tarde.' }, 429)
 
   // Audit: ids and outcome only, never values.
@@ -224,21 +250,29 @@ Deno.serve(async (req) => {
     admin.from('audit_events').insert({ user_id: user.id, actor_id: user.id, event, source: 'server', target_type: 'connector', target_id: connector, details })
 
   try {
+    const config = body.config ?? {}
     if (action === 'revoke_old') {
-      if (connector !== 'aws-iam-access-key') return json({ error: 'Pedido inválido.' }, 400)
-      await revokeOldAws({ id, secret }, String(body.oldId ?? ''))
+      if (!REVOCABLE.includes(connector)) return json({ error: 'Pedido inválido.' }, 400)
+      const oldId = String(body.oldId ?? '')
+      if (connector === 'aws-iam-access-key') await revokeOldAws({ id, secret }, oldId)
+      else if (connector === 'gcp-service-account-key') await revokeOldGcpKey(secret, oldId)
+      else await revokeOldEntraSecret(id, secret, config, oldId, String(body.newKeyId ?? ''))
       await audit('rotation.old_revoked', { connector })
       return json({ ok: true })
     }
-    const result =
+    const result: Result =
       connector === 'aws-iam-access-key' ? await rotateAws({ id, secret })
-      : connector === 'gitlab-pat' ? await rotateGitlab(secret, body.config ?? {})
+      : connector === 'aws-iam-console' ? await rotateAwsConsole(id, adminCred)
+      : connector === 'gcp-service-account-key' ? await rotateGcpKey(secret)
+      : connector === 'entra-app-secret' ? await rotateEntraSecret(id, secret, config)
+      : connector === 'gitlab-pat' ? await rotateGitlab(secret, config)
       : await rotateCloudflare(secret)
-    await audit('rotation.succeeded', { connector, verified: result.identity !== 'não verificado' })
+    await audit('rotation.succeeded', { connector, verified: result.verified })
     return json({ ok: true, ...result })
   } catch (error) {
     const e = error instanceof RotationError ? error : new RotationError('internal', 'Falha inesperada na rotação. Nada foi salvo; confira a plataforma antes de tentar de novo.', 500)
-    await audit('rotation.failed', { connector, code: e.code })
+    // Requests refused by validation never reach a platform, so they do not count toward the limit.
+    await audit(e.code === 'bad_input' ? 'rotation.rejected' : 'rotation.failed', { connector, code: e.code })
     return json({ error: e.message, code: e.code }, e.status)
   }
 })

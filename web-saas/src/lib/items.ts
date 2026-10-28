@@ -9,8 +9,38 @@ export type Attachment = { fileId: string; name: string; size: number }
 export type CardData = { holder: string; number: string; expiry: string; cvv: string }
 
 /** Connectors that can rotate an item in one click through the platform API (Edge Function `rotate`). */
-export const AUTO_CONNECTOR_IDS = ['aws-iam-access-key', 'gitlab-pat', 'cloudflare-api-token'] as const
+export const AUTO_CONNECTOR_IDS = [
+  'aws-iam-access-key',
+  'aws-iam-console',
+  'gcp-service-account-key',
+  'entra-app-secret',
+  'gitlab-pat',
+  'cloudflare-api-token',
+] as const
 export type AutoConnectorId = (typeof AUTO_CONNECTOR_IDS)[number]
+
+/** Item type each automatic connector works on. */
+export const AUTO_CONNECTOR_ITEM_TYPE: Record<AutoConnectorId, ItemType> = {
+  'aws-iam-access-key': 'secret',
+  'aws-iam-console': 'login',
+  'gcp-service-account-key': 'secret',
+  'entra-app-secret': 'secret',
+  'gitlab-pat': 'secret',
+  'cloudflare-api-token': 'secret',
+}
+
+export type AutoRotationConfig = {
+  /** gitlab-pat: self-hosted GitLab (default https://gitlab.com). */
+  baseUrl?: string
+  /** gitlab-pat (default 90), entra-app-secret (default 180): validity of the new credential. */
+  expiresInDays?: string
+  /** entra-app-secret: Directory (tenant) ID or domain. */
+  tenantId?: string
+  /** entra-app-secret: platform id of the current secret (filled after the first rotation). */
+  keyId?: string
+  /** aws-iam-console: vault item (secret) holding the admin access key used to change the password. */
+  adminItemId?: string
+}
 
 /**
  * Per-item opt-in for automatic rotation. Stored inside the encrypted item. `consentAt` records that
@@ -19,8 +49,7 @@ export type AutoConnectorId = (typeof AUTO_CONNECTOR_IDS)[number]
 export type AutoRotation = {
   connectorId: AutoConnectorId
   consentAt: string
-  /** gitlab-pat: baseUrl (default https://gitlab.com) and expiresInDays (default 90). */
-  config: { baseUrl?: string; expiresInDays?: string }
+  config: AutoRotationConfig
   lastRotatedAt: string | null
   /** Expiry reported by the platform for the current credential (GitLab, Cloudflare). */
   expiresAt: string | null
@@ -101,6 +130,9 @@ export function emptyItem(type: ItemType = 'login'): SecuredItemData {
   }
 }
 
+/** Keeps the opt-in only on the item type its connector works on. */
+const autoRotationFor = (type: ItemType, a: AutoRotation | null) => (a && AUTO_CONNECTOR_ITEM_TYPE[a.connectorId] === type ? a : null)
+
 function normalizeAutoRotation(raw: unknown): AutoRotation | null {
   if (!raw || typeof raw !== 'object') return null
   const a = raw as Record<string, unknown>
@@ -109,7 +141,13 @@ function normalizeAutoRotation(raw: unknown): AutoRotation | null {
   return {
     connectorId: a.connectorId as AutoConnectorId,
     consentAt: a.consentAt,
-    config: { baseUrl: str(config.baseUrl, 300) || undefined, expiresInDays: str(config.expiresInDays, 3) || undefined },
+    config: {
+      baseUrl: str(config.baseUrl, 300) || undefined,
+      expiresInDays: str(config.expiresInDays, 3) || undefined,
+      tenantId: str(config.tenantId, 120) || undefined,
+      keyId: str(config.keyId, 64) || undefined,
+      adminItemId: str(config.adminItemId, 64) || undefined,
+    },
     lastRotatedAt: typeof a.lastRotatedAt === 'string' ? a.lastRotatedAt : null,
     expiresAt: typeof a.expiresAt === 'string' ? a.expiresAt : null,
   }
@@ -157,7 +195,7 @@ export function normalizeItem(raw: unknown): SecuredItemData {
           .filter((a) => typeof a.fileId === 'string')
           .map((a) => ({ fileId: a.fileId as string, name: str(a.name, 200), size: Number(a.size) || 0 }))
       : [],
-    autoRotation: type === 'secret' ? normalizeAutoRotation(r.autoRotation) : null,
+    autoRotation: autoRotationFor(type, normalizeAutoRotation(r.autoRotation)),
   }
 }
 

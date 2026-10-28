@@ -29,9 +29,9 @@ type RotationViewProps = {
 
 /** Which one-click rotation an item supports, if any. */
 export function quickRotateMode(item: VaultItem): 'auto' | 'assisted' | null {
-  if (item.access !== 'owner' && item.data.autoRotation) return null;
   if (item.access === 'view') return null;
-  if (item.data.type === 'secret' && item.data.autoRotation) return 'auto';
+  // Automatic rotation is consented by the owner, so only the owner runs it.
+  if (item.data.autoRotation && item.access === 'owner') return 'auto';
   if (item.data.type === 'login') return 'assisted';
   return null;
 }
@@ -155,8 +155,8 @@ export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }:
             Rotação automática em 1 clique <span className="muted">({automatic.length})</span>
           </h2>
           <p className="subtle">
-            Para chaves da AWS, tokens do GitLab e da Cloudflare: edite o segredo, escolha o conector em "Rotação automática" e
-            autorize. Depois, "Rotacionar agora" cria a nova credencial na plataforma, verifica e salva no cofre (a anterior vai
+            Para AWS IAM (access keys e senha do console), Google Cloud (chaves de service account), Entra ID (client secrets),
+            GitLab e Cloudflare: edite o item, escolha o conector em "Rotação automática" e autorize. Depois, "Rotacionar agora" cria a nova credencial na plataforma, verifica e salva no cofre (a anterior vai
             para o histórico).
           </p>
         </div>

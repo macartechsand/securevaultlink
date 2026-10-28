@@ -373,6 +373,9 @@ function VaultApp() {
               getKeyContext={session.getKeyContext}
               getKeyPair={session.getKeyPair}
               getHistory={session.getHistory}
+              adminKeyItems={items
+                .filter((i) => i.access === 'owner' && i.data.type === 'secret' && /^AKIA[A-Z0-9]{16}$/.test(i.data.username.trim()))
+                .map((i) => ({ id: i.id, title: i.data.title }))}
               onCancel={() => setEditing(null)}
               onSave={async (data) => {
                 if (editing.item) await session.saveItem(editing.item, data);
@@ -386,6 +389,7 @@ function VaultApp() {
             <QuickRotate
               item={items.find((i) => i.id === quickRotating.item.id) ?? quickRotating.item}
               assistedPassword={quickRotating.password}
+              findItem={(id) => items.find((i) => i.id === id)}
               onSave={async (next) => {
                 const current = items.find((i) => i.id === quickRotating.item.id) ?? quickRotating.item;
                 await session.saveItem(current, next(current.data));

@@ -20,7 +20,7 @@ describe('connectors', () => {
     }
     expect(CONNECTORS.filter((c) => c.status === 'available').map((c) => c.id)).toEqual(['web-assisted'])
     // One-click automatic connectors stay "beta" until validated against the real platforms.
-    expect(CONNECTORS.filter((c) => c.status === 'beta').map((c) => c.id)).toEqual([...AUTO_CONNECTOR_IDS])
+    expect(CONNECTORS.filter((c) => c.status === 'beta').map((c) => c.id).sort()).toEqual([...AUTO_CONNECTOR_IDS].sort())
     // Targets inside private networks must run on an agent.
     expect(CONNECTORS.filter((c) => c.category === 'database').every((c) => c.executor === 'agent')).toBe(true)
     expect(connectorById('nope')).toBeUndefined()

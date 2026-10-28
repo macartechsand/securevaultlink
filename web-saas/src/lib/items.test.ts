@@ -85,4 +85,13 @@ describe('autoRotation (per-item consent)', () => {
     expect(normalizeItem({ type: 'login', autoRotation: consented }).autoRotation).toBeNull()
     expect(emptyItem('secret').autoRotation).toBeNull()
   })
+
+  it('accepts each connector only on its item type (console password = login)', () => {
+    const consoleAuto = { ...consented, connectorId: 'aws-iam-console', config: { adminItemId: 'item-1' } }
+    expect(normalizeItem({ type: 'login', autoRotation: consoleAuto }).autoRotation?.config.adminItemId).toBe('item-1')
+    expect(normalizeItem({ type: 'secret', autoRotation: consoleAuto }).autoRotation).toBeNull()
+    const entra = { ...consented, connectorId: 'entra-app-secret', config: { tenantId: 'contoso.onmicrosoft.com', keyId: 'k' } }
+    expect(normalizeItem({ type: 'secret', autoRotation: entra }).autoRotation?.config).toMatchObject({ tenantId: 'contoso.onmicrosoft.com', keyId: 'k' })
+    expect(normalizeItem({ type: 'secret', autoRotation: { ...consented, connectorId: 'gcp-service-account-key' } }).autoRotation).not.toBeNull()
+  })
 })

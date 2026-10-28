@@ -30,6 +30,8 @@ type ItemEditorProps = {
   getKeyContext: () => KeyContext;
   getKeyPair: () => Promise<UserKeyPair>;
   getHistory: (item: VaultItem) => Promise<PasswordHistoryEntry[]>;
+  /** Owner's secrets holding an AWS access key (admin key for aws-iam-console). */
+  adminKeyItems?: { id: string; title: string }[];
   onSave: (data: SecuredItemData) => Promise<void>;
   onCancel: () => void;
 };
@@ -95,7 +97,7 @@ function SecretInput({
   );
 }
 
-export function ItemEditor({ item, initialType = 'login', folders, getKeyContext, getKeyPair, getHistory, onSave, onCancel }: ItemEditorProps) {
+export function ItemEditor({ item, initialType = 'login', folders, getKeyContext, getKeyPair, getHistory, adminKeyItems = [], onSave, onCancel }: ItemEditorProps) {
   const [data, setData] = useState<SecuredItemData>(() => (item ? structuredClone(item.data) : emptyItem(initialType)));
   const [tagInput, setTagInput] = useState('');
   const [tab, setTab] = useState<'details' | 'history'>('details');
@@ -370,8 +372,14 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
               </label>
             )}
 
-            {data.type === 'secret' && isOwner && (
-              <AutoRotationFields value={data.autoRotation} onChange={(v) => set('autoRotation', v)} readOnly={readOnly} />
+            {(data.type === 'secret' || data.type === 'login') && isOwner && (
+              <AutoRotationFields
+                itemType={data.type}
+                value={data.autoRotation}
+                onChange={(v) => set('autoRotation', v)}
+                adminKeyItems={adminKeyItems.filter((a) => a.id !== item?.id)}
+                readOnly={readOnly}
+              />
             )}
 
             {showUrl && (

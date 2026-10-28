@@ -18,6 +18,11 @@ describe('quickRotateMode', () => {
     expect(quickRotateMode(item({ type: 'secret' }))).toBeNull()
     expect(quickRotateMode(item({ type: 'secret', autoRotation: auto }, 'edit'))).toBeNull()
   })
+  it('logins with the AWS console connector rotate automatically (owner only)', () => {
+    const consoleAuto = { ...auto, connectorId: 'aws-iam-console' as const }
+    expect(quickRotateMode(item({ type: 'login', autoRotation: consoleAuto }))).toBe('auto')
+    expect(quickRotateMode(item({ type: 'login', autoRotation: consoleAuto }, 'edit'))).toBe('assisted')
+  })
   it('view-only items never rotate', () => {
     expect(quickRotateMode(item({ type: 'login' }, 'view'))).toBeNull()
   })

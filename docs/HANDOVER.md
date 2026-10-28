@@ -39,7 +39,7 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 | **Compartilhar (conectar usuários)** | Itens com permissão **Visualizar** ou **Editar**; arquivos; validade de até **48 h no gratuito** (Premium até 30 dias ou sem expiração); conferência da **impressão digital** da chave; revogação com **troca de chave** |
 | **Arquivos** | Cofre de arquivos cifrados; "Compartilhados comigo"; **transferências por link** para qualquer pessoa (senha opcional, expiração, limite de downloads, revogação) |
 | **Saúde e postura** | Senhas fracas, reutilizadas, antigas e com troca vencida; **Verificar segurança**: vazamentos (Have I Been Pwned, k-anonimato) e sites perigosos (Google Safe Browsing); **score de postura** 0–100 com recomendações |
-| **Rotação** | **1 clique**: logins geram e copiam a nova senha e abrem `/.well-known/change-password`, e a senha só é salva após confirmação. Segredos da **AWS IAM (access key)**, **GitLab (PAT)** e **Cloudflare (token)** rotacionam **automaticamente** via API, com consentimento por item (beta). Também: troca assistida passo a passo, **troca programada** (30 dias a 1 ano), **fila de correção** por risco e catálogo de **conectores** |
+| **Rotação** | **1 clique**: logins geram e copiam a nova senha e abrem `/.well-known/change-password`, e a senha só é salva após confirmação. Rotacionam **automaticamente** via API, com consentimento por item (beta): **AWS IAM** (access key e senha do console), **Google Cloud** (chave de service account), **Entra ID** (client secret), **GitLab** (PAT) e **Cloudflare** (token). Também: troca assistida passo a passo, **troca programada** (30 dias a 1 ano), **fila de correção** por risco e catálogo de **conectores** |
 | **Gerador** | Senhas com CSPRNG, sem viés |
 | **Atividade** | Log de auditoria da própria conta |
 | **Backup e migração** | **Exportação cifrada** (senha própria, PBKDF2 600k + AES-GCM); importação do backup; **importação de CSV** (Chrome, Edge, Firefox, Bitwarden, 1Password, LastPass) |
@@ -111,7 +111,7 @@ Hospedagem: Netlify (CSP, HSTS, noindex)
 | `admin` | sim | MFA reset, suspender, links de convite e redefinição, saúde | `APP_ORIGINS` |
 | `storage-r2` | sim | URLs assinadas do R2 (Premium) | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
 | `account` | sim | Exclusão da própria conta (LGPD) e "recomeçar cofre" | — |
-| `rotate` | sim | Rotação automática em 1 clique (AWS IAM, GitLab, Cloudflare); não guarda nem registra valores; 20 por hora por usuário | — |
+| `rotate` | sim | Rotação automática em 1 clique (AWS IAM, Google Cloud, Entra ID, GitLab, Cloudflare); não guarda nem registra valores; 20 chamadas às plataformas por hora por usuário | — |
 
 ---
 
@@ -245,7 +245,7 @@ npm test -- integration        # integração contra o Supabase de DESENVOLVIMEN
 ## 8. Limitações conhecidas
 - **Senha mestra:** sem a chave de recuperação, esquecê-la significa perder o cofre.
 - **Tamanho de arquivo:** até 25 MB, porque a cifragem é feita em memória. Arquivos maiores exigem streaming.
-- **Conectores automáticos de rotação:** AWS IAM, GitLab e Cloudflare funcionam em 1 clique, mas estão em **beta**. Foram testados contra as APIs reais só com credenciais falsas (falham na autenticação, sem alterar nada), e ainda falta validar cada um com uma credencial real de baixo risco. Os demais seguem planejados. Não existe rotação agendada sem o usuário presente: exigiria custódia da credencial.
+- **Conectores automáticos de rotação:** AWS IAM (access key e console), Google Cloud, Entra ID, GitLab e Cloudflare funcionam em 1 clique, mas estão em **beta**. Foram testados contra as APIs reais só com credenciais falsas (falham na autenticação, sem alterar nada), e ainda falta validar cada um com uma credencial real de baixo risco. Os demais seguem planejados. Não existe rotação agendada sem o usuário presente: exigiria custódia da credencial.
 - **Revogação:** não apaga cópias que o destinatário já tinha. O endpoint autenticado do Storage pode servir um objeto em cache por alguns segundos; o app usa URLs assinadas e não é afetado.
 - **Metadados visíveis ao servidor:** quantidade de itens, tamanhos e datas.
 - **Confirmação por e-mail com PKCE:** precisa ser aberta no mesmo navegador do cadastro.

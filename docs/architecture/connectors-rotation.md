@@ -1,6 +1,6 @@
 # Conectores e rotação de senhas: arquitetura
 
-Status: 2026-10-28. A troca **assistida** está implementada, também em **1 clique**. Três conectores automáticos **sob demanda** estão implementados em **beta**: AWS IAM access key, GitLab PAT e Cloudflare API token (Edge Function `rotate`). Os demais seguem especificados aqui como "Planejado".
+Status: 2026-10-28. A troca **assistida** está implementada, também em **1 clique**. Seis conectores automáticos **sob demanda** estão implementados em **beta** (Edge Function `rotate`): AWS IAM access key, AWS IAM senha do console, Google Cloud service account key, Entra ID client secret, GitLab PAT e Cloudflare API token. Os demais seguem especificados aqui como "Planejado".
 
 ## 0. Rotação em 1 clique (implementado)
 
@@ -14,17 +14,35 @@ Status: 2026-10-28. A troca **assistida** está implementada, também em **1 cli
   1. `GetCallerIdentity` com a chave atual (recusa root e chaves temporárias `ASIA…`).
   2. `CreateAccessKey` e espera a propagação; verifica com a **mesma ARN**. Se a verificação falhar, apaga a nova e mantém a atual.
   3. O app salva no cofre e só então chama `revoke_old`, que apaga a chave antiga assinando com a nova.
+- **AWS IAM, senha do console** (item Login):
+  - `UpdateLoginProfile` com uma senha forte gerada no servidor (4 classes de caracteres, 32 caracteres).
+  - A chamada é assinada com a access key administrativa de **outro segredo do cofre**, que o item referencia (`adminItemId`); a chave não é copiada.
+  - A senha atual do console **não é enviada**.
+  - O login no console não é verificável por API, por isso o resultado aparece como "não verificado".
+- **Google Cloud, chave de service account** (JSON no valor do segredo):
+  1. JWT RS256 assinado com a chave atual, trocado por um token OAuth.
+  2. `serviceAccounts.keys.create`.
+  3. Verificação: obter um token com a **nova** chave, com novas tentativas por até cerca de 40 s, por causa da propagação. Se falhar, remove a nova.
+  4. O app salva, e `revoke_old` apaga a antiga usando a nova.
+  - O `token_uri` do JSON é ignorado; o endpoint é fixo, contra exfiltração.
+  - A política da organização `iam.disableServiceAccountKeyCreation` e o limite de 10 chaves geram mensagens claras.
+- **Entra ID, client secret** (Application (client) ID em Identificador, tenant na configuração):
+  1. Token *client credentials* com a secret atual.
+  2. Graph `addPassword`, com validade configurável (padrão 180 dias).
+  3. Verificação: um token com a **nova** secret. Se falhar, `removePassword` remove a nova.
+  4. O app salva, e `revoke_old` chama `removePassword` para a antiga, autenticado com a nova.
+  - O `keyId` da antiga vem da configuração (preenchido após a 1ª rotação) ou do `hint` (3 primeiros caracteres) quando é único. Senão, a antiga não é removida e o app avisa.
 - **GitLab:** `POST /personal_access_tokens/self/rotate` com validade configurável (padrão 90 dias), depois verificação. O GitLab revoga o token antigo na hora.
 - **Cloudflare:** `/user/tokens/verify` (descobre o id) → `PUT /user/tokens/{id}/value` (roll) → verificação. Só tokens de usuário.
 - **Se o cofre não conseguir salvar** depois que a plataforma trocou, o modal não fecha sozinho: mostra "Copiar nova credencial" e "Tentar salvar de novo".
 - **Proteções:**
   - JWT obrigatório, e `aal2` quando o usuário tem MFA;
-  - limite de 20 rotações por hora por usuário;
+  - limite de 20 chamadas às plataformas por hora por usuário (pedidos recusados pela validação viram `rotation.rejected` e não contam);
   - GitLab próprio só em HTTPS público (sem IP literal, `localhost` ou nomes internos, contra SSRF);
   - redirecionamentos bloqueados e timeout de 15 s;
   - auditoria `rotation.succeeded`, `rotation.failed` (com código) e `rotation.old_revoked`, sem valores.
 - **Assinatura AWS SigV4:** `supabase/functions/_shared/sigv4.ts`, validada contra o exemplo oficial da AWS.
-- **Testes:** `rotate.integration` chama as três APIs reais com credenciais **falsas**: autenticação, validação, SSRF, erros e nenhum valor ecoado.
+- **Testes:** `rotate.integration` chama as APIs reais de AWS, Google, Microsoft, GitLab e Cloudflare com credenciais **falsas** (incluindo uma chave RSA válida de uma service account inexistente e um `token_uri` malicioso, que é ignorado): autenticação, validação, SSRF, erros e nenhum valor ecoado.
 - **Para passar de beta a disponível:** rotacionar uma credencial real de baixo risco em cada plataforma e conferir o item, o histórico e a revogação.
 
 ## 1. Problema: diversidade de plataformas

@@ -27,6 +27,9 @@ Função `rotate` e site publicados; não há migration. Para validar cada conec
 1. [ ] **GitLab:** crie um PAT de teste com escopo `api`, salve como Segredo, ative "Rotação automática → GitLab" e clique em **Rotacionar agora**. Confira que o antigo foi revogado no GitLab, que o novo está no item e que o antigo aparece no histórico.
 2. [ ] **Cloudflare:** token de **usuário** de teste com a permissão "API Tokens: Edit". Mesmo teste.
 3. [ ] **AWS:** usuário IAM de teste, com só `iam:CreateAccessKey` e `iam:DeleteAccessKey` em si mesmo e **1** chave ativa. Coloque o Access key ID em "Identificador". Depois da rotação, deve sobrar só a chave nova.
+   - [ ] **AWS, senha do console:** usuário IAM de teste com senha de console, salvo como **Login** (nome do usuário IAM em "Usuário"). Uma access key administrativa de teste com `iam:UpdateLoginProfile` para esse usuário, salva como **Segredo**. No login: Rotação automática → AWS IAM: senha do console → vincule o segredo. Depois de rotacionar, entre no console com a senha nova.
+   - [ ] **Google Cloud:** service account de teste com o papel "Service Account Key Admin" nela mesma, e uma chave JSON colada em "Valor do segredo". Depois da rotação, só a chave nova deve aparecer em IAM → Service accounts → Keys.
+   - [ ] **Entra ID:** app registration de teste com a permissão de aplicativo `Application.ReadWrite.OwnedBy` (com consentimento do admin) e a service principal como dona do app. Client ID em "Identificador", secret no valor, tenant ID na configuração. Depois da rotação, em Certificates & secrets, deve sobrar só a secret "SecureVault <data>".
 4. [ ] Peça ao Claude para marcar como "Disponível" os conectores aprovados.
 
 ## Desbloqueio, reset do cofre e convites Premium (2026-10-19)

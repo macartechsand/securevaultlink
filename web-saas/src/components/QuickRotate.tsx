@@ -14,6 +14,8 @@ type QuickRotateProps = {
   assistedPassword?: string;
   /** Saves the item; receives an updater so it always applies to the latest copy. */
   onSave: (next: (data: SecuredItemData) => SecuredItemData) => Promise<void>;
+  /** Looks up another vault item (the admin access key linked by aws-iam-console). */
+  findItem: (id: string) => VaultItem | undefined;
   onClose: () => void;
 };
 
@@ -32,11 +34,11 @@ export function startAssistedRotation(item: VaultItem): string {
 
 type Phase = 'rotating' | 'saving' | 'revoking' | 'done' | 'failed' | 'save_failed';
 
-export function QuickRotate({ item, assistedPassword, onSave, onClose }: QuickRotateProps) {
+export function QuickRotate({ item, assistedPassword, onSave, findItem, onClose }: QuickRotateProps) {
   return assistedPassword ? (
     <AssistedQuick item={item} password={assistedPassword} onSave={onSave} onClose={onClose} />
   ) : (
-    <AutoQuick item={item} onSave={onSave} onClose={onClose} />
+    <AutoQuick item={item} onSave={onSave} findItem={findItem} onClose={onClose} />
   );
 }
 
@@ -61,7 +63,7 @@ function Shell({ title, eyebrow, onClose, closable = true, children }: { title: 
   );
 }
 
-function AssistedQuick({ item, password, onSave, onClose }: { item: VaultItem; password: string } & Omit<QuickRotateProps, 'item' | 'assistedPassword'>) {
+function AssistedQuick({ item, password, onSave, onClose }: { item: VaultItem; password: string } & Pick<QuickRotateProps, 'onSave' | 'onClose'>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
@@ -124,7 +126,7 @@ function AssistedQuick({ item, password, onSave, onClose }: { item: VaultItem; p
   );
 }
 
-function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPassword'>) {
+function AutoQuick({ item, onSave, findItem, onClose }: Omit<QuickRotateProps, 'assistedPassword'>) {
   const auto = item.data.autoRotation!;
   const connector = connectorById(auto.connectorId);
   const [phase, setPhase] = useState<Phase>('rotating');
@@ -141,8 +143,13 @@ function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPa
       await onSave((d) => ({
         ...d,
         password: r.secret,
-        username: r.id ?? d.username,
-        autoRotation: d.autoRotation && { ...d.autoRotation, lastRotatedAt: now, expiresAt: r.expiresAt ?? null },
+        username: r.identifier ?? d.username,
+        autoRotation: d.autoRotation && {
+          ...d.autoRotation,
+          config: r.keyId ? { ...d.autoRotation.config, keyId: r.keyId } : d.autoRotation.config,
+          lastRotatedAt: now,
+          expiresAt: r.expiresAt ?? null,
+        },
       }));
     } catch (err) {
       // The platform already holds the new credential: never lose it.
@@ -153,9 +160,9 @@ function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPa
     if (r.revokeOldId) {
       setPhase('revoking');
       try {
-        await revokeOldCredential(auto, { id: r.id ?? '', secret: r.secret }, r.revokeOldId);
+        await revokeOldCredential(auto, { id: r.identifier ?? item.data.username.trim(), secret: r.secret }, r.revokeOldId, r.keyId);
       } catch (err) {
-        setWarning(friendlyError(err));
+        setWarning((w) => [w, friendlyError(err)].filter(Boolean).join(' '));
       }
     }
     setPhase('done');
@@ -167,7 +174,16 @@ function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPa
     started.current = true;
     void (async () => {
       try {
-        const r = await rotateCredential(auto, { id: item.data.username.trim(), secret: item.data.password });
+        let r: RotationResult;
+        if (auto.connectorId === 'aws-iam-console') {
+          // Only the IAM user name and the linked admin key are sent; never the current console password.
+          const adminItem = auto.config.adminItemId ? findItem(auto.config.adminItemId) : undefined;
+          if (!adminItem) throw new Error('Vincule, em Editar → Rotação automática, o segredo com a access key administrativa.');
+          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: '' }, { id: adminItem.data.username.trim(), secret: adminItem.data.password });
+        } else {
+          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: item.data.password });
+        }
+        if (r.warning) setWarning(r.warning);
         setResult(r);
         await persist(r);
       } catch (err) {
@@ -198,12 +214,12 @@ function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPa
         )}
         {phase === 'done' && (
           <div className="alert alert--ok" aria-live="polite">
-            <Icon name="check" size={14} /> Credencial rotacionada{result?.identity === 'não verificado' ? '' : ' e verificada'} e salva no cofre. A anterior
-            está no histórico do item{result?.revokeOldId && !warning ? ' e já foi removida na AWS' : ''}.
+            <Icon name="check" size={14} /> Credencial rotacionada{result?.verified ? ' e verificada' : ''} e salva no cofre. A anterior
+            está no histórico do item{result?.revokeOldId && !warning ? ' e já foi removida na plataforma' : ''}.
             {result?.expiresAt ? ` Nova validade: ${formatDate(result.expiresAt)}.` : ''}
           </div>
         )}
-        {phase === 'done' && result?.identity === 'não verificado' && (
+        {phase === 'done' && result && !result.verified && !result.warning && (
           <div className="alert alert--warn">A plataforma emitiu a nova credencial, mas a verificação não respondeu. Teste-a antes de usar.</div>
         )}
         {warning && <div className="alert alert--warn">{warning}</div>}
@@ -219,7 +235,7 @@ function AutoQuick({ item, onSave, onClose }: Omit<QuickRotateProps, 'assistedPa
                 type="button"
                 className="btn btn--sm"
                 onClick={async () => {
-                  if (await copyWithAutoClear(result.id ? `${result.id}\n${result.secret}` : result.secret)) setCopied(true);
+                  if (await copyWithAutoClear(result.identifier ? `${result.identifier}\n${result.secret}` : result.secret)) setCopied(true);
                 }}
               >
                 <Icon name={copied ? 'check' : 'copy'} size={14} />
