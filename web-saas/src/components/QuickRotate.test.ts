@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyItem } from '../lib/items'
 import type { VaultItem } from '../state/itemOps'
+import { canRotateFromList } from './ItemList'
 import { quickRotateMode } from './RotationView'
 
 const item = (patch: Partial<VaultItem['data']>, access: VaultItem['access'] = 'owner') =>
@@ -25,5 +26,17 @@ describe('quickRotateMode', () => {
   })
   it('view-only items never rotate', () => {
     expect(quickRotateMode(item({ type: 'login' }, 'view'))).toBeNull()
+  })
+})
+
+describe('rotate button in the item list', () => {
+  it('shows for logins (owner or edit) and for the owner's secrets; never for view-only, notes or cards', () => {
+    expect(canRotateFromList(item({ type: 'login' }))).toBe(true)
+    expect(canRotateFromList(item({ type: 'login' }, 'edit'))).toBe(true)
+    expect(canRotateFromList(item({ type: 'secret' }))).toBe(true)
+    expect(canRotateFromList(item({ type: 'secret' }, 'edit'))).toBe(false)
+    expect(canRotateFromList(item({ type: 'login' }, 'view'))).toBe(false)
+    expect(canRotateFromList(item({ type: 'note' }))).toBe(false)
+    expect(canRotateFromList(item({ type: 'card' }))).toBe(false)
   })
 })

@@ -78,6 +78,11 @@ function VaultApp() {
   const [rotatingItem, setRotatingItem] = useState<VaultItem | null>(null);
   const [quickRotating, setQuickRotating] = useState<{ item: VaultItem; password?: string } | null>(null);
   // Runs inside the click (clipboard and new tab need the user gesture).
+  // From the item list: rotate in one click, or open the editor to set up a connector for secrets.
+  const rotateFromList = (item: VaultItem) => {
+    if (quickRotateMode(item)) startQuickRotate(item);
+    else setEditing({ item });
+  };
   const startQuickRotate = (item: VaultItem) => {
     if (quickRotateMode(item) === 'assisted') {
       setQuickRotating({ item, password: startAssistedRotation(item) });
@@ -377,6 +382,10 @@ function VaultApp() {
                 .filter((i) => i.access === 'owner' && i.data.type === 'secret' && /^AKIA[A-Z0-9]{16}$/.test(i.data.username.trim()))
                 .map((i) => ({ id: i.id, title: i.data.title }))}
               onCancel={() => setEditing(null)}
+              onRotate={(item) => {
+                setEditing(null);
+                startQuickRotate(item);
+              }}
               onSave={async (data) => {
                 if (editing.item) await session.saveItem(editing.item, data);
                 else await session.addItem(data);
@@ -520,6 +529,7 @@ function VaultApp() {
                 onOpen={(item) => setEditing({ item })}
                 onShare={setSharingItem}
                 onDelete={handleDelete}
+                onRotate={rotateFromList}
               />
             </>
           )}
@@ -535,6 +545,7 @@ function VaultApp() {
               onNew={(type) => setEditing({ type })}
               onOpen={(item) => setEditing({ item })}
               onShare={setSharingItem}
+              onRotate={rotateFromList}
               onDelete={handleDelete}
               onCreateFolder={session.createFolder}
               onRenameFolder={session.renameFolder}

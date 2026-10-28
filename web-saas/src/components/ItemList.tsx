@@ -48,9 +48,21 @@ type ItemListProps = {
   onOpen: (item: VaultItem) => void;
   onShare: (item: VaultItem) => void;
   onDelete: (item: VaultItem) => void;
+  /** One-click rotation (or, for secrets without a connector, opens its setup). */
+  onRotate?: (item: VaultItem) => void;
 };
 
-export function ItemList({ title, items, health, emptyText, onNew, onOpen, onShare, onDelete }: ItemListProps) {
+/** Logins (not view-only) and the owner's secrets can be rotated from the list. */
+export const canRotateFromList = (item: VaultItem) =>
+  (item.data.type === 'login' && item.access !== 'view') || (item.data.type === 'secret' && item.access === 'owner');
+
+function rotateLabel(item: VaultItem) {
+  if (item.data.autoRotation && item.access === 'owner') return 'Rotacionar agora (automático)';
+  if (item.data.type === 'login') return 'Trocar senha em 1 clique';
+  return 'Configurar rotação automática';
+}
+
+export function ItemList({ title, items, health, emptyText, onNew, onOpen, onShare, onDelete, onRotate }: ItemListProps) {
   const [copied, setCopied] = useState<string | null>(null);
 
   return (
@@ -162,6 +174,17 @@ export function ItemList({ title, items, health, emptyText, onNew, onOpen, onSha
                             }}
                           >
                             <Icon name={copied === item.id ? 'check' : 'copy'} />
+                          </button>
+                        )}
+                        {onRotate && canRotateFromList(item) && (
+                          <button
+                            type="button"
+                            className="btn btn--ghost icon-btn"
+                            aria-label={rotateLabel(item)}
+                            title={rotateLabel(item)}
+                            onClick={() => onRotate(item)}
+                          >
+                            <Icon name="refresh" />
                           </button>
                         )}
                         <button type="button" className="btn btn--ghost icon-btn" aria-label="Abrir" title="Abrir" onClick={() => onOpen(item)}>

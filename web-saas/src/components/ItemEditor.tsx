@@ -14,6 +14,7 @@ import {
 } from '../lib/items';
 import { ROTATION_INTERVALS } from '../lib/connectors';
 import { AutoRotationFields } from './AutoRotationFields';
+import { quickRotateMode } from './RotationView';
 import { CATEGORIES, STRENGTH_LABELS, categoryLabel, strengthBadge } from '../lib/labels';
 import { formatBytes, formatDateTime, friendlyError } from '../lib/messages';
 import { generatePassword } from '../lib/passwordGenerator';
@@ -34,6 +35,8 @@ type ItemEditorProps = {
   adminKeyItems?: { id: string; title: string }[];
   onSave: (data: SecuredItemData) => Promise<void>;
   onCancel: () => void;
+  /** Starts the one-click rotation of the SAVED item (the editor closes). */
+  onRotate?: (item: VaultItem) => void;
 };
 
 function SecretInput({
@@ -97,7 +100,7 @@ function SecretInput({
   );
 }
 
-export function ItemEditor({ item, initialType = 'login', folders, getKeyContext, getKeyPair, getHistory, adminKeyItems = [], onSave, onCancel }: ItemEditorProps) {
+export function ItemEditor({ item, initialType = 'login', folders, getKeyContext, getKeyPair, getHistory, adminKeyItems = [], onSave, onCancel, onRotate }: ItemEditorProps) {
   const [data, setData] = useState<SecuredItemData>(() => (item ? structuredClone(item.data) : emptyItem(initialType)));
   const [tagInput, setTagInput] = useState('');
   const [tab, setTab] = useState<'details' | 'history'>('details');
@@ -195,9 +198,22 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
             </p>
             <h2 id="item-editor-title">{title}</h2>
           </div>
-          <button type="button" className="btn btn--ghost icon-btn" onClick={onCancel} aria-label="Fechar">
-            <Icon name="close" />
-          </button>
+          <span className="row">
+            {item && onRotate && quickRotateMode(item) && (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => onRotate(item)}
+                title={item.data.autoRotation ? 'Cria a nova credencial na plataforma, verifica e salva' : 'Gera, copia e abre a página de troca do site'}
+              >
+                <Icon name="refresh" size={14} />
+                {item.data.autoRotation && item.access === 'owner' ? 'Rotacionar agora' : 'Trocar em 1 clique'}
+              </button>
+            )}
+            <button type="button" className="btn btn--ghost icon-btn" onClick={onCancel} aria-label="Fechar">
+              <Icon name="close" />
+            </button>
+          </span>
         </div>
 
         {item && isOwner && (data.type === 'login' || data.type === 'secret') && (

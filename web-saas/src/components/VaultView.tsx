@@ -18,6 +18,7 @@ type VaultViewProps = {
   onNew: (type?: ItemType) => void;
   onOpen: (item: VaultItem) => void;
   onShare: (item: VaultItem) => void;
+  onRotate?: (item: VaultItem) => void;
   onDelete: (item: VaultItem) => void;
   onCreateFolder: (name: string) => Promise<Folder>;
   onRenameFolder: (folder: Folder, name: string) => Promise<void>;
@@ -33,6 +34,7 @@ export function VaultView({
   onNew,
   onOpen,
   onShare,
+  onRotate,
   onDelete,
   onCreateFolder,
   onRenameFolder,
@@ -240,6 +242,7 @@ export function VaultView({
         onNew={() => onNew(type === 'all' ? undefined : type)}
         onOpen={onOpen}
         onShare={onShare}
+        onRotate={onRotate}
         onDelete={onDelete}
       />
     </div>
