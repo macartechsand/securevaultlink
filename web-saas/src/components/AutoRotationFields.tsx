@@ -1,6 +1,30 @@
 import { useState } from 'react';
 import { connectorById } from '../lib/connectors';
-import { AUTO_CONNECTOR_IDS, AUTO_CONNECTOR_ITEM_TYPE, type AutoConnectorId, type AutoRotation, type AutoRotationConfig, type ItemType } from '../lib/items';
+import {
+  ADMIN_LINKED_CONNECTORS,
+  AUTO_CONNECTOR_IDS,
+  AUTO_CONNECTOR_ITEM_TYPE,
+  type AdminKeyKind,
+  type AutoConnectorId,
+  type AutoRotation,
+  type AutoRotationConfig,
+  type ItemType,
+} from '../lib/items';
+
+const ADMIN_KEY_LABEL: Record<AdminKeyKind, { field: string; missing: string }> = {
+  aws: {
+    field: 'Access key administrativa (outro segredo do cofre)',
+    missing: 'Cadastre antes um Segredo com o Access key ID (AKIA…) em "Identificador" e a Secret no valor.',
+  },
+  entra: {
+    field: 'App administrativo do Entra ID (outro segredo do cofre)',
+    missing: 'Cadastre antes um Segredo com o Application (client) ID em "Identificador" e a client secret no valor.',
+  },
+  gcp: {
+    field: 'Service account com delegação (outro segredo do cofre)',
+    missing: 'Cadastre antes um Segredo com o arquivo JSON da service account no valor.',
+  },
+};
 import { formatDateTime } from '../lib/messages';
 
 const HINTS: Record<AutoConnectorId, string> = {
@@ -9,6 +33,10 @@ const HINTS: Record<AutoConnectorId, string> = {
     'Coloque o nome do usuário IAM em "Usuário". A troca usa a access key de outro segredo do cofre (escolha abaixo); a senha atual do console não é enviada.',
   'gcp-service-account-key': 'Cole o arquivo JSON completo da chave da service account em "Valor do segredo". A chave antiga é removida depois de salvar a nova.',
   'entra-app-secret': 'Coloque o Application (client) ID em "Identificador" e a client secret em "Valor do segredo". A secret antiga é removida depois de salvar a nova.',
+  'entra-user':
+    'Coloque o e-mail da conta (ex.: maria@empresa.com) em "Usuário". A troca usa um app administrativo de outro segredo do cofre; a senha atual não é enviada. Contas Microsoft pessoais (Outlook, Hotmail) não têm API: use "Trocar em 1 clique".',
+  'google-workspace-user':
+    'Coloque o e-mail da conta Workspace em "Usuário". A troca usa uma service account de outro segredo do cofre; a senha atual não é enviada. Contas Gmail pessoais não têm API: use "Trocar em 1 clique".',
   'gitlab-pat': 'Coloque o token pessoal em "Valor do segredo". O GitLab revoga o token antigo na hora da rotação.',
   'cloudflare-api-token': 'Coloque o token de API (de usuário) em "Valor do segredo". O valor antigo deixa de valer na hora.',
 };
@@ -17,8 +45,8 @@ type Props = {
   itemType: ItemType;
   value: AutoRotation | null;
   onChange: (v: AutoRotation | null) => void;
-  /** Candidate admin keys for aws-iam-console (owner's secrets with an AKIA… identifier). */
-  adminKeyItems: { id: string; title: string }[];
+  /** Owner's secrets that hold an admin credential (AWS key, Entra app or Google service account). */
+  adminKeyItems: { id: string; title: string; kind: AdminKeyKind }[];
   readOnly?: boolean;
 };
 
@@ -112,21 +140,39 @@ export function AutoRotationFields({ itemType, value, onChange, adminKeyItems, r
               </label>
             </div>
           )}
-          {value.connectorId === 'aws-iam-console' && (
+          {value.connectorId === 'entra-user' && (
             <label className="field">
-              Access key administrativa (outro segredo do cofre)
-              <select value={value.config.adminItemId ?? ''} onChange={(e) => setConfig({ adminItemId: e.target.value || undefined })} disabled={readOnly}>
-                <option value="">Escolha…</option>
-                {adminKeyItems.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.title}
-                  </option>
-                ))}
-              </select>
-              {adminKeyItems.length === 0 && (
-                <span className="field__hint">Cadastre antes um Segredo com o Access key ID (AKIA…) em "Identificador" e a Secret no valor.</span>
-              )}
+              Directory (tenant) ID
+              <input
+                value={value.config.tenantId ?? ''}
+                placeholder="00000000-0000-0000-0000-000000000000 ou empresa.onmicrosoft.com"
+                onChange={(e) => setConfig({ tenantId: e.target.value.trim() || undefined })}
+                readOnly={readOnly}
+                required
+              />
             </label>
+          )}
+          {value.connectorId === 'google-workspace-user' && (
+            <label className="field">
+              E-mail do administrador representado
+              <input
+                type="email"
+                value={value.config.adminEmail ?? ''}
+                placeholder="admin@empresa.com"
+                onChange={(e) => setConfig({ adminEmail: e.target.value.trim() || undefined })}
+                readOnly={readOnly}
+                required
+              />
+            </label>
+          )}
+          {ADMIN_LINKED_CONNECTORS[value.connectorId] && (
+            <AdminKeyPicker
+              kind={ADMIN_LINKED_CONNECTORS[value.connectorId]!}
+              value={value.config.adminItemId}
+              items={adminKeyItems}
+              onChange={(adminItemId) => setConfig({ adminItemId })}
+              readOnly={readOnly}
+            />
           )}
           <span className="field__hint">
             Autorizado em {formatDateTime(value.consentAt)}
@@ -136,5 +182,35 @@ export function AutoRotationFields({ itemType, value, onChange, adminKeyItems, r
         </>
       )}
     </fieldset>
+  );
+}
+
+function AdminKeyPicker({
+  kind,
+  value,
+  items,
+  onChange,
+  readOnly,
+}: {
+  kind: AdminKeyKind;
+  value: string | undefined;
+  items: { id: string; title: string; kind: AdminKeyKind }[];
+  onChange: (id: string | undefined) => void;
+  readOnly?: boolean;
+}) {
+  const candidates = items.filter((i) => i.kind === kind);
+  return (
+    <label className="field">
+      {ADMIN_KEY_LABEL[kind].field}
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)} disabled={readOnly}>
+        <option value="">Escolha…</option>
+        {candidates.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.title}
+          </option>
+        ))}
+      </select>
+      {candidates.length === 0 && <span className="field__hint">{ADMIN_KEY_LABEL[kind].missing}</span>}
+    </label>
   );
 }

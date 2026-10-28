@@ -14,6 +14,8 @@ export const AUTO_CONNECTOR_IDS = [
   'aws-iam-console',
   'gcp-service-account-key',
   'entra-app-secret',
+  'entra-user',
+  'google-workspace-user',
   'gitlab-pat',
   'cloudflare-api-token',
 ] as const
@@ -25,6 +27,8 @@ export const AUTO_CONNECTOR_ITEM_TYPE: Record<AutoConnectorId, ItemType> = {
   'aws-iam-console': 'login',
   'gcp-service-account-key': 'secret',
   'entra-app-secret': 'secret',
+  'entra-user': 'login',
+  'google-workspace-user': 'login',
   'gitlab-pat': 'secret',
   'cloudflare-api-token': 'secret',
 }
@@ -38,8 +42,31 @@ export type AutoRotationConfig = {
   tenantId?: string
   /** entra-app-secret: platform id of the current secret (filled after the first rotation). */
   keyId?: string
-  /** aws-iam-console: vault item (secret) holding the admin access key used to change the password. */
+  /**
+   * Login connectors: vault item (secret) holding the admin credential that changes the password:
+   * aws-iam-console = AWS access key, entra-user = app registration, google-workspace-user = service account JSON.
+   */
   adminItemId?: string
+  /** google-workspace-user: Workspace admin the service account impersonates (domain-wide delegation). */
+  adminEmail?: string
+}
+
+/** Login connectors that use an admin credential from another vault item. */
+export const ADMIN_LINKED_CONNECTORS: Partial<Record<AutoConnectorId, AdminKeyKind>> = {
+  'aws-iam-console': 'aws',
+  'entra-user': 'entra',
+  'google-workspace-user': 'gcp',
+}
+export type AdminKeyKind = 'aws' | 'entra' | 'gcp'
+
+/** Which kind of admin credential a secret item holds (by its identifier/value format), if any. */
+export function adminKeyKind(d: SecuredItemData): AdminKeyKind | null {
+  if (d.type !== 'secret') return null
+  const id = d.username.trim()
+  if (/^AKIA[A-Z0-9]{16}$/.test(id)) return 'aws'
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return 'entra'
+  if (/"type"\s*:\s*"service_account"/.test(d.password) && d.password.includes('private_key')) return 'gcp'
+  return null
 }
 
 /**
@@ -147,6 +174,7 @@ function normalizeAutoRotation(raw: unknown): AutoRotation | null {
       tenantId: str(config.tenantId, 120) || undefined,
       keyId: str(config.keyId, 64) || undefined,
       adminItemId: str(config.adminItemId, 64) || undefined,
+      adminEmail: str(config.adminEmail, 200) || undefined,
     },
     lastRotatedAt: typeof a.lastRotatedAt === 'string' ? a.lastRotatedAt : null,
     expiresAt: typeof a.expiresAt === 'string' ? a.expiresAt : null,

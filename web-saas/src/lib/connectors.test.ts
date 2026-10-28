@@ -5,6 +5,12 @@ import { AUTO_CONNECTOR_IDS, emptyItem, normalizeItem, rotationDueInDays } from 
 describe('connectors', () => {
   it('builds the well-known change-password URL only for web addresses', () => {
     expect(changePasswordUrl('github.com')).toBe('https://github.com/.well-known/change-password')
+    // Platforms without a password API: direct password pages.
+    expect(changePasswordUrl('https://www.instagram.com/')).toBe('https://accountscenter.instagram.com/password_and_security/')
+    expect(changePasswordUrl('facebook.com')).toBe('https://accountscenter.facebook.com/password_and_security/')
+    expect(changePasswordUrl('accounts.google.com')).toBe('https://myaccount.google.com/signinoptions/password')
+    expect(changePasswordUrl('outlook.com')).toBe('https://account.live.com/password/Change')
+    expect(changePasswordUrl('notfacebook.com.evil.example')).toBe('https://notfacebook.com.evil.example/.well-known/change-password')
     expect(changePasswordUrl('https://contas.banco.com.br/login?x=1')).toBe('https://contas.banco.com.br/.well-known/change-password')
     expect(changePasswordUrl('javascript:alert(1)')).toBeNull()
     expect(changePasswordUrl('')).toBeNull()
@@ -18,7 +24,8 @@ describe('connectors', () => {
       expect(c.policy.maxLength).toBeGreaterThanOrEqual(c.policy.minLength)
       expect(c.requires.length).toBeGreaterThan(0)
     }
-    expect(CONNECTORS.filter((c) => c.status === 'available').map((c) => c.id)).toEqual(['web-assisted'])
+    // Only assisted connectors are "available"; automatic ones stay beta until validated on the real platforms.
+    expect(CONNECTORS.filter((c) => c.status === 'available').every((c) => c.executor === 'assisted')).toBe(true)
     // One-click automatic connectors stay "beta" until validated against the real platforms.
     expect(CONNECTORS.filter((c) => c.status === 'beta').map((c) => c.id).sort()).toEqual([...AUTO_CONNECTOR_IDS].sort())
     // Targets inside private networks must run on an agent.

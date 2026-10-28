@@ -76,6 +76,19 @@ export const CONNECTORS: ConnectorManifest[] = [
     policy: WEB_POLICY,
   },
   {
+    id: 'consumer-assisted',
+    name: 'Instagram, Facebook, Gmail e conta Microsoft pessoal',
+    category: 'web',
+    executor: 'assisted',
+    status: 'available',
+    capabilities: ['change'],
+    itemTypes: ['login'],
+    description:
+      'Essas plataformas não oferecem API pública para trocar senhas, então a troca automática não é possível. O "1 clique" abre direto a página de troca de senha de cada uma (Central de Contas da Meta, Conta do Google, conta Microsoft).',
+    requires: ['Acesso à conta (a plataforma pode pedir a verificação em duas etapas)'],
+    policy: WEB_POLICY,
+  },
+  {
     id: 'aws-iam-access-key',
     name: 'AWS IAM: chave de acesso',
     category: 'cloud',
@@ -137,14 +150,17 @@ export const CONNECTORS: ConnectorManifest[] = [
   },
   {
     id: 'entra-user',
-    name: 'Microsoft Entra ID: senha de usuário',
+    name: 'Microsoft 365 / Entra ID: senha de conta corporativa',
     category: 'directory',
     executor: 'cloud',
-    status: 'planned',
+    status: 'beta',
     capabilities: ['change'],
     itemTypes: ['login'],
-    description: 'Redefine a senha de contas de serviço do tenant via Microsoft Graph.',
-    requires: ['Administrador do tenant (User.ReadWrite.All)'],
+    description: 'Gera uma senha forte e a aplica à conta (Microsoft Graph, passwordProfile) usando um app administrativo guardado em outro item do cofre.',
+    requires: [
+      'Login com o e-mail (UPN) da conta em "Usuário" e o Directory (tenant) ID',
+      'Segredo do cofre com um app (client ID + secret) com a permissão de aplicativo User-PasswordProfile.ReadWrite.All; para contas admin, também a função Privileged Authentication Administrator',
+    ],
     policy: { minLength: 16, maxLength: 256, symbols: true },
   },
   {
@@ -152,11 +168,14 @@ export const CONNECTORS: ConnectorManifest[] = [
     name: 'Google Workspace: senha de usuário',
     category: 'directory',
     executor: 'cloud',
-    status: 'planned',
+    status: 'beta',
     capabilities: ['change'],
     itemTypes: ['login'],
-    description: 'Troca a senha de contas do domínio via Admin SDK.',
-    requires: ['Conta de serviço com delegação de domínio'],
+    description: 'Gera uma senha forte e a aplica ao usuário (Admin SDK) com uma service account guardada em outro item do cofre, representando um administrador.',
+    requires: [
+      'Login com o e-mail da conta Workspace em "Usuário"',
+      'Segredo do cofre com o JSON de uma service account com delegação em todo o domínio (escopo admin.directory.user) e o e-mail de um administrador',
+    ],
     policy: { minLength: 16, maxLength: 100, symbols: true },
   },
   {
@@ -295,11 +314,26 @@ export const CONNECTORS: ConnectorManifest[] = [
 
 export const connectorById = (id: string | null | undefined) => CONNECTORS.find((c) => c.id === id)
 
-/** The W3C "well-known change-password" URL for a site (sites that do not support it redirect or 404). */
+/** Direct password pages for big platforms without a password API (checked by domain suffix). */
+const KNOWN_CHANGE_PAGES: [RegExp, string][] = [
+  [/(^|\.)instagram\.com$/, 'https://accountscenter.instagram.com/password_and_security/'],
+  [/(^|\.)(facebook\.com|fb\.com|messenger\.com|meta\.com|threads\.net)$/, 'https://accountscenter.facebook.com/password_and_security/'],
+  [/(^|\.)(google\.com|gmail\.com|youtube\.com)$/, 'https://myaccount.google.com/signinoptions/password'],
+  [/(^|\.)(live\.com|outlook\.com|hotmail\.com|xbox\.com|skype\.com)$/, 'https://account.live.com/password/Change'],
+  [/(^|\.)(microsoftonline\.com|office\.com|microsoft365\.com|office365\.com|sharepoint\.com)$/, 'https://mysignins.microsoft.com/security-info/password/change'],
+  [/(^|\.)(aws\.amazon\.com|amazonaws\.com)$/, 'https://console.aws.amazon.com/iam/home#/security_credentials'],
+]
+
+/**
+ * Where to change the password of a site: a known direct page for large platforms, otherwise the
+ * W3C "well-known change-password" URL (sites that do not support it redirect or 404).
+ */
 export function changePasswordUrl(siteUrl: string): string | null {
   try {
     const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(siteUrl.trim()) ? siteUrl.trim() : `https://${siteUrl.trim()}`)
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+    const known = KNOWN_CHANGE_PAGES.find(([host]) => host.test(url.hostname.toLowerCase()))
+    if (known) return known[1]
     return `${url.origin}/.well-known/change-password`
   } catch {
     return null

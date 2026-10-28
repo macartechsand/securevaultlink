@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { changePasswordUrl, connectorById } from '../lib/connectors';
-import type { SecuredItemData } from '../lib/items';
+import { ADMIN_LINKED_CONNECTORS, type SecuredItemData } from '../lib/items';
 import { formatDate, friendlyError } from '../lib/messages';
 import { generatePassword } from '../lib/passwordGenerator';
 import { type RotationResult, revokeOldCredential, rotateCredential } from '../services/rotationService';
@@ -175,10 +175,10 @@ function AutoQuick({ item, onSave, findItem, onClose }: Omit<QuickRotateProps, '
     void (async () => {
       try {
         let r: RotationResult;
-        if (auto.connectorId === 'aws-iam-console') {
-          // Only the IAM user name and the linked admin key are sent; never the current console password.
+        if (ADMIN_LINKED_CONNECTORS[auto.connectorId]) {
+          // Only the account name and the linked admin credential are sent; never the current password.
           const adminItem = auto.config.adminItemId ? findItem(auto.config.adminItemId) : undefined;
-          if (!adminItem) throw new Error('Vincule, em Editar → Rotação automática, o segredo com a access key administrativa.');
+          if (!adminItem) throw new Error('Vincule, em Editar → Rotação automática, o segredo com a credencial administrativa.');
           r = await rotateCredential(auto, { id: item.data.username.trim(), secret: '' }, { id: adminItem.data.username.trim(), secret: adminItem.data.password });
         } else {
           r = await rotateCredential(auto, { id: item.data.username.trim(), secret: item.data.password });

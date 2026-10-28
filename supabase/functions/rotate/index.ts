@@ -13,6 +13,10 @@
 //                             (another vault item); console sign-in cannot be verified by API.
 //  - gcp-service-account-key: create key → verify (OAuth token with the new key) → save → revoke_old.
 //  - entra-app-secret:        Graph addPassword → verify (client-credentials token) → save → revoke_old.
+//  - entra-user:              Microsoft 365 / Entra work-account password (Graph passwordProfile), with an
+//                             admin app registration from another vault item.
+//  - google-workspace-user:   Workspace user password (Admin SDK users.update), with a service account
+//                             (domain-wide delegation) from another vault item, impersonating an admin.
 //  - gitlab-pat:              POST /personal_access_tokens/self/rotate (GitLab revokes the old token) → verify.
 //  - cloudflare-api-token:    /user/tokens/verify → PUT /user/tokens/{id}/value ("roll") → verify.
 //
@@ -20,8 +24,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { sigv4Authorization } from '../_shared/sigv4.ts'
 import { RotationError, type Result, sleep, strongPassword, timedFetch } from './common.ts'
-import { revokeOldEntraSecret, rotateEntraSecret } from './entra.ts'
-import { revokeOldGcpKey, rotateGcpKey } from './google.ts'
+import { revokeOldEntraSecret, rotateEntraSecret, rotateEntraUser } from './entra.ts'
+import { revokeOldGcpKey, rotateGcpKey, rotateWorkspaceUser } from './google.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -31,7 +35,12 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
-const CONNECTORS = ['aws-iam-access-key', 'aws-iam-console', 'gcp-service-account-key', 'entra-app-secret', 'gitlab-pat', 'cloudflare-api-token'] as const
+const CONNECTORS = [
+  'aws-iam-access-key', 'aws-iam-console', 'gcp-service-account-key', 'entra-app-secret', 'entra-user', 'google-workspace-user',
+  'gitlab-pat', 'cloudflare-api-token',
+] as const
+/** Login connectors: the app sends an admin credential from another vault item, never the current password. */
+const ADMIN_LINKED: ConnectorId[] = ['aws-iam-console', 'entra-user', 'google-workspace-user']
 type ConnectorId = (typeof CONNECTORS)[number]
 /** Connectors with a second phase (the old credential is removed after the vault saved the new one). */
 const REVOCABLE: ConnectorId[] = ['aws-iam-access-key', 'gcp-service-account-key', 'entra-app-secret']
@@ -210,7 +219,7 @@ Deno.serve(async (req) => {
     action?: string
     connector?: string
     credential?: { id?: string; secret?: string }
-    /** aws-iam-console only: the admin access key from the vault item the user linked. */
+    /** Login connectors: the admin credential from the vault item the user linked. */
     admin?: { id?: string; secret?: string }
     config?: Record<string, string>
     oldId?: string
@@ -227,10 +236,10 @@ Deno.serve(async (req) => {
   const id = String(body.credential?.id ?? '').trim()
   const adminCred = { id: String(body.admin?.id ?? '').trim(), secret: String(body.admin?.secret ?? '') }
   // The console connector does not need (and the app does not send) the current console password.
-  const needsSecret = connector !== 'aws-iam-console'
+  const needsSecret = !ADMIN_LINKED.includes(connector)
   if (
     !CONNECTORS.includes(connector) || !['rotate', 'revoke_old'].includes(action) ||
-    (needsSecret && !secret) || secret.length > 8192 || adminCred.secret.length > 4096
+    (needsSecret && !secret) || secret.length > 8192 || adminCred.secret.length > 8192
   ) {
     return json({ error: 'Pedido inválido.' }, 400)
   }
@@ -265,6 +274,8 @@ Deno.serve(async (req) => {
       : connector === 'aws-iam-console' ? await rotateAwsConsole(id, adminCred)
       : connector === 'gcp-service-account-key' ? await rotateGcpKey(secret)
       : connector === 'entra-app-secret' ? await rotateEntraSecret(id, secret, config)
+      : connector === 'entra-user' ? await rotateEntraUser(id, adminCred, config)
+      : connector === 'google-workspace-user' ? await rotateWorkspaceUser(id, adminCred.secret, String(config.adminEmail ?? '').trim())
       : connector === 'gitlab-pat' ? await rotateGitlab(secret, config)
       : await rotateCloudflare(secret)
     await audit('rotation.succeeded', { connector, verified: result.verified })

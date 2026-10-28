@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LIMITS, emptyItem, matchesQuery, maskCard, normalizeItem, normalizeTags, passwordAgeDays, validateItem } from './items'
+import { LIMITS, adminKeyKind, emptyItem, matchesQuery, maskCard, normalizeItem, normalizeTags, passwordAgeDays, validateItem } from './items'
 
 describe('normalizeItem', () => {
   it('upgrades a v1 entry to a login item with defaults', () => {
@@ -86,10 +86,21 @@ describe('autoRotation (per-item consent)', () => {
     expect(emptyItem('secret').autoRotation).toBeNull()
   })
 
+  it('detects which admin credential a secret holds', () => {
+    expect(adminKeyKind(normalizeItem({ type: 'secret', username: 'AKIAIOSFODNN7EXAMPLE', password: 'x' }))).toBe('aws')
+    expect(adminKeyKind(normalizeItem({ type: 'secret', username: '11111111-2222-3333-4444-555555555555', password: 'x' }))).toBe('entra')
+    expect(adminKeyKind(normalizeItem({ type: 'secret', password: '{"type": "service_account", "private_key": "-----BEGIN"}' }))).toBe('gcp')
+    expect(adminKeyKind(normalizeItem({ type: 'secret', username: 'qualquer', password: 'x' }))).toBeNull()
+    expect(adminKeyKind(normalizeItem({ type: 'login', username: 'AKIAIOSFODNN7EXAMPLE', password: 'x' }))).toBeNull()
+  })
+
   it('accepts each connector only on its item type (console password = login)', () => {
     const consoleAuto = { ...consented, connectorId: 'aws-iam-console', config: { adminItemId: 'item-1' } }
     expect(normalizeItem({ type: 'login', autoRotation: consoleAuto }).autoRotation?.config.adminItemId).toBe('item-1')
     expect(normalizeItem({ type: 'secret', autoRotation: consoleAuto }).autoRotation).toBeNull()
+    const workspace = { ...consented, connectorId: 'google-workspace-user', config: { adminItemId: 'sa', adminEmail: 'admin@empresa.com' } }
+    expect(normalizeItem({ type: 'login', autoRotation: workspace }).autoRotation?.config).toMatchObject({ adminEmail: 'admin@empresa.com' })
+    expect(normalizeItem({ type: 'login', autoRotation: { ...consented, connectorId: 'entra-user' } }).autoRotation).not.toBeNull()
     const entra = { ...consented, connectorId: 'entra-app-secret', config: { tenantId: 'contoso.onmicrosoft.com', keyId: 'k' } }
     expect(normalizeItem({ type: 'secret', autoRotation: entra }).autoRotation?.config).toMatchObject({ tenantId: 'contoso.onmicrosoft.com', keyId: 'k' })
     expect(normalizeItem({ type: 'secret', autoRotation: { ...consented, connectorId: 'gcp-service-account-key' } }).autoRotation).not.toBeNull()

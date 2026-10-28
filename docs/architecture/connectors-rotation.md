@@ -1,6 +1,6 @@
 # Conectores e rotação de senhas: arquitetura
 
-Status: 2026-10-28. A troca **assistida** está implementada, também em **1 clique**. Seis conectores automáticos **sob demanda** estão implementados em **beta** (Edge Function `rotate`): AWS IAM access key, AWS IAM senha do console, Google Cloud service account key, Entra ID client secret, GitLab PAT e Cloudflare API token. Os demais seguem especificados aqui como "Planejado".
+Status: 2026-10-28. A troca **assistida** está implementada, também em **1 clique**. Oito conectores automáticos **sob demanda** estão implementados em **beta** (Edge Function `rotate`): AWS IAM access key, AWS IAM senha do console, Microsoft 365 / Entra ID senha de conta corporativa, Google Workspace senha de usuário, Google Cloud service account key, Entra ID client secret, GitLab PAT e Cloudflare API token. Os demais seguem especificados aqui como "Planejado".
 
 ## 0. Rotação em 1 clique (implementado)
 
@@ -32,6 +32,15 @@ Status: 2026-10-28. A troca **assistida** está implementada, também em **1 cli
   3. Verificação: um token com a **nova** secret. Se falhar, `removePassword` remove a nova.
   4. O app salva, e `revoke_old` chama `removePassword` para a antiga, autenticado com a nova.
   - O `keyId` da antiga vem da configuração (preenchido após a 1ª rotação) ou do `hint` (3 primeiros caracteres) quando é único. Senão, a antiga não é removida e o app avisa.
+- **Senhas de login com credencial administrativa** (Microsoft 365 / Entra ID e Google Workspace, além do console da AWS):
+  - O item Login referencia, em `adminItemId`, outro segredo do cofre com a credencial administrativa. O app detecta o tipo pelo formato: AKIA… para AWS, GUID para app Entra, JSON de service account para Google.
+  - A senha atual **não é enviada**. A nova (32 caracteres, 4 classes) é gerada no servidor e devolvida só ao navegador.
+  - **Entra / M365:** `PATCH /users/{upn}` com `passwordProfile`, usando um app com a permissão de aplicativo `User-PasswordProfile.ReadWrite.All`. Para contas administrativas, o app também precisa da função Privileged Authentication Administrator.
+  - **Workspace:** Admin SDK `users.update`, com uma service account com delegação em todo o domínio (escopo `admin.directory.user`), representando um administrador (`adminEmail`).
+  - O login interativo (com MFA) não é verificável por API, por isso o resultado aparece como "não verificado".
+- **Sem API pública (não automatizável):** Instagram, Facebook (Meta), Gmail e conta Microsoft pessoal (Outlook, Hotmail).
+  - Automatizar o login violaria os termos de uso e esbarraria em 2FA e detecção de bots.
+  - O 1 clique abre a página de senha de cada plataforma (`KNOWN_CHANGE_PAGES` em `lib/connectors.ts`: Central de Contas da Meta, `myaccount.google.com`, `account.live.com`, `mysignins.microsoft.com`).
 - **GitLab:** `POST /personal_access_tokens/self/rotate` com validade configurável (padrão 90 dias), depois verificação. O GitLab revoga o token antigo na hora.
 - **Cloudflare:** `/user/tokens/verify` (descobre o id) → `PUT /user/tokens/{id}/value` (roll) → verificação. Só tokens de usuário.
 - **Se o cofre não conseguir salvar** depois que a plataforma trocou, o modal não fecha sozinho: mostra "Copiar nova credencial" e "Tentar salvar de novo".

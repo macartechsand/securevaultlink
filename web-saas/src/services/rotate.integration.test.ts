@@ -95,6 +95,34 @@ ${pkcs8}
     )
   }, 60_000)
 
+  it('Microsoft 365 / Entra user password: needs the admin app and reports a fake one (real Microsoft endpoint)', async () => {
+    await expectRejected(rotateCredential(auto('entra-user', { tenantId: crypto.randomUUID() }), { id: 'maria@empresa.com', secret: '' }), /app administrativo/)
+    await expectRejected(rotateCredential(auto('entra-user', { tenantId: crypto.randomUUID() }), { id: 'sem-arroba', secret: '' }, { id: crypto.randomUUID(), secret: FAKE_SECRET }), /UPN/)
+    await expectRejected(
+      rotateCredential(auto('entra-user', { tenantId: crypto.randomUUID() }), { id: 'maria@empresa.com', secret: '' }, { id: crypto.randomUUID(), secret: FAKE_SECRET }),
+      /recusou o app administrativo/,
+    )
+  }, 60_000)
+
+  it('Google Workspace user password: needs admin e-mail and reports an unknown service account (real Google endpoint)', async () => {
+    await expectRejected(rotateCredential(auto('google-workspace-user'), { id: 'maria@empresa.com', secret: '' }, { id: '', secret: '{}' }), /administrador do Workspace/)
+    const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])
+    const pkcs8 = Buffer.from(await crypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64')
+    const fakeKey = JSON.stringify({
+      type: 'service_account',
+      client_email: `fake-${Date.now()}@securevault-tests.iam.gserviceaccount.com`,
+      private_key_id: 'b'.repeat(40),
+      private_key: `-----BEGIN PRIVATE KEY-----
+${pkcs8}
+-----END PRIVATE KEY-----
+`,
+    })
+    await expectRejected(
+      rotateCredential(auto('google-workspace-user', { adminEmail: 'admin@empresa.com' }), { id: 'maria@empresa.com', secret: '' }, { id: '', secret: fakeKey }),
+      /recusou a service account vinculada/,
+    )
+  }, 60_000)
+
   it('requires a signed-in user', async () => {
     await supabase.auth.signOut()
     const { error } = await supabase.functions.invoke('rotate', { body: { connector: 'gitlab-pat', credential: { secret: FAKE_SECRET } } })

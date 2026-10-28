@@ -14,6 +14,7 @@ import {
 } from '../lib/items';
 import { ROTATION_INTERVALS } from '../lib/connectors';
 import { AutoRotationFields } from './AutoRotationFields';
+import type { AdminKeyKind } from '../lib/items';
 import { quickRotateMode } from './RotationView';
 import { CATEGORIES, STRENGTH_LABELS, categoryLabel, strengthBadge } from '../lib/labels';
 import { formatBytes, formatDateTime, friendlyError } from '../lib/messages';
@@ -31,8 +32,8 @@ type ItemEditorProps = {
   getKeyContext: () => KeyContext;
   getKeyPair: () => Promise<UserKeyPair>;
   getHistory: (item: VaultItem) => Promise<PasswordHistoryEntry[]>;
-  /** Owner's secrets holding an AWS access key (admin key for aws-iam-console). */
-  adminKeyItems?: { id: string; title: string }[];
+  /** Owner's secrets holding an admin credential (for login connectors). */
+  adminKeyItems?: { id: string; title: string; kind: AdminKeyKind }[];
   onSave: (data: SecuredItemData) => Promise<void>;
   onCancel: () => void;
   /** Starts the one-click rotation of the SAVED item (the editor closes). */

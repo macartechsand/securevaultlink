@@ -1,7 +1,7 @@
 // Microsoft Entra ID app registration client secrets (Microsoft Graph):
 // token with the current secret → addPassword → verify (token with the NEW secret) → the app saves
 // → revoke_old calls removePassword for the previous secret, authenticated with the new one.
-import { GUID, RotationError, type Result, eventually, timedFetch } from './common.ts'
+import { GUID, RotationError, type Result, eventually, strongPassword, timedFetch } from './common.ts'
 
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 const appUrl = (clientId: string) => `${GRAPH}/applications(appId='${clientId}')`
@@ -90,5 +90,44 @@ export async function revokeOldEntraSecret(id: string, newSecret: string, config
     : null
   if (!res || (!res.ok && res.status !== 404)) {
     throw new RotationError('revoke_failed', 'Não foi possível remover a secret antiga. Remova-a no portal do Entra ID (Certificates & secrets).', 502)
+  }
+}
+
+// ------------------------------------------------------------------ Entra ID / Microsoft 365 user password
+const UPN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/**
+ * Resets a work account's password (Graph PATCH /users/{upn} passwordProfile) with an admin app
+ * registration stored in another vault item (client ID + client secret).
+ */
+export async function rotateEntraUser(upn: string, admin: { id: string; secret: string }, config: Config): Promise<Result> {
+  if (!UPN.test(upn)) throw new RotationError('bad_input', 'Coloque o e-mail (UPN) da conta Microsoft 365 / Entra ID em "Usuário".')
+  if (!GUID.test(admin.id) || !admin.secret) {
+    throw new RotationError('bad_input', 'Vincule um segredo com o app administrativo (Application ID em "Identificador" e a client secret no valor).')
+  }
+  const token = await graphToken(tenantOf(config), admin.id, admin.secret)
+  if (!token) throw new RotationError('current_invalid', 'O Entra ID recusou o app administrativo vinculado (tenant, client ID ou secret incorretos).')
+  const password = strongPassword(32)
+  const res = await timedFetch(`${GRAPH}/users/${encodeURIComponent(upn)}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ passwordProfile: { password, forceChangePasswordNextSignIn: false } }),
+  })
+  if (res.status === 404) throw new RotationError('not_found', 'Usuário não encontrado neste tenant.')
+  if (res.status === 403 || res.status === 401) {
+    throw new RotationError(
+      'permission',
+      'O app precisa da permissão de aplicativo User-PasswordProfile.ReadWrite.All (com consentimento do admin). Para contas administrativas, o app também precisa da função "Privileged Authentication Administrator".',
+    )
+  }
+  if (!res.ok) {
+    const text = await res.text()
+    if (/password/i.test(text) && res.status === 400) throw new RotationError('policy', 'A política de senhas do tenant recusou a nova senha. Nada foi alterado.')
+    throw new RotationError('platform_error', `O Entra ID recusou a troca (HTTP ${res.status}). Nada foi alterado.`, 502)
+  }
+  return {
+    secret: password,
+    verified: false,
+    warning: 'A Microsoft aplicou a nova senha. O login interativo (com MFA) não é verificável por API: confira na próxima entrada.',
   }
 }

@@ -1,6 +1,6 @@
 // Google Cloud service account keys: create → verify (OAuth token with the NEW key) → the app saves
 // → revoke_old deletes the previous key, authenticated with the new key. Undo on failed verification.
-import { RotationError, type Result, eventually, timedFetch } from './common.ts'
+import { RotationError, type Result, eventually, strongPassword, timedFetch } from './common.ts'
 
 type SaKey = { type?: string; client_email?: string; private_key?: string; private_key_id?: string }
 type ValidKey = { client_email: string; private_key: string; private_key_id: string }
@@ -36,7 +36,10 @@ export function parseServiceAccountKey(raw: string): ValidKey {
   return k as ValidKey
 }
 
-async function accessToken(k: ValidKey): Promise<string | null> {
+const CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
+
+/** OAuth token for the key; with `subject`, impersonates that Workspace user (domain-wide delegation). */
+async function accessToken(k: ValidKey, scope = CLOUD_SCOPE, subject?: string): Promise<string | null> {
   let key: CryptoKey
   try {
     const der = fromB64(k.private_key.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, ''))
@@ -46,7 +49,7 @@ async function accessToken(k: ValidKey): Promise<string | null> {
   }
   const now = Math.floor(Date.now() / 1000)
   const header = b64url(utf8(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: k.private_key_id })))
-  const claims = b64url(utf8(JSON.stringify({ iss: k.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: TOKEN_URL, iat: now, exp: now + 600 })))
+  const claims = b64url(utf8(JSON.stringify({ iss: k.client_email, scope, aud: TOKEN_URL, iat: now, exp: now + 600, ...(subject ? { sub: subject } : {}) })))
   const signature = b64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, utf8(`${header}.${claims}`))))
   const res = await timedFetch(TOKEN_URL, {
     method: 'POST',
@@ -105,5 +108,41 @@ export async function revokeOldGcpKey(newRaw: string, oldId: string) {
   const res = token ? await timedFetch(keyUrl(next.client_email, oldId), { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }) : null
   if (!res || (!res.ok && res.status !== 404)) {
     throw new RotationError('revoke_failed', `Não foi possível remover a chave antiga ${oldId}. Remova-a no console do Google Cloud.`, 502)
+  }
+}
+
+// ------------------------------------------------------------------ Google Workspace user password
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/**
+ * Sets a new password for a Workspace user through the Admin SDK (users.update), with a service
+ * account that has domain-wide delegation for admin.directory.user, impersonating an admin.
+ */
+export async function rotateWorkspaceUser(userEmail: string, adminKeyRaw: string, adminEmail: string): Promise<Result> {
+  if (!EMAIL.test(userEmail)) throw new RotationError('bad_input', 'Coloque o e-mail da conta do Google Workspace em "Usuário".')
+  if (!EMAIL.test(adminEmail)) throw new RotationError('bad_input', 'Informe o e-mail do administrador do Workspace que a service account vai representar.')
+  const key = parseServiceAccountKey(adminKeyRaw)
+  const token = await accessToken(key, 'https://www.googleapis.com/auth/admin.directory.user', adminEmail)
+  if (!token) {
+    throw new RotationError(
+      'current_invalid',
+      'O Google recusou a service account vinculada. Confira a delegação em todo o domínio (escopo admin.directory.user) e o e-mail do administrador.',
+    )
+  }
+  const password = strongPassword(32)
+  const res = await timedFetch(`https://admin.googleapis.com/admin/directory/v1/users/${encodeURIComponent(userEmail)}`, {
+    method: 'PUT',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ password, changePasswordAtNextLogin: false }),
+  })
+  if (res.status === 404) throw new RotationError('not_found', 'Usuário não encontrado neste Google Workspace.')
+  if (res.status === 403 || res.status === 401) {
+    throw new RotationError('permission', 'O administrador representado não pode alterar este usuário (precisa ser administrador de usuários ou superadministrador).')
+  }
+  if (!res.ok) throw new RotationError('platform_error', `O Google recusou a troca (HTTP ${res.status}). Nada foi alterado.`, 502)
+  return {
+    secret: password,
+    verified: false,
+    warning: 'O Google aplicou a nova senha. O login do usuário não é verificável por API: confira na próxima entrada (sessões abertas podem ser encerradas).',
   }
 }

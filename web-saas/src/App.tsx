@@ -27,7 +27,7 @@ import { CenterLayout } from './components/ui/CenterLayout';
 import { Icon } from './components/ui/Icon';
 import { checkPwnedMany, type PwnedResult } from './lib/health/pwned';
 import { computeItemHealth } from './lib/itemHealth';
-import { type ItemType, hasCheckablePassword } from './lib/items';
+import { type ItemType, adminKeyKind, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
 import { type PostureInput, computePosture } from './lib/posture';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -378,9 +378,10 @@ function VaultApp() {
               getKeyContext={session.getKeyContext}
               getKeyPair={session.getKeyPair}
               getHistory={session.getHistory}
-              adminKeyItems={items
-                .filter((i) => i.access === 'owner' && i.data.type === 'secret' && /^AKIA[A-Z0-9]{16}$/.test(i.data.username.trim()))
-                .map((i) => ({ id: i.id, title: i.data.title }))}
+              adminKeyItems={items.flatMap((i) => {
+                const kind = i.access === 'owner' ? adminKeyKind(i.data) : null;
+                return kind ? [{ id: i.id, title: i.data.title, kind }] : [];
+              })}
               onCancel={() => setEditing(null)}
               onRotate={(item) => {
                 setEditing(null);
