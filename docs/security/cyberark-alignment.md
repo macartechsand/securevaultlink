@@ -7,7 +7,7 @@ Referências pedidas pelo dono do produto:
 - PAM Self-Hosted: *Security Fundamentals – Introduction* (camadas de segurança do Digital Vault)
 - PAM Self-Hosted: *Digital Vault Server Security Standards and Requirements*
 
-> **Fontes (atualizado em 2026-11-02):** as seções 2 e 3 foram revisadas sobre o texto oficial, a partir dos PDFs "Digital Vault Security Requirements | CyberArk Docs" e "Manage secured items | Idira Docs" fornecidos pelo dono do produto (o portal recusa acesso automatizado). A seção 1 (*Security Fundamentals*) ainda se baseia no conteúdo público conhecido; vale conferir com o PDF dessa página quando disponível.
+> **Fontes (2026-11-02):** todas as seções foram revisadas sobre o texto oficial, a partir dos PDFs fornecidos pelo dono do produto (o portal recusa acesso automatizado): "Security Fundamentals | CyberArk Docs" (seção 1), "Digital Vault Security Requirements | CyberArk Docs" (seção 2) e "Manage secured items | Idira Docs" (seção 3).
 
 ## Como ler
 **Atende**: implementado e testado. **Parcial**: existe, com limitação conhecida. **Gap**: falta; tem ação. **Fora do escopo**: não se aplica a um cofre pessoal SaaS de 5 usuários, com justificativa.
@@ -16,22 +16,25 @@ A diferença estrutural mais importante: o Digital Vault da CyberArk **decifra n
 
 ---
 
-## 1. Camadas de segurança do Vault (Security Fundamentals)
+## 1. Security Fundamentals (os 9 controles mínimos)
 
-| Princípio CyberArk | Como está no SecureLink Vault | Situação | Ação |
-|---|---|---|---|
-| **Criptografia em camadas** (chave por arquivo → chave do Safe → chave do servidor; chave de recuperação offline) | Chave por item (AES-256-GCM) → DEK do usuário → KEK derivada da senha mestra (PBKDF2-SHA-256, 600 mil). Chave de recuperação opcional e offline. Arquivos cifrados por blocos no navegador. AAD liga cada item ao dono e à versão | **Atende** (mais restritivo: nem o operador decifra) | Futuro: Argon2id no lugar de PBKDF2 |
-| **Isolamento código-dados** | O servidor guarda só blobs cifrados; a lógica de cripto roda no navegador; RLS isola linhas por usuário; tabelas internas no schema `private` | **Atende** | — |
-| **Comunicação cifrada** | TLS 1.2+ em tudo; HSTS com preload; CSP sem scripts de terceiros (`script-src 'self'`) | **Atende** | — |
-| **Firewall próprio / superfície mínima** | Supabase gerenciado. Postgres acessível só por conexão autenticada; funções expostas são 7 | **Parcial** | Produção: ligar **Network Restrictions** (só o IP do administrador acessa o Postgres direto), **SSL obrigatório**, desligar provedores de login não usados, `ALLOWED_ORIGIN` no domínio de produção |
-| **Autenticação forte** | Senha da conta + **TOTP**; RLS exige `aal2` para o cofre de quem tem MFA; MFA obrigatório para todos (configuração) e sempre para papéis administrativos | **Parcial** | Falta WebAuthn/chave física (futuro). No beta: MFA obrigatório para todos **ligado** |
-| **Controle de acesso granular** (permissões por Safe, objeto invisível a quem não tem acesso) | RLS por linha, permissões por **coluna**, compartilhamento por item com **ver/editar** e expiração; quem não tem acesso não vê nem a existência do item | **Atende** para o escopo | Sem permissões "gerenciar/conceder" por item: só o dono compartilha (ver seção 3) |
-| **Dual control** (aprovação de outro usuário para acesso ou mudança sensível) | Não há. Um único administrador master concede papéis e licenças | **Gap aceito no beta** | Mitigado por: papéis temporários com justificativa, auditoria imutável, conformidade. Implementar aprovação em dupla quando houver 2+ administradores |
-| **Acesso exclusivo / senha de uso único / checkout** | Não se aplica a cofre pessoal. A rotação em 1 clique troca a credencial sob demanda | **Fora do escopo** | Relevante só em cofres de equipe (MVP 4) |
-| **Trilha de auditoria à prova de adulteração** | **Implementado agora** (`20261102000000`): append-only para todos os papéis, **cadeia SHA-256**, verificação no painel, cabeça da cadeia gravada em cada backup externo, eventos mantidos após exclusão de conta. Nunca contém segredos | **Atende** (tamper-evident) | Um superusuário do Postgres ainda pode desligar triggers; a âncora no backup externo torna isso detectável. Futuro: exportar eventos para um SIEM/armazenamento WORM |
-| **Segregação de funções** | Admin vê só metadados; papéis `owner`, `admin`, `support`, `auditor`; PAM com expiração e justificativa; o admin não lê cofres | **Atende** | — |
-| **Usuário master / emergência (break-glass)** | Um `owner` único com MFA. Recuperação de emergência pelo SQL Editor do Supabase (`supabase/admin/create-master-admin.sql`) | **Parcial** | Documentar o break-glass: a conta da organização Supabase é a "chave mestra"; protegê-la com chave física e guardar os códigos de recuperação em papel no cofre físico |
-| **Backup Vault / DR** (réplica cifrada, restauração testada) | Backup diário do Pro + **backup externo cifrado** (`scripts/backup`, AES-256-GCM + scrypt) com banco e arquivos, **teste de restauração** com verificação de hashes | **Atende** após o primeiro teste de restauração | Ver [`operations/data-storage-and-backup.md`](../operations/data-storage-and-backup.md) |
+Fonte: *Security Fundamentals* (CyberArk Docs, PDF). A CyberArk chama estes controles de **requisitos mínimos** para proteger a implantação e pede revisão periódica. A tradução para este projeto parte de um ponto: os "servidores de componentes" aqui são o **site (Netlify)**, as **Edge Functions e o banco (Supabase)**, o **repositório (GitHub)** e a **sua estação de administração**. Quem controla qualquer um deles controla o cofre.
+
+| # | Controle CyberArk (texto oficial, resumido) | Como está no SecureLink Vault | Situação | Ação |
+|---|---|---|---|---|
+| 1 | **Isolar e endurecer o servidor do Vault**: fora do domínio, sem software de terceiros, entrada só por protocolos CyberArk, **saída só para integrações aprovadas** (LDAPS, SMTPS), credenciais do SO únicas, infraestrutura de hospedagem com os mesmos controles, patches regulares, firewall de rede para o tráfego administrativo | Projeto Supabase dedicado; provedor cuida de SO, patches e rede física. Entrada: HTTPS e Postgres restrito por IP. Saída: funções só chamam endpoints fixos; rotação automática desligada por padrão | **Parcial** | Network Restrictions e SSL obrigatório; allowlist explícita de saída na função `rotate`; senhas únicas por plataforma (nunca reaproveitadas) |
+| 2 | **MFA para todos os usuários e administradores**, contra keyloggers e coleta de senhas | TOTP; `aal2` exigido pelas regras do banco; MFA obrigatório para papéis administrativos e, em produção, para todos | **Atende** no app | Estender a MFA (chave física) a todas as contas de plataforma |
+| 3 | **Restringir acesso aos servidores de componentes** (tratados como *tier 0*, igual a controlador de domínio): poucos acessos, sem aplicações de terceiros, allowlisting de aplicações, firewall e IPsec no acesso administrativo | Equivalentes *tier 0*: Netlify, GitHub, Supabase, Cloudflare, e-mail administrativo e a sua estação. Hoje só você tem acesso | **Gap (procedimento)** | Tratar essas contas como *tier 0*: e-mail administrativo dedicado, chave física, proteção da branch `master`, só você publica, perfil de navegador exclusivo para administrar (sem extensões) |
+| 4 | **Limitar privilégios e pontos de administração**: poucos administradores, privilégio mínimo; **administradores não têm justificativa para acessar todas as credenciais**; elevação com **dual control** ou ticket para mudanças de configuração; administração isolada e monitorada | Um único `owner`; papéis `admin`, `support`, `auditor` temporários com justificativa (PAM); **o administrador não acessa nenhuma credencial** (zero-knowledge), nem por elevação; toda ação administrativa vai para a auditoria imutável | **Atende**, exceto dual control | Dual control (aprovação de um segundo administrador) quando houver mais de um; até lá, revisão semanal dos eventos `admin.*` |
+| 5 | **Proteger contas sensíveis e chaves**: senhas de administrador, SO e iDRAC **em cofre físico, com cópias em 2+ locais e acesso exigindo mais de uma pessoa**; Master Password e Master Key idem; **Operator Key fora da mídia dos dados**, em HSM | Não há Operator Key nem Master Key no servidor: a chave de cada cofre vem da senha mestra do usuário. As "contas fora de banda" deste projeto são: conta root da organização Supabase, Netlify, GitHub, registrador do domínio, senha do banco, frase do backup e os códigos de recuperação de MFA | **Gap (procedimento)** | Envelope de emergência (seção 8 de [`../operations/data-storage-and-backup.md`](../operations/data-storage-and-backup.md#8-plano-de-recuperação-de-desastres)) com essas credenciais em **2 locais físicos**. Como o operador é uma pessoa só, o "mais de uma pessoa" vira: uma cópia lacrada com alguém de confiança, que só a entrega em emergência |
+| 6 | **Protocolos seguros**: HTTPS para portal e APIs; TLS para SMTP e syslog; nada em texto aberto | HTTPS com HSTS preload em tudo; Postgres com TLS; SMTP próprio com TLS (a configurar em produção) | **Atende** | Exigir TLS no SMTP de produção; SSL obrigatório no Postgres |
+| 7 | **Restringir aplicações de terceiros** no ambiente; mudanças de configuração são responsabilidade do cliente | Sem scripts de terceiros (CSP `script-src 'self'`); dependências travadas; configurações versionadas no repositório (migrations, `netlify.toml`) | **Atende** | Revisar toda dependência nova; `npm audit` a cada release |
+| 8 | **Monitorar logs**: SIEM; **alertas** de falhas de autenticação em excesso, logins de administrador e eventos de infraestrutura; análise de anomalias | Auditoria imutável e encadeada; aba Conformidade (falhas de desbloqueio em 24 h, integridade da auditoria, idade do backup); Visão geral diária. **Não há alerta ativo**: depende de você olhar | **Parcial** | Rotina diária/semanal do `PRODUCTION.md`. Próximo passo: alerta por e-mail quando houver pico de `vault.unlock_failed`, ação `admin.*` ou cadeia de auditoria quebrada (a função de limpeza horária pode verificar e avisar) |
+| 9 | **Plano de recuperação de desastres documentado e testado**: avaliação de riscos, contatos, processo de acesso às credenciais fora de banda, procedimentos para os problemas prováveis e de alto impacto | Backup diário + backup externo cifrado + teste de restauração mensal; tabela de incidentes; **plano de DR** com riscos, contatos e envelope de emergência | **Atende** após o primeiro teste de restauração | Ver [`../operations/data-storage-and-backup.md`](../operations/data-storage-and-backup.md), seções 4 e 8 |
+
+**Pontos em que o projeto vai além do mínimo CyberArk:**
+- **Ninguém administra credenciais alheias.** O controle 4 pede que administradores não tenham acesso a todas as credenciais. Aqui eles não têm acesso a **nenhuma**, nem com elevação.
+- **Não há chave no servidor para roubar.** O controle 5 existe porque a Operator Key decifra dados. Aqui o equivalente não existe.
 
 ---
 
@@ -104,9 +107,10 @@ Fonte: *Manage secured items* (Idira Docs, PDF).
 1. Reautenticação (senha mestra ou TOTP) para revelar histórico e itens sensíveis, como o Idira faz com o histórico.
 2. Campos e anexos **ocultos de verdade**: cifrados com a chave do dono, invisíveis para qualquer destinatário.
 3. Rotina das credenciais de plataforma: 30 dias para contas administrativas, anual para credenciais de serviço (15+ caracteres).
-4. WebAuthn (chave física/passkey) como segundo fator.
-5. Allowlist de saída na função `rotate`.
-6. Dual control para concessão de papéis quando houver mais de um administrador.
-7. Exportação contínua da auditoria para armazenamento WORM/SIEM.
-8. Filtros "compartilhado por mim/comigo", lixeira, aviso por e-mail de compartilhamento.
-9. Argon2id; pentest externo antes de abrir além do beta.
+4. Envelope de emergência em 2 locais físicos e alertas por e-mail (falhas de desbloqueio, ações administrativas, cadeia de auditoria).
+5. WebAuthn (chave física/passkey) como segundo fator.
+6. Allowlist de saída na função `rotate`.
+7. Dual control para concessão de papéis quando houver mais de um administrador.
+8. Exportação contínua da auditoria para armazenamento WORM/SIEM.
+9. Filtros "compartilhado por mim/comigo", lixeira, aviso por e-mail de compartilhamento.
+10. Argon2id; pentest externo antes de abrir além do beta.

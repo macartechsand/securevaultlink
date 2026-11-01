@@ -147,3 +147,47 @@ Um backup só conta depois de restaurado uma vez.
 | Conta Supabase perdida ou provedor indisponível | Criar projeto novo, `restore.mjs --apply` nele (traz banco e arquivos), publicar as funções, recriar os secrets e apontar o site para o novo projeto |
 | Suspeita de adulteração | Verificar log de auditoria; comparar a cabeça com a do último backup; preservar o projeto (não restaurar por cima) e investigar |
 | Vazamento de um `.svbk` | Os cofres continuam protegidos. Trocar a frase de backup para os próximos; avaliar comunicação aos usuários (e-mails e metadados expostos) |
+
+---
+
+## 8. Plano de recuperação de desastres
+
+Exigido pelo controle 9 de *Security Fundamentals* (CyberArk): riscos avaliados, contatos, acesso às credenciais fora de banda e procedimentos testados.
+
+### 8.1 Riscos
+
+| Risco | Probabilidade | Impacto | Resposta | Tempo-alvo |
+|---|---|---|---|---|
+| Supabase fora do ar (região) | Baixa | Alto: app indisponível | Aguardar o provedor (status.supabase.com); se passar de 4 h, restaurar o backup externo em projeto novo em outra região | 4 h |
+| Erro humano no banco (dado apagado) | Média | Médio | Backup diário do Pro (painel → Database → Backups) | 2 h |
+| Arquivo apagado ou corrompido no Storage | Baixa | Médio | Reenviar do último backup externo | 2 h |
+| Conta Supabase, Netlify ou GitHub comprometida | Baixa | **Crítico** (código adulterado captura senhas mestras) | Tirar o site do ar, recuperar a conta pelo envelope de emergência, revisar o último deploy e as migrations, republicar a partir do Git, trocar todos os segredos, avisar os usuários para trocar a senha mestra | 1 h para conter |
+| Perda da estação do administrador | Média | Médio | Credenciais e frase do backup estão no envelope; reinstalar ferramentas; nenhum dado de usuário vive na estação | 1 dia |
+| Administrador indisponível (doença, viagem) | Média | Médio | A pessoa de confiança tem a cópia lacrada do envelope e as instruções desta seção | — |
+| Usuário esquece a senha mestra | Média | Alto para ele | Chave de recuperação; sem ela, "Recomeçar cofre" (os dados são perdidos por desenho) | Imediato |
+
+### 8.2 Contatos
+
+| Papel | Quem | Como |
+|---|---|---|
+| Administrador master | (preencher) | (preencher) |
+| Pessoa de confiança (guarda a cópia lacrada) | (preencher) | (preencher) |
+| Suporte Supabase | Plano Pro | supabase.com/dashboard/support |
+| Suporte Netlify | — | app.netlify.com/support |
+
+### 8.3 Envelope de emergência (credenciais fora de banda)
+
+Papel, **duas cópias** em locais físicos diferentes (uma com a pessoa de confiança, lacrada). Nunca em arquivo digital fora do seu cofre.
+
+- [ ] E-mail administrativo: senha e códigos de recuperação
+- [ ] Supabase (organização): códigos de recuperação de MFA
+- [ ] Senha do banco de produção
+- [ ] Netlify e GitHub: códigos de recuperação de MFA
+- [ ] Registrador do domínio: códigos de recuperação
+- [ ] **Frase do backup externo** e onde ficam as cópias do `.svbk`
+- [ ] Este documento (seções 4, 7 e 8) impresso
+
+Revise o envelope a cada troca de credencial e no mínimo a cada 6 meses (data da última revisão: ________).
+
+### 8.4 Teste do plano
+O teste de restauração mensal (seção 4) valida o banco e os arquivos. **Uma vez por semestre**, simule também a perda da estação: recupere o acesso às contas só com o envelope, sem usar o computador habitual.
