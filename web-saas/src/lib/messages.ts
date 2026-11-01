@@ -37,6 +37,8 @@ const EXACT: Record<string, string> = {
 }
 
 const PATTERNS: [RegExp, string][] = [
+  [/PREMIUM_SEATS_FULL/, 'Todas as licenças Premium estão em uso. Libere uma (mude alguém para Gratuito) ou aumente o número de licenças.'],
+  [/Could not find the function public\.admin_(license_summary|set_plan)/i, 'Aplique a migration 20261101000000_licenses.sql no SQL Editor para usar a gestão de licenças.'],
   [/Could not find the function public\.admin_invite/i, 'Convite Premium ainda indisponível: aplique a migration 20261023000000_premium_invites.sql no SQL Editor.'],
   [/cannot be used as it is not authorized|email_address_not_authorized/i, 'A conta não foi criada: o envio de e-mail do servidor ainda não está liberado para este endereço. Peça ao administrador um link de convite.'],
   [/sending (confirmation|recovery|magic link|invite) email/i, 'Não foi possível enviar o e-mail. Peça ao administrador um link de acesso.'],

@@ -46,6 +46,10 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-21 | IAM/PAM (owner/admin/support/auditor, acesso temporário), MFA obrigatório por política, suporte por metadados (postura numérica opt-out, relatórios), conformidade e eventos globais. OAuth Google/GitHub com PKCE. **MVP finalizado**: backup cifrado, importação CSV, exclusão de conta (LGPD), aviso de privacidade e testes ponta a ponta das funcionalidades core. **107/107 testes.** Documento de continuidade: `HANDOVER.md`. |
 | 2026-10-20 | Migrations e funções das fases A a F aplicadas; **22/22 testes de isolamento passando**. Beta fechado implementado (convites, limite de 10 contas, cotas para o Supabase Free). Corrigido: depois de revogar um compartilhamento, o endpoint autenticado do Storage ainda servia o arquivo por alguns segundos (cache); os downloads agora usam URLs assinadas novas. **Deploy de teste no Netlify** (`securelinkvaultdev.netlify.app`) com os cabeçalhos verificados. |
 | 2026-10-19 | Visual aprovado. **Fases C a F implementadas**: Secured Items com chave por item, postura e sessões, administração e diagnóstico, catálogo de conectores com troca assistida e programada, e backend Cloudflare R2. Pendente: 4 migrations, deploy de funções e testes (ver `pending-actions.md`). |
+| 2026-10-19 (noite) | Investigação de cadastro e desbloqueio: `my_vault_status()` garante que quem já tem cofre sempre chegue ao desbloqueio, mesmo bloqueado pela política de MFA; falha de carga não aparece mais como senha errada; erros de envio de e-mail (SMTP padrão do Supabase) viram orientação clara. **"Recomeçar cofre"** para quem esqueceu a senha mestra sem chave de recuperação. **Convites Premium** com prazo opcional. Branch `dev` enviada ao GitHub e **PR #1** aberto. |
+| 2026-10-28 | **Rotação em 1 clique**: troca assistida rápida para qualquer site e rotação **automática** via API (Edge Function `rotate`), com consentimento por item: AWS IAM (access key e senha do console), Google Cloud (chave de service account), Entra ID (client secret), GitLab e Cloudflare. Assinatura AWS SigV4 validada contra o exemplo oficial. Botão de rotação na lista de itens e no editor. |
+| 2026-10-29 | Rotação automática de **senhas de login** do Microsoft 365 / Entra ID e do Google Workspace, com credencial administrativa vinculada de outro item do cofre. Páginas diretas de troca de senha para Instagram, Facebook, Gmail e conta Microsoft pessoal, que não têm API. |
+| 2026-11-01 | **Licenças** (Administração → Licenças): 10 licenças Premium por padrão, atribuição com prazo, observação, controle de vagas e vencimentos. Documento de produção [`PRODUCTION.md`](PRODUCTION.md) para 10 usuários Premium com credenciais reais. **130/130 testes.** |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---
@@ -84,23 +88,35 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | Testes | `lib/crypto/vaultCrypto.test.ts`, `lib/crypto/fileCrypto.test.ts`, `lib/lib.test.ts`, `services/rls.integration.test.ts`, `services/files.integration.test.ts` |
 
 ### 3.3 Banco (`supabase/migrations/`), em ordem de aplicação
-| Arquivo | Conteúdo | Aplicado no dev? |
-|---|---|---|
-| `20261009000000_vault_e2ee.sql` | `vault_profiles`, `vault_entries`, RLS por usuário | ✅ |
-| `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo:** apaga `vault_items` e `secure_links` (aprovado) | ⚠️ Não confirmado (opcional) |
-| `20261010000000_mfa_and_remove_recovery_key.sql` | Remove a recuperação; políticas `aal2` | ✅ |
-| `20261010000100_fix_mfa_policy_permissions.sql` | Checagem `aal2` via `private.vault_mfa_satisfied()` | ✅ |
-| `20261011000000_file_vault.sql` | `user_keys`, `vault_files`, `file_shares`, `transfers`, bucket `vault-files`, políticas de storage, cotas, funções | ✅ |
-| `20261018000000_fix_file_vault_policies.sql` | Quebra a recursão de RLS (funções `private.*`); revoga os privilégios padrão de `authenticated` e concede só as colunas necessárias (arquivos e cofre de senhas) | ✅ |
+| Arquivo | Conteúdo |
+|---|---|
+| `20261009000000_vault_e2ee.sql` | `vault_profiles`, `vault_entries`, RLS por usuário |
+| `20261009000100_drop_legacy_plaintext_tables.sql` | **Destrutivo (aprovado):** apaga as tabelas antigas em texto puro |
+| `20261010000000_mfa_and_remove_recovery_key.sql` | Políticas `aal2` (MFA) |
+| `20261010000100_fix_mfa_policy_permissions.sql` | `private.vault_mfa_satisfied()` |
+| `20261011000000_file_vault.sql` | Cofre de arquivos, compartilhamento, transferências, bucket, cotas |
+| `20261018000000_fix_file_vault_policies.sql` | Sem recursão de RLS; permissões só por coluna |
+| `20261018000100_plans_audit_expiry.sql` | Planos, validade de compartilhamentos, recuperação opcional, auditoria |
+| `20261019000000_secured_items.sql` | Secured Items, chave por item, histórico, pastas, compartilhamento de itens |
+| `20261019000100_posture_sessions.sql` | Postura e sessões |
+| `20261019000200_admin_troubleshooting.sql` | Painel administrativo e diagnóstico |
+| `20261019000300_r2_storage.sql` | Backend Cloudflare R2 |
+| `20261020000000_closed_beta.sql` | Beta fechado: convites, limite de contas, cotas |
+| `20261021000000_iam_pam_support.sql` | IAM/PAM, MFA por política, métricas de suporte, conformidade, eventos |
+| `20261022000000_vault_status.sql` | `my_vault_status()` (desbloqueio mesmo com política de MFA) |
+| `20261023000000_premium_invites.sql` | Convites Premium com prazo; validade da licença |
+| `20261101000000_licenses.sql` | Licenças: vagas Premium (`premium_seats`), atribuição com prazo e observação, resumo para o painel |
 
 ### 3.4 Edge Functions (`supabase/functions/`)
-| Função | Papel | Acesso | Situação |
-|---|---|---|---|
-| `check-url` | Reputação de URLs (Safe Browsing), até 50 por chamada | Usuário logado | Publicada (informado); sem teste de ponta a ponta |
-| `transfer` | Download público de transferências; consome o download e gera URL assinada de 60 s | Público (`--no-verify-jwt`) | ✅ Publicada; sem teste de ponta a ponta |
-| `cleanup-files` | Remove transferências vencidas e uploads abandonados | Header `x-cleanup-secret` | ✅ Publicada; ⏳ agendamento não confirmado (`pending-actions.md` §3) |
-
-Secrets: `SAFE_BROWSING_API_KEY` e `CLEANUP_SECRET` (definidos, informado).
+| Função | Papel |
+|---|---|
+| `check-url` | Reputação de URLs (Safe Browsing) |
+| `transfer` | Download público de transferências (sem JWT) |
+| `cleanup-files` | Limpeza de vencidos e abandonados (header secreto) |
+| `admin` | Reset de MFA, suspensão, links de convite e redefinição, saúde |
+| `storage-r2` | URLs assinadas do R2 (Premium) |
+| `account` | Exclusão da conta (LGPD) e "recomeçar cofre" |
+| `rotate` | Rotação automática em 1 clique (módulos `common`, `google`, `entra`; SigV4 em `_shared/sigv4.ts`) |
 
 ### 3.5 Infra e repositório
 - `netlify.toml`: CSP, HSTS, `frame-ancestors`/`X-Frame-Options`, nosniff, Referrer-Policy, Permissions-Policy, COOP; build com `npm ci`.
@@ -128,6 +144,8 @@ ec62db0 feat(web): add client-side vault crypto module with real tests
 ---
 
 ## 4. Estado dos testes
+
+> **Estado atual (2026-11-01): 130/130** (unitários + integração). Suítes descritas em [`HANDOVER.md`](HANDOVER.md), seção 6. A tabela abaixo é o histórico inicial.
 
 | Teste | Situação |
 |---|---|

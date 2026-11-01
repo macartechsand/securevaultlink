@@ -1,6 +1,6 @@
 # Ações pendentes
 
-Última atualização: 2026-10-20 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-11-01 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
@@ -8,7 +8,15 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
-## Liberar o MVP para 15 usuários (2026-10-21)
+## Produção com 10 usuários Premium (2026-11-01)
+
+Roteiro completo e checklist de go-live: [`PRODUCTION.md`](PRODUCTION.md). No ambiente de **desenvolvimento**, para testar a gestão de licenças:
+
+1. [ ] **SQL Editor:** rodar, nesta ordem, se ainda não rodou: `20261022000000_vault_status.sql`, `20261023000000_premium_invites.sql`, `20261101000000_licenses.sql`.
+2. [ ] Administração → **Licenças**: conferir "Licenças Premium em uso", atribuir Premium por 30 dias a uma conta de teste e ver o vencimento na lista.
+3. [ ] Decidir: **projeto de produção separado no plano Pro** (recomendado) ou transformar o atual (ver `PRODUCTION.md`, seção 1).
+
+## Liberar o MVP para 15 usuários (2026-10-21), substituído pela seção acima
 
 Checklist completo e roteiro de ambiente novo: [`HANDOVER.md`](HANDOVER.md), seção 7. Resumo do que falta:
 

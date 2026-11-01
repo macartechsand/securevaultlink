@@ -8,5 +8,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     testTimeout: 30_000,
+    // Integration suites share the test accounts A and B (one even resets A's vault): run files one at a time.
+    fileParallelism: false,
   },
 })

@@ -76,9 +76,34 @@ export async function userEvents(userId: string): Promise<AdminEvent[]> {
   return (data ?? []) as AdminEvent[];
 }
 
-export async function setPlan(userId: string, plan: 'free' | 'premium') {
-  const { error } = await supabase.rpc('admin_set_plan', { p_user: userId, p_plan: plan });
+/**
+ * Assigns a license. `days` = Premium with an end date (null = no end date); `note` is for admins only.
+ * Without days/note only the original two arguments are sent (works before 20261101000000).
+ */
+export async function setPlan(userId: string, plan: 'free' | 'premium', days: number | null = null, note = '') {
+  const args =
+    days || note.trim()
+      ? { p_user: userId, p_plan: plan, p_days: plan === 'premium' ? days : null, p_note: note.trim() || null }
+      : { p_user: userId, p_plan: plan };
+  const { error } = await supabase.rpc('admin_set_plan', args);
   if (error) throw new Error(error.message);
+}
+
+export type LicenseSummary = {
+  seats: number;
+  premium_in_use: number;
+  users: number;
+  max_users: number;
+  expiring_7d: { user_id: string; email: string; expires_at: string }[];
+  expired_30d: number;
+  pending_premium_invites: number;
+  licenses: { user_id: string; note: string | null; updated_at: string; granted_by: string | null }[];
+};
+
+export async function fetchLicenseSummary(): Promise<LicenseSummary> {
+  const { data, error } = await supabase.rpc('admin_license_summary');
+  if (error) throw new Error(error.message);
+  return data as LicenseSummary;
 }
 
 export async function revokeUserSessions(userId: string): Promise<number> {

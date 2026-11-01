@@ -6,6 +6,7 @@ import { StatCard } from './StatCard';
 import { ComplianceTab } from './admin/ComplianceTab';
 import { EventsTab } from './admin/EventsTab';
 import { IamUsersTab } from './admin/IamUsersTab';
+import { LicensesTab } from './admin/LicensesTab';
 import { PrivilegedTab } from './admin/PrivilegedTab';
 import { Icon } from './ui/Icon';
 
@@ -23,7 +24,7 @@ const HEALTH_LABELS: Record<string, string> = {
 };
 
 export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
-  const [tab, setTab] = useState<'overview' | 'users' | 'pam' | 'compliance' | 'events' | 'beta' | 'health'>('overview');
+  const [tab, setTab] = useState<'overview' | 'licenses' | 'users' | 'pam' | 'compliance' | 'events' | 'beta' | 'health'>('overview');
   const manage = canManage(status);
   const [error, setError] = useState('');
 
@@ -51,6 +52,7 @@ export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
         {(
           [
             ['overview', 'Visão geral'],
+            ['licenses', 'Licenças'],
             ['users', 'Usuários (IAM)'],
             ['pam', 'Acesso privilegiado (PAM)'],
             ['compliance', 'Conformidade'],
@@ -66,6 +68,7 @@ export function AdminView({ status }: { status: NonNullable<AdminStatus> }) {
       </div>
       {error && <div className="alert alert--error">{error}</div>}
       {tab === 'overview' && <OverviewTab onError={setError} />}
+      {tab === 'licenses' && <LicensesTab canAct={manage} />}
       {tab === 'users' && <IamUsersTab canAct={manage} />}
       {tab === 'pam' && <PrivilegedTab isOwner={status.role === 'owner'} />}
       {tab === 'compliance' && <ComplianceTab />}

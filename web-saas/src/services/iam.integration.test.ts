@@ -103,6 +103,12 @@ describe.skipIf(!configured)('IAM, PAM and support metadata (dev project)', () =
     expect(['free', 'premium']).toContain(limits.data?.[0]?.plan)
   })
 
+  it('a regular user cannot read or assign licenses', async () => {
+    expect((await a.client.rpc('admin_license_summary')).error).not.toBeNull()
+    expect((await a.client.rpc('admin_set_plan', { p_user: a.userId, p_plan: 'premium' })).error).not.toBeNull()
+    expect((await a.client.rpc('admin_set_setting', { p_key: 'premium_seats', p_value: '999' })).error).not.toBeNull()
+  })
+
   it('reports the MFA policy for the caller', async () => {
     const policy = await a.client.rpc('my_security_policy')
     expect(policy.error).toBeNull()

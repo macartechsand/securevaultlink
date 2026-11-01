@@ -113,7 +113,18 @@ Limitações dos arquivos:
 ## Conectores e rotação (Fase F)
 
 - **Troca assistida:** zero-knowledge. O app gera a senha, abre `/.well-known/change-password` e só salva após confirmação; a anterior vai para o histórico.
-- **Conectores automáticos:** especificados em `docs/architecture/connectors-rotation.md` e **ainda não habilitados**. Executores na nuvem exigirão consentimento por item, porque o worker vê a credencial durante a troca. O agente local só fará conexões de saída.
+- **Conectores automáticos (2026-10-28 a 2026-10-29, beta):** a Edge Function `rotate` troca credenciais pela API da plataforma: AWS IAM, Microsoft 365/Entra ID, Google Workspace, Google Cloud, GitLab e Cloudflare.
+  - **Exceção ao zero-knowledge, só nesses itens:** o navegador envia a credencial atual (ou a credencial administrativa vinculada) por TLS; a função usa, verifica e devolve a nova ao navegador, que a cifra. Nada é armazenado nem registrado.
+  - Exige **consentimento explícito por item**, gravado dentro do item cifrado. Só o dono rotaciona.
+  - Proteções:
+    - JWT obrigatório, e `aal2` quando o usuário tem MFA;
+    - limite de 20 chamadas às plataformas por hora;
+    - anti-SSRF no GitLab próprio;
+    - endpoints fixos (o `token_uri` do JSON do Google é ignorado);
+    - auditoria só com códigos.
+  - Em duas fases quando a plataforma permite: a credencial antiga só é revogada depois de o cofre salvar a nova; se a verificação falhar, a nova é desfeita.
+  - Senhas de login (console da AWS, Entra/M365, Workspace) usam uma credencial administrativa de **outro item** do cofre, por referência. A senha atual nunca é enviada.
+- **Licenças (2026-11-01):** o plano efetivo é sempre calculado no servidor (`private.user_plan`, que ignora Premium vencido). O usuário só lê o próprio plano e a validade (permissão por coluna). Só `admin`/`owner` com MFA atribuem licenças, e as vagas são limitadas por `premium_seats`.
 
 ## MFA (TOTP)
 
