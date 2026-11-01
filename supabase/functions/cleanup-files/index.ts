@@ -51,9 +51,10 @@ Deno.serve(async (req) => {
   // Expired user-to-user shares (recipients already lose access at expiry through RLS).
   const sharesRemoved = (await admin.from('file_shares').delete().lte('expires_at', now.toISOString()).select('id')).data?.length ?? 0
   const itemSharesRemoved = (await admin.from('item_shares').delete().lte('expires_at', now.toISOString()).select('id')).data?.length ?? 0
-  // Audit retention: 365 days.
+  // Audit retention: 365 days. The log is append-only and hash-chained; the purge removes only the
+  // oldest prefix and records an anchor event (20261102000000_beta_scope_audit_integrity.sql).
   const auditCutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString()
-  await admin.from('audit_events').delete().lt('created_at', auditCutoff)
+  await admin.rpc('audit_purge_before', { p_cutoff: auditCutoff })
 
   let removed = 0
   if (r2Configured) {

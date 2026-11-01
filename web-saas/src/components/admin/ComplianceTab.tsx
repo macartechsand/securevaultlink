@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { friendlyError } from '../../lib/messages';
-import { type Compliance, fetchCompliance } from '../../services/adminService';
+import { type AuditVerification, type Compliance, fetchCompliance, verifyAuditChain } from '../../services/adminService';
 
 type Rule = { label: string; detail: string; evaluate: (v: number, users: number) => 'pass' | 'warn' | 'fail' };
 
@@ -21,6 +21,8 @@ const RULES: Record<string, Rule> = {
   failed_unlocks_24h: { label: 'Desbloqueios falhos (24 h)', detail: 'Picos podem indicar tentativa de adivinhação.', evaluate: (v) => (v < 10 ? 'pass' : v < 50 ? 'warn' : 'fail') },
   cleanup_last_run_hours: { label: 'Horas desde a última limpeza', detail: 'Deve rodar de hora em hora (Cron).', evaluate: (v) => (v === null ? 'fail' : v <= 2 ? 'pass' : v <= 24 ? 'warn' : 'fail') },
   posture_reporting_users: { label: 'Usuários enviando métricas', detail: 'Cobertura dos insights de suporte.', evaluate: (v, u) => (v >= u * 0.8 ? 'pass' : 'warn') },
+  audit_chain_broken: { label: 'Integridade do log de auditoria', detail: 'Cadeia de hashes: 0 = íntegra. 1 = algum evento foi alterado ou removido; investigue e compare com o backup.', evaluate: (v) => (v === 0 ? 'pass' : 'fail') },
+  offsite_backup_last_days: { label: 'Dias desde o último backup externo', detail: 'scripts/backup (cifrado, fora do Supabase). Meta: semanal.', evaluate: (v) => (v === null ? 'fail' : v <= 8 ? 'pass' : v <= 31 ? 'warn' : 'fail') },
 };
 
 const BADGE = { pass: 'badge--ok', warn: 'badge--warn', fail: 'badge--danger' } as const;
@@ -29,6 +31,15 @@ const LABEL = { pass: 'OK', warn: 'Atenção', fail: 'Falha' } as const;
 export function ComplianceTab() {
   const [data, setData] = useState<Compliance | null>(null);
   const [error, setError] = useState('');
+  const [audit, setAudit] = useState<AuditVerification | null>(null);
+  const [auditError, setAuditError] = useState('');
+
+  const checkAudit = () => {
+    setAuditError('');
+    verifyAuditChain()
+      .then(setAudit)
+      .catch((e) => setAuditError(friendlyError(e)));
+  };
 
   useEffect(() => {
     fetchCompliance()
@@ -75,6 +86,26 @@ export function ComplianceTab() {
           </li>
         ))}
       </ul>
+      <div className="row-between">
+        <p className="subtle">
+          O log de auditoria é imutável e encadeado por hashes. Anote o hash final junto de cada backup externo: se ele sumir da cadeia
+          depois, houve remoção de eventos.
+        </p>
+        <button type="button" className="btn btn--sm" onClick={checkAudit}>
+          Verificar log de auditoria
+        </button>
+      </div>
+      {auditError && <div className="alert alert--error">{auditError}</div>}
+      {audit && (
+        <div className={`alert ${audit.ok ? 'alert--ok' : 'alert--error'}`}>
+          {audit.ok ? `Cadeia íntegra: ${audit.events} eventos.` : `Cadeia quebrada no evento nº ${audit.broken_at}.`}{' '}
+          {audit.head_hash && (
+            <>
+              Hash final: <span className="mono">{audit.head_hash.slice(0, 16)}…</span>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

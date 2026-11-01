@@ -240,7 +240,16 @@ export async function fetchCompliance(): Promise<Compliance> {
   return data as Compliance;
 }
 
-export type GlobalEvent = AdminEvent & { user_id: string | null; user_email: string | null };
+export type AuditVerification = { ok: boolean; broken_at: number | null; events: number; head_seq: number | null; head_hash: string | null; head_at: string | null };
+
+/** Recomputes the audit hash chain on the server (admin only). */
+export async function verifyAuditChain(): Promise<AuditVerification> {
+  const { data, error } = await supabase.rpc('admin_audit_verify');
+  if (error) throw new Error(error.message);
+  return data as AuditVerification;
+}
+
+export type GlobalEvent = AdminEvent &{ user_id: string | null; user_email: string | null };
 
 export async function globalEvents(prefix: string): Promise<GlobalEvent[]> {
   const { data, error } = await supabase.rpc('admin_events', { p_prefix: prefix, p_user: null, p_limit: 300 });

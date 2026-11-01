@@ -7,7 +7,9 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 | Documento | Para quê |
 |---|---|
 | **Este arquivo** | Visão completa, ambiente novo, operação, testes |
-| [`PRODUCTION.md`](PRODUCTION.md) | **Ir para produção com 10 usuários Premium e credenciais reais**: projeto de produção, licenças, backups, segurança, rotinas e checklist de go-live |
+| [`PRODUCTION.md`](PRODUCTION.md) | **Ir para produção (beta: 5 usuários Premium por 30 dias, sem cobrança)**: projeto de produção, licenças, backups, segurança, rotinas e checklist de go-live |
+| [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |
+| [`security/cyberark-alignment.md`](security/cyberark-alignment.md) | Aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) |
 | [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de segurança detalhado e limitações |
 | [`security/oauth.md`](security/oauth.md) | Login com Google e GitHub (OAuth + PKCE) |
 | [`architecture/connectors-rotation.md`](architecture/connectors-rotation.md) | Conectores e rotação de senhas |
@@ -55,7 +57,7 @@ Nenhuma função administrativa devolve conteúdo de cofre.
 | Aba | Conteúdo |
 |---|---|
 | Visão geral | Usuários, MFA, recuperação, Premium, itens, arquivos, transferências e sinais operacionais de 24 h |
-| **Licenças** | Licenças Premium em uso e disponíveis (padrão **10**), usuários × tipo de licença, atribuição **Premium com prazo** (30, 90 ou 180 dias, 1 ano, outro) ou **sem prazo**, ou Gratuito; observação só para admins; vencimentos dos próximos 7 dias; convites Premium pendentes. Detalhes em `PRODUCTION.md`, seção 3 |
+| **Licenças** | Licenças Premium em uso e disponíveis (padrão **5** no beta), usuários × tipo de licença, atribuição **Premium com prazo** (30, 90 ou 180 dias, 1 ano, outro) ou **sem prazo**, ou Gratuito; observação só para admins; vencimentos dos próximos 7 dias; convites Premium pendentes. Detalhes em `PRODUCTION.md`, seção 3 |
 | **Usuários (IAM)** | Lista com papel, plano, provedores, MFA e score. A ficha tem: **Insights de segurança** (postura em números e metadados do servidor), **Identidade e acesso** (plano, MFA obrigatório, link de redefinição, reset de MFA, encerrar sessões, suspender), **Eventos** e **Suporte** (relatórios recebidos) |
 | **Acesso privilegiado (PAM)** | Revisão de quem tem privilégio, até quando, por quê e com que MFA; concessão **temporária** (just-in-time) com justificativa. Só o **Administrador master** concede |
 | **Conformidade** | 16 controles marcados como OK, atenção ou falha |
@@ -133,7 +135,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 16 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261101…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 17 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261102…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -233,7 +235,7 @@ npm test -- integration        # integração contra o Supabase de DESENVOLVIMEN
 
 ## 7. Checklist de produção
 
-O checklist de go-live para **10 usuários Premium com credenciais reais** está em [`PRODUCTION.md`](PRODUCTION.md), seção 8. As ações do ambiente atual estão em [`pending-actions.md`](pending-actions.md).
+O checklist de go-live para o **beta com 5 usuários Premium e credenciais reais** está em [`PRODUCTION.md`](PRODUCTION.md), seção 8. As ações do ambiente atual estão em [`pending-actions.md`](pending-actions.md).
 
 ---
 

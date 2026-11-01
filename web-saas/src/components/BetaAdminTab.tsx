@@ -17,7 +17,7 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [plan, setPlan] = useState<'free' | 'premium'>('free');
-  const [premiumDays, setPremiumDays] = useState('');
+  const [premiumDays, setPremiumDays] = useState('30');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +48,7 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
     setEmail('');
     setNote('');
     setPlan('free');
-    setPremiumDays('');
+    setPremiumDays('30');
   };
 
   const run = async (label: string, fn: () => Promise<unknown>) => {

@@ -8,7 +8,15 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
-## Produção com 10 usuários Premium (2026-11-01)
+## Beta de produção: 5 Premium por 30 dias (2026-11-02)
+
+1. [ ] **SQL Editor (desenvolvimento):** rodar `20261102000000_beta_scope_audit_integrity.sql` depois das anteriores. Conferir em Conformidade → **Verificar log de auditoria** ("Cadeia íntegra").
+2. [ ] Publicar a função `cleanup-files` atualizada (`npx supabase functions deploy cleanup-files --no-verify-jwt`), que passa a usar a retenção que preserva a cadeia.
+3. [ ] Ler [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) e [`security/cyberark-alignment.md`](security/cyberark-alignment.md).
+4. [ ] Criar o projeto de produção (Pro, São Paulo) e seguir [`PRODUCTION.md`](PRODUCTION.md).
+5. [ ] Primeiro **backup externo** e **teste de restauração** num projeto temporário, antes do primeiro usuário real.
+
+## Produção com 10 usuários Premium (2026-11-01), escopo reduzido para 5 acima
 
 Roteiro completo e checklist de go-live: [`PRODUCTION.md`](PRODUCTION.md). No ambiente de **desenvolvimento**, para testar a gestão de licenças:
 

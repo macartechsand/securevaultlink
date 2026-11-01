@@ -19,3 +19,7 @@ google-services.json
 *.pem
 # Supabase CLI local state
 supabase/.temp/
+
+# Off-site backups (encrypted, but never in the repo)
+*.svbk
+*.svbk.sha256

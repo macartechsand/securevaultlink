@@ -75,7 +75,7 @@ export function LicensesTab({ canAct }: { canAct: boolean }) {
 
   const openEditor = (u: AdminUser) => {
     setEditing(u.user_id);
-    setDraft({ plan: u.plan === 'premium' ? 'free' : 'premium', days: '', note: notes.get(u.user_id)?.note ?? '' });
+    setDraft({ plan: u.plan === 'premium' ? 'free' : 'premium', days: '30', note: notes.get(u.user_id)?.note ?? '' });
   };
 
   if (!summary) {

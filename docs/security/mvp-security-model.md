@@ -124,6 +124,8 @@ Limitações dos arquivos:
     - auditoria só com códigos.
   - Em duas fases quando a plataforma permite: a credencial antiga só é revogada depois de o cofre salvar a nova; se a verificação falhar, a nova é desfeita.
   - Senhas de login (console da AWS, Entra/M365, Workspace) usam uma credencial administrativa de **outro item** do cofre, por referência. A senha atual nunca é enviada.
+- **Auditoria (2026-11-02):** `audit_events` é append-only para todos os papéis (inclusive a service role), encadeada por SHA-256 e verificável no painel; a cabeça da cadeia vai para cada backup externo; os eventos sobrevivem à exclusão da conta (id pseudônimo, 365 dias). Aderência às práticas CyberArk em [`cyberark-alignment.md`](cyberark-alignment.md).
+- **Backups (2026-11-02):** diário do Supabase Pro (só banco) + backup externo semanal cifrado com AES-256-GCM/scrypt (banco e arquivos). Detalhes em [`../operations/data-storage-and-backup.md`](../operations/data-storage-and-backup.md).
 - **Licenças (2026-11-01):** o plano efetivo é sempre calculado no servidor (`private.user_plan`, que ignora Premium vencido). O usuário só lê o próprio plano e a validade (permissão por coluna). Só `admin`/`owner` com MFA atribuem licenças, e as vagas são limitadas por `premium_seats`.
 
 ## MFA (TOTP)
