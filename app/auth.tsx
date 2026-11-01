@@ -1,140 +1,129 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { Shield, LockKeyhole, Fingerprint, ArrowRight } from 'lucide-react-native';
-import { StatusBar } from 'expo-status-bar';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Text, TextInput, Button, Surface } from 'react-native-paper';
+import { useState } from 'react';
+import { theme } from '../src/constants/theme';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { router } from 'expo-router';
-import Colors from '@/constants/Colors';
-import { useAuth } from '@/hooks/useAuth';
+import { signIn, signUp, AuthError } from '../src/services/auth';
 
-export default function AuthScreen() {
+export default function Auth() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const { 
-    isAuthenticated, 
-    isBiometricSupported, 
-    isBiometricEnabled,
-    authenticateWithBiometric, 
-    authenticateWithPassword 
-  } = useAuth();
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/(tabs)/passwords');
-    }
-    
-    // Try biometric auth if enabled
-    if (isBiometricSupported && isBiometricEnabled) {
-      handleBiometricAuth();
-    }
-  }, [isAuthenticated, isBiometricSupported, isBiometricEnabled]);
-
-  const handleLogin = async () => {
-    if (!password.trim()) {
-      setError('Please enter your password');
+  const handleAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos');
       return;
     }
-    
-    setIsLoading(true);
-    setError('');
-    
+
+    setLoading(true);
     try {
-      const success = await authenticateWithPassword(password);
-      if (!success) {
-        setError('Incorrect password. Please try again.');
+      if (isRegistering) {
+        await signUp(email, password);
+      } else {
+        await signIn(email, password);
       }
-    } catch (err) {
-      setError('Authentication failed. Please try again.');
-      console.error(err);
+      router.replace('/(tabs)');
+    } catch (error) {
+      const authError = error as AuthError;
+      Alert.alert('Erro', authError.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleBiometricAuth = async () => {
-    if (!isBiometricSupported) {
-      return;
-    }
-    
-    setIsLoading(true);
-    setError('');
-    
+  const handleBiometric = async () => {
     try {
-      await authenticateWithBiometric();
-      // If authentication is successful, the hook will update isAuthenticated
-      // which will trigger the redirection in the useEffect
-    } catch (err) {
-      console.error('Biometric auth error:', err);
-    } finally {
-      setIsLoading(false);
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) {
+        Alert.alert('Erro', 'Seu dispositivo não suporta autenticação biométrica');
+        return;
+      }
+
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert('Erro', 'Nenhuma biometria cadastrada no dispositivo');
+        return;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Autenticar com biometria',
+        fallbackLabel: 'Use sua senha',
+      });
+
+      if (result.success) {
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível autenticar com biometria');
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
     >
-      <StatusBar style="light" />
-      
-      <View style={styles.logoContainer}>
-        <View style={styles.logoBackground}>
-          <Shield size={40} color={Colors.primary} />
-        </View>
-        <Text style={styles.logoText}>SecureLink Vault</Text>
-        <Text style={styles.tagline}>Your digital security guardian</Text>
-      </View>
-      
-      <View style={styles.formContainer}>
-        <Text style={styles.welcomeText}>Welcome back</Text>
-        <Text style={styles.instructionsText}>Enter your password to continue</Text>
+      <Surface style={styles.surface}>
+        <Text variant="headlineMedium" style={styles.title}>
+          {isRegistering ? 'Criar Conta' : 'Login'}
+        </Text>
         
-        <View style={styles.inputContainer}>
-          <LockKeyhole size={20} color={Colors.textSecondary} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={Colors.gray}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            onSubmitEditing={handleLogin}
-          />
-        </View>
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          mode="outlined"
+          style={styles.input}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          disabled={loading}
+        />
         
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        
-        <TouchableOpacity 
-          style={styles.loginButton} 
-          onPress={handleLogin}
-          disabled={isLoading}
+        <TextInput
+          label="Senha"
+          value={password}
+          onChangeText={setPassword}
+          mode="outlined"
+          style={styles.input}
+          secureTextEntry
+          disabled={loading}
+        />
+
+        <Button
+          mode="contained"
+          onPress={handleAuth}
+          style={styles.button}
+          loading={loading}
+          disabled={loading}
         >
-          {isLoading ? (
-            <ActivityIndicator color={Colors.text} />
-          ) : (
-            <>
-              <Text style={styles.loginButtonText}>Sign In</Text>
-              <ArrowRight size={18} color={Colors.text} />
-            </>
-          )}
-        </TouchableOpacity>
-        
-        {isBiometricSupported && (
-          <TouchableOpacity 
-            style={styles.biometricButton} 
-            onPress={handleBiometricAuth}
-            disabled={isLoading}
+          {isRegistering ? 'Registrar' : 'Entrar'}
+        </Button>
+
+        {!isRegistering && (
+          <Button
+            mode="outlined"
+            onPress={handleBiometric}
+            style={styles.button}
+            icon="fingerprint"
+            disabled={loading}
           >
-            <Fingerprint size={24} color={Colors.primary} />
-            <Text style={styles.biometricText}>Sign in with biometrics</Text>
-          </TouchableOpacity>
+            Entrar com Biometria
+          </Button>
         )}
-      </View>
-      
-      <View style={styles.demoNote}>
-        <Text style={styles.demoNoteText}>Demo credentials: "securepass123"</Text>
-      </View>
+
+        <Button
+          onPress={() => setIsRegistering(!isRegistering)}
+          style={styles.switchButton}
+          disabled={loading}
+        >
+          {isRegistering
+            ? 'Já tem uma conta? Entre'
+            : 'Não tem uma conta? Registre-se'}
+        </Button>
+      </Surface>
     </KeyboardAvoidingView>
   );
 }
@@ -142,117 +131,27 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-    padding: 24,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 40,
-  },
-  logoBackground: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.colors.background,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: 16,
   },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
-    fontFamily: 'PlusJakartaSans-Bold',
+  surface: {
+    padding: 24,
+    borderRadius: theme.roundness,
+    elevation: 4,
   },
-  tagline: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontFamily: 'PlusJakartaSans-Regular',
-  },
-  formContainer: {
-    width: '100%',
+  title: {
+    textAlign: 'center',
     marginBottom: 24,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-  },
-  instructionsText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    marginBottom: 24,
-    fontFamily: 'PlusJakartaSans-Regular',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    color: theme.colors.primary,
   },
   input: {
-    flex: 1,
-    height: 40,
-    color: Colors.text,
-    marginLeft: 12,
-    fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Regular',
-  },
-  errorText: {
-    color: Colors.danger,
     marginBottom: 16,
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Regular',
   },
-  loginButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  button: {
+    marginTop: 8,
   },
-  loginButtonText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+  switchButton: {
+    marginTop: 16,
   },
-  biometricButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  biometricText: {
-    color: Colors.primary,
-    fontSize: 16,
-    marginLeft: 8,
-    fontFamily: 'PlusJakartaSans-Medium',
-  },
-  demoNote: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  demoNoteText: {
-    color: Colors.gray,
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Regular',
-  },
-});
+}); 

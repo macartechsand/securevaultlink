@@ -1,0 +1,159 @@
+/* Extension popup: fixed width, same tokens as the web app (theme.css). */
+body.ext {
+  width: 380px;
+  min-height: 520px;
+  max-height: 600px;
+  background-image: none;
+  font-size: 14px;
+}
+.ext #root {
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+.ext-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.ext-header .brand__mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.ext-site {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.ext-site strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.ext-site small {
+  color: var(--text-subtle);
+  font-size: 0.75rem;
+}
+.ext-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ext-center {
+  flex: 1;
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ext-center .brand {
+  padding: 0;
+}
+.ext-section-title {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  font-weight: 650;
+  margin: 2px 0 -4px;
+}
+.ext-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ext-item {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 8px 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ext-item--match {
+  border-color: var(--primary-ring);
+}
+.ext-item__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ext-item__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+.ext-item__text strong,
+.ext-item__text small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ext-item__text small {
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+}
+.ext-item .avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+.ext-item__actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ext-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.ext-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  animation: rise-in 0.15s var(--ease);
+}
+.ext .tabs {
+  margin: 0 -14px;
+  padding: 0 10px;
+}
+.ext .secret-box code {
+  font-size: 0.95rem;
+}
+.ext .search {
+  display: block;
+  width: 100%;
+  max-width: none;
+  flex: none;
+}
