@@ -7,7 +7,7 @@ Referências pedidas pelo dono do produto:
 - PAM Self-Hosted: *Security Fundamentals – Introduction* (camadas de segurança do Digital Vault)
 - PAM Self-Hosted: *Digital Vault Server Security Standards and Requirements*
 
-> As páginas da CyberArk retornaram 404 para acesso automatizado em 2026-11-02 (inclusive a raiz do portal). A análise usa o conteúdo público conhecido desses padrões: as camadas do Vault (firewall próprio, isolamento código-dados, criptografia de arquivos em camadas, comunicação cifrada, autenticação forte, controle de acesso granular, dual control, trilha de auditoria à prova de adulteração, backup/DR) e o Server Security Standard (servidor dedicado e endurecido, sem domínio, sem software de terceiros, só a porta do Vault aberta, segurança física, chave do servidor e chave de recuperação fora do servidor, acesso administrativo restrito). Vale conferir os pontos marcados como **Gap** contra a versão vigente das páginas.
+> **Fontes (atualizado em 2026-11-02):** as seções 2 e 3 foram revisadas sobre o texto oficial, a partir dos PDFs "Digital Vault Security Requirements | CyberArk Docs" e "Manage secured items | Idira Docs" fornecidos pelo dono do produto (o portal recusa acesso automatizado). A seção 1 (*Security Fundamentals*) ainda se baseia no conteúdo público conhecido; vale conferir com o PDF dessa página quando disponível.
 
 ## Como ler
 **Atende**: implementado e testado. **Parcial**: existe, com limitação conhecida. **Gap**: falta; tem ação. **Fora do escopo**: não se aplica a um cofre pessoal SaaS de 5 usuários, com justificativa.
@@ -35,39 +35,55 @@ A diferença estrutural mais importante: o Digital Vault da CyberArk **decifra n
 
 ---
 
-## 2. Digital Vault Server Security Standard → equivalente em SaaS
+## 2. Digital Vault Security Requirements → equivalente em SaaS
 
-No modelo CyberArk o operador endurece o servidor. Aqui o servidor é do Supabase/Netlify (responsabilidade compartilhada: hardening do SO, patches, segurança física e rede do datacenter ficam com eles; ambos têm SOC 2 Type 2). O que continua sendo **nosso** é o equivalente a "quem pode administrar o Vault".
+Fonte: *Digital Vault Security Requirements* (CyberArk Docs, PDF). No modelo CyberArk o cliente endurece o servidor do Vault. Aqui o servidor é do Supabase/Netlify (responsabilidade compartilhada: sistema operacional, patches, rede e segurança física são deles). O que continua sendo **nosso** é o equivalente a "quem administra o Vault" e "o que entra e sai dele".
 
-| Requisito do Standard | Equivalente aqui | Situação | Ação |
+| Requisito CyberArk (texto oficial, resumido) | Equivalente no SecureLink Vault | Situação | Ação |
 |---|---|---|---|
-| **Servidor dedicado**, nada além do Vault | **Projeto Supabase dedicado** à produção (sem testes, sem outros apps); site Netlify dedicado | **Gap → em andamento** | Criar o projeto de produção (`PRODUCTION.md`); nunca rodar testes de integração nele |
-| Fora do domínio corporativo / sem confiança herdada | Contas das plataformas com **e-mail administrativo dedicado**, não o pessoal do dia a dia; sem login social nessas contas | **Gap** | Criar um e-mail só para administrar Supabase/Netlify/GitHub/Cloudflare |
-| Instalação a partir de mídia original, sem software de terceiros | Build reprodutível do repositório; sem scripts de terceiros no app (CSP); dependências travadas no `package-lock`; Deno com versões fixas | **Atende** | `npm audit` a cada release |
-| **Só a porta do Vault aberta** | Só HTTPS do app e das funções; Postgres direto restrito por IP (Network Restrictions) | **Parcial** | Ligar Network Restrictions e SSL obrigatório no Pro |
-| Acesso remoto ao servidor restrito a estações autorizadas | Acesso aos painéis só pelo administrador, com **MFA por chave física** (ou TOTP) em Supabase, Netlify, GitHub, Cloudflare e no registrador do domínio | **Gap** | Ativar MFA em todas essas contas; revisar membros das organizações (só você) |
-| Estação de administração endurecida | Perfil de navegador **separado** só para administrar, sem extensões; sistema atualizado | **Gap (procedimento)** | Adotar o perfil dedicado |
-| Segurança física, BIOS, mídia removível | Datacenter do provedor (AWS sa-east-1 via Supabase) | **Fora do escopo** (provedor) | — |
-| Patches certificados | Postgres e runtime atualizados pelo Supabase; o painel avisa upgrades | **Atende** | Aplicar upgrades do Postgres fora do horário de uso, depois do backup |
-| **Chave do servidor em HSM; chave de recuperação offline** | Não existe chave de servidor que abra cofres. Segredos da plataforma ficam nos secrets do Supabase. A **frase do backup** e os **códigos de recuperação** das contas são as "chaves de recuperação" e ficam em papel, offline | **Atende** com procedimento | Guardar frase do backup e códigos de recuperação em local físico seguro |
-| Sincronização de horário, logs, monitoramento | Horário do provedor; eventos de auditoria; aba Conformidade (18 controles); visão geral diária | **Atende** | Revisão semanal (PRODUCTION.md) |
-| Rotação de credenciais administrativas | Secrets (`CLEANUP_SECRET`, Safe Browsing, R2) gerados novos para produção | **Parcial** | Rotacionar a cada 6 meses ou ao trocar de pessoa |
+| **Máquina física dedicada**, instalada a partir de SO limpo, não da imagem padrão da empresa | **Projeto Supabase dedicado** só à produção (sem testes, sem outros apps) e site Netlify dedicado | **Em andamento** | Criar o projeto de produção; nunca rodar testes de integração nele |
+| **SO endurecido** no nível fornecido pela CyberArk (CAVaultHarden, base CIS) | Endurecimento do SO é do provedor. Do nosso lado: Network Restrictions, SSL obrigatório, provedores de login não usados desligados, CSP estrita | **Parcial** | Ligar Network Restrictions e SSL obrigatório no Pro |
+| **Credencial do administrador do Vault expira a cada 30 dias**; guardar em cofre físico | Senhas das contas que administram a plataforma (Supabase, Netlify, GitHub, Cloudflare, e-mail administrativo) e a senha do banco | **Gap (procedimento)** | Trocar a cada 30 dias as senhas das contas de plataforma ou, preferível, usar chave física (FIDO2) como fator principal; guardar os códigos de recuperação em cofre físico |
+| **Credenciais de serviço**: rotacionar anualmente ou quando sair alguém que as conhecia; **15+ caracteres**, maiúsculas, minúsculas, número, especial, sem palavra de dicionário | Senha do banco Postgres, `service_role`, `CLEANUP_SECRET`, chave do Safe Browsing, chaves do R2, frase do backup | **Gap (procedimento)** | Gerar todas com 32+ caracteres aleatórios (já é o padrão do gerador do app); rotacionar anualmente e na saída de qualquer pessoa; registrar a data da última troca |
+| **Fora do domínio corporativo** (domínio abre protocolos, GPO e administradores de domínio) | Contas de plataforma **sem** login social e **sem** SSO herdado de uma conta pessoal; e-mail administrativo dedicado | **Gap** | Criar o e-mail administrativo e migrar as contas de plataforma para ele |
+| **Mídia original, sem software de terceiros** (antivírus, gerência remota) | App sem scripts de terceiros (CSP `script-src 'self'`), dependências travadas no lockfile, funções com imports fixos e versionados | **Atende** | `npm audit` a cada release; revisar novas dependências antes de adicionar |
+| **Patches mensais** do SO | Postgres e runtime atualizados pelo Supabase; dependências do app pelo `npm` | **Atende** (provedor) / **procedimento** (app) | Aplicar upgrades do Postgres depois do backup; atualizar dependências mensalmente |
+| **Server Key separada do sistema de arquivos (HSM)**; **Recovery Private Key em cofre físico**. Cada objeto tem chave AES-256 própria e **a decifragem é feita só pelo cliente** que pede o dado | Cada item já tem **chave AES-256 própria** e **só o navegador decifra**, igual ao princípio citado. **Não existe Server Key** que abra cofres: a chave de cada usuário vem da senha mestra. A **chave de recuperação** de cada usuário e a **frase do backup** são as "Recovery Keys" e ficam offline | **Atende** (mais restritivo: o servidor não tem chave nenhuma) | Orientar a guardar a chave de recuperação em papel; frase do backup em cofre físico |
+| **Firewall gerido só pelo Vault**: só a porta do Vault (1858) entra; saída só autorizada | Entrada: só HTTPS do app e das funções; Postgres direto restrito por IP. **Saída**: as funções só chamam endpoints fixos (AWS, Google, Microsoft, GitLab, Cloudflare, Safe Browsing); GitLab próprio passa por bloqueio de endereços internos | **Parcial** | Futuro: lista explícita de destinos permitidos na função `rotate` (allowlist de saída), além do bloqueio atual |
+| **Evitar DNS no servidor** (canal de C2) | Não controlamos DNS do provedor. Equivalente: reduzir para onde o servidor pode falar (item acima) e manter a rotação automática **desligada** até validar os conectores | **Parcial** | Interruptor `auto_rotation` desligado em produção (migration `20261103000000`) |
 
 ---
 
-## 3. Secured Items (CyberArk Identity / Workforce Password Management)
+## 3. Secured Items (Idira / Workforce Password Management)
 
-| Recurso CyberArk | SecureLink Vault | Situação |
+Fonte: *Manage secured items* (Idira Docs, PDF).
+
+| Recurso no Idira WPM | SecureLink Vault | Situação |
 |---|---|---|
-| Tipos de item (login, nota, cartão, licença de software, Wi-Fi, banco, documento etc.) | Tipos de Secured Items com campos próprios e **campos personalizados** | **Atende** |
-| Notas, anexos, pastas e tags | Sim (anexos via cofre de arquivos; pastas com nome cifrado) | **Atende** |
-| Histórico de versões | 10 versões de senha por item, cifradas, só para o dono | **Atende** |
-| Compartilhamento com permissões (ver, editar; dono) | Ver/editar, com **expiração**; só o dono compartilha, exclui e rotaciona | **Atende** para o escopo |
-| Permissões "conceder/gerenciar" e transferência de propriedade | Não há | **Gap baixo** (futuro, com equipes) |
-| Políticas do administrador (quem pode criar/compartilhar, expiração máxima) | Limites por plano (duração de compartilhamento Free 48 h; Premium livre); MFA por política | **Parcial** |
-| **Reautenticação para revelar** um segredo | O cofre bloqueia por inatividade; revelar não pede a senha de novo | **Gap médio**: próximo passo sugerido é pedir a senha mestra (ou TOTP) para revelar/copiar itens marcados como sensíveis |
-| Atividade por item | Eventos de compartilhamento e rotação no log; não há tela "atividade do item" | **Parcial** |
-| Rotação de senha | Assistida para qualquer site; automática por API (beta) com consentimento por item | **Atende** (beta) |
+| Tipos **Secured password** (apps não web) e **Secured note** (licenças, tokens, chaves, perguntas de segurança) | Login (web e não web), nota segura, segredo (chave de API, token, chave SSH, certificado, outro) e cartão, com campos próprios | **Atende** (mais tipos) |
+| Nome, tags, pasta, usuário, senha, notas (até 3.999 caracteres) | Sim | **Atende** |
+| **Até 10 campos personalizados** (nome e valor até 100 caracteres) | Campos personalizados | **Atende** |
+| **Campo personalizado "Hidden"**: escondido de quem recebeu com **View** (quem tem **Edit** vê) | Nosso "oculto" só **mascara** o valor na tela; o destinatário que abre o item vê o campo | **Gap**. Implementação sugerida, mais forte que a do Idira: cifrar os campos ocultos com a chave pessoal do dono (como o histórico), assim **nenhum** destinatário os decifra |
+| Bloqueio de conteúdo com padrões de script (`SRC=`, `onerror=`) | O React escapa todo texto exibido; CSP impede script injetado | **Atende** (por outro mecanismo, sem restringir o que o usuário guarda) |
+| Busca por nome, usuário, descrição, nome de campo, nome de anexo | Busca local em campos visíveis, nunca em segredos nem em valores ocultos | **Atende** |
+| Filtros: tipo, compartilhado por mim/comigo/não compartilhado, risco (comprometida, fraca, antiga), tags; **filtros salvos** | Filtros de risco (vazada, fraca, reutilizada, vencida) e de pasta/tag | **Parcial**: faltam filtros "compartilhado por mim/comigo" e filtros salvos |
+| **Só o dono compartilha**; destinatário não recompartilha | Igual, e **provado em teste** (recertificação) | **Atende** |
+| Permissões **Owner** (co-dono), **View**, **Edit** | View e Edit; sem co-dono | **Parcial** (co-dono fica para equipes, MVP 4) |
+| **Janela de acesso com início e fim**; o item some do destinatário no fim | Expiração (fim), aplicada pelo servidor no instante exato; sem horário de início | **Parcial** |
+| **E-mail ao destinatário** quando algo é compartilhado | Aparece no app ("Compartilhados comigo") e no log; sem e-mail | **Gap baixo** |
+| Excluir o item remove o acesso de todos e apaga anexos | Igual (exclusão em cascata) | **Atende** |
+| Anexos compartilhados junto com o item; **anexos ocultos**; Edit pode enviar/apagar anexos | Anexos compartilhados junto, **só leitura** para destinatários; sem anexos ocultos | **Parcial** (mais restritivo para Edit; falta "anexo oculto") |
+| Anexo **cifrado após o upload** no servidor; 10 MB por arquivo, 10 por item, 1 GB por usuário; lista de extensões | Anexo **cifrado antes do upload, no navegador**; cotas por plano | **Atende** (mais restritivo: o servidor nunca vê o arquivo) |
+| Copiar usuário/senha/nota | Copiar com **limpeza automática da área de transferência** | **Atende** (com proteção extra) |
+| **Histórico de senhas** habilitado por política, **pode pedir MFA antes de mostrar** | Histórico de 10 versões, só do dono, cifrado com a chave pessoal; não pede reautenticação | **Parcial**: falta o desafio (senha mestra ou TOTP) antes de revelar histórico e itens sensíveis |
+| Só o dono exclui; **lixeira** com restauração em lote (early access) | Só o dono exclui; exclusão imediata, sem lixeira | **Gap baixo** (a exportação cifrada e o backup cobrem a recuperação) |
+| Alertas: senha comprometida, acesso restrito pelo admin | Alerta de senha vazada (HIBP), fraca e reutilizada | **Atende** |
+| Recomendação de **não guardar dados pessoais (PII)** | No Idira o fornecedor consegue processar o conteúdo; aqui o conteúdo é cifrado de ponta a ponta, então guardar documentos pessoais é aceitável | **Atende** (modelo diferente) |
+
+### Diferença de modelo: quem consegue decifrar
+- **Idira WPM:** o arquivo é "cifrado após o upload" e os itens ficam na nuvem do fornecedor, com políticas definidas pelo administrador da empresa (o admin pode tornar itens indisponíveis, exigir MFA para ver histórico). A plataforma participa da cifragem.
+- **CyberArk Digital Vault (PAM):** chave por objeto, decifragem pelo cliente que pede o dado, Server Key em HSM e Recovery Key em cofre físico.
+- **SecureLink Vault:** chave por item, **só o navegador** cifra e decifra, e não há chave no servidor. O administrador da plataforma não consegue tornar um item legível para ninguém, nem para si.
 
 ---
 
@@ -85,8 +101,12 @@ No modelo CyberArk o operador endurece o servidor. Aqui o servidor é do Supabas
 4. MFA obrigatório para todos no app; chave de recuperação no onboarding.
 
 **Depois, por ordem de valor**
-1. Reautenticação para revelar itens sensíveis.
-2. WebAuthn (chave física/passkey) como segundo fator.
-3. Dual control para concessão de papéis quando houver mais de um administrador.
-4. Exportação contínua da auditoria para armazenamento WORM/SIEM.
-5. Argon2id; pentest externo antes de abrir além do beta.
+1. Reautenticação (senha mestra ou TOTP) para revelar histórico e itens sensíveis, como o Idira faz com o histórico.
+2. Campos e anexos **ocultos de verdade**: cifrados com a chave do dono, invisíveis para qualquer destinatário.
+3. Rotina das credenciais de plataforma: 30 dias para contas administrativas, anual para credenciais de serviço (15+ caracteres).
+4. WebAuthn (chave física/passkey) como segundo fator.
+5. Allowlist de saída na função `rotate`.
+6. Dual control para concessão de papéis quando houver mais de um administrador.
+7. Exportação contínua da auditoria para armazenamento WORM/SIEM.
+8. Filtros "compartilhado por mim/comigo", lixeira, aviso por e-mail de compartilhamento.
+9. Argon2id; pentest externo antes de abrir além do beta.
