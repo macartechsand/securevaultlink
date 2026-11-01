@@ -1,4 +1,5 @@
 /** Messages between the popup and the background service worker (extension pages only). */
+import type { OAuthProvider } from '../../src/lib/oauthProviders';
 
 export type ExtStatus = 'signed-out' | 'needs-mfa' | 'needs-setup' | 'locked' | 'unlocked';
 
@@ -16,6 +17,8 @@ export type ItemSummary = {
 export type Request =
   | { type: 'status' }
   | { type: 'signIn'; email: string; password: string }
+  | { type: 'providers' }
+  | { type: 'signInOAuth'; provider: OAuthProvider }
   | { type: 'verifyMfa'; code: string }
   | { type: 'unlock'; masterPassword: string }
   | { type: 'lock' }
@@ -25,7 +28,13 @@ export type Request =
   | { type: 'reveal'; itemId: string; field: 'username' | 'password' }
   | { type: 'clipboardCopied' };
 
-export type StatusResponse = { status: ExtStatus; email: string | null; idleMinutes: number };
+export type StatusResponse = {
+  status: ExtStatus;
+  email: string | null;
+  idleMinutes: number;
+  /** Error of the last Google/GitHub sign-in (the popup closes while the provider window is open). */
+  authError?: string;
+};
 
 export type FillResponse =
   | { ok: true; filled: { username: boolean; password: boolean } }

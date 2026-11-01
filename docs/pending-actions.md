@@ -14,6 +14,7 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 2. [ ] `cd web-saas` → `npm run build:ext` → no Edge, `edge://extensions` → Modo de desenvolvedor → **Carregar sem compactação** → `web-saas/dist-extension`.
 3. [ ] Testar com a sua conta: entrar, desbloquear, preencher em 2 ou 3 sites reais, `Ctrl+Shift+L`, copiar senha e conferir que a área de transferência limpa em 30 s.
 4. [ ] Conferir em Atividade (app web) os eventos de desbloqueio e preenchimento.
+5. [ ] **Login com Google/GitHub na extensão:** Supabase (desenvolvimento) → Authentication → URL Configuration → Redirect URLs → adicionar `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/`. Depois `npm run build:ext`, recarregar a extensão e testar os dois botões.
 
 ## Beta de produção: 5 Premium por 30 dias (2026-11-02)
 

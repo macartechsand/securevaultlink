@@ -11,11 +11,13 @@
 import { unlockWithPassword } from '../../src/lib/crypto';
 import { fromBase64, toBase64 } from '../../src/lib/crypto/encoding';
 import { friendlyError } from '../../src/lib/messages';
+import { type OAuthProvider, OAUTH_PROVIDERS, fetchEnabledProviders, oauthOptions } from '../../src/lib/oauthProviders';
 import { logClientEvent } from '../../src/services/auditService';
 import { ensureUserKeyPair } from '../../src/services/fileService';
 import { fetchProfile } from '../../src/services/vaultService';
 import { loadItems, type VaultItem } from '../../src/state/itemOps';
 import { matchItem, sameSite } from './domainMatch';
+import { oauthCodeFrom } from './oauthCallback';
 import { type FrameScan, fillLoginFields, scanLoginFields } from './pageScripts';
 import type { FillResponse, ItemSummary, Request, Response, StatusResponse } from './protocol';
 import { supabase } from './supabase';
@@ -59,7 +61,9 @@ async function lock(reason: string) {
 }
 
 async function status(): Promise<StatusResponse> {
-  const base = { idleMinutes: IDLE_MINUTES };
+  const { authError } = await chrome.storage.session.get('authError');
+  if (authError) await chrome.storage.session.remove('authError');
+  const base = { idleMinutes: IDLE_MINUTES, ...(authError ? { authError: String(authError) } : {}) };
   const { data } = await supabase.auth.getSession();
   if (!data.session) {
     if (dek) await lock('signed-out');
@@ -78,6 +82,36 @@ async function signIn(email: string, password: string) {
   await lock('sign-in');
   const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Google/GitHub through Supabase (Authorization Code + PKCE). The provider window returns to this
+ * extension's own https://<id>.chromiumapp.org/ address, which must be in the project's Redirect URLs.
+ * The code_verifier stays in this extension's storage, so a code leaked elsewhere is useless.
+ */
+async function signInOAuth(provider: OAuthProvider) {
+  if (!OAUTH_PROVIDERS.some((p) => p.key === provider)) throw new Error('Provedor de login desconhecido.');
+  await lock('sign-in');
+  await chrome.storage.session.remove('authError');
+  try {
+    const redirectTo = chrome.identity.getRedirectURL();
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo, skipBrowserRedirect: true, ...oauthOptions(provider) },
+    });
+    if (error || !data.url) throw new Error(error?.message ?? 'Não foi possível iniciar o login.');
+    const result = await chrome.identity.launchWebAuthFlow({ url: data.url, interactive: true });
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(oauthCodeFrom(result, redirectTo));
+    if (exchangeError) throw new Error(exchangeError.message);
+  } catch (err) {
+    // The popup usually closed when the provider window opened: keep the message for its next opening.
+    const message = friendlyError(err, 'Não foi possível entrar.');
+    await chrome.storage.session.set({ authError: message });
+    throw new Error(message);
+  } finally {
+    // Reopen the popup so the user continues (MFA or master password) without hunting for the icon.
+    await chrome.action.openPopup().catch(() => undefined);
+  }
 }
 
 async function verifyMfa(code: string) {
@@ -232,6 +266,10 @@ async function handle(request: Request): Promise<unknown> {
       return status();
     case 'signIn':
       return signIn(request.email, request.password);
+    case 'providers':
+      return fetchEnabledProviders();
+    case 'signInOAuth':
+      return signInOAuth(request.provider);
     case 'verifyMfa':
       return verifyMfa(request.code);
     case 'unlock':

@@ -6,7 +6,7 @@
  * - Swaps web-saas/src/lib/supabase.ts for extension/src/supabase.ts (chrome.storage session).
  * - Writes manifest.json with the Supabase project as the only host permission.
  */
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
@@ -30,7 +30,14 @@ function swapSupabaseClient(): Plugin {
   }
 }
 
-function manifest(env: Record<string, string>, testHosts: boolean): Plugin {
+/**
+ * Public key that fixes the extension ID (mcljapeloopnadipmhmojkmbjjgbpdij) for unpacked installs, so
+ * the OAuth redirect https://<id>.chromiumapp.org/ is stable. Store packages are built with
+ * `--mode store`, which drops it (the stores assign their own ID and key).
+ */
+const manifestKey = JSON.parse(readFileSync(resolve(here, 'manifest-key.json'), 'utf8')) as { key: string; id: string }
+
+function manifest(env: Record<string, string>, testHosts: boolean, store: boolean): Plugin {
   const supabaseUrl = env.VITE_SUPABASE_URL
   if (!supabaseUrl) throw new Error('VITE_SUPABASE_URL is required to build the extension')
   const supabaseOrigin = new URL(supabaseUrl).origin
@@ -44,11 +51,12 @@ function manifest(env: Record<string, string>, testHosts: boolean): Plugin {
         short_name: 'SecureLink',
         description: 'Preenche logins do seu cofre SecureLink com criptografia de ponta a ponta.',
         version: pkg.version,
+        ...(store ? {} : { key: manifestKey.key }),
         minimum_chrome_version: '116',
         action: { default_popup: 'popup.html', default_title: 'SecureLink Vault' },
         background: { service_worker: 'background.js', type: 'module' },
         icons: { '16': 'icons/icon-192.png', '48': 'icons/icon-192.png', '128': 'icons/icon-192.png' },
-        permissions: ['storage', 'activeTab', 'scripting', 'alarms', 'idle', 'offscreen', 'clipboardWrite'],
+        permissions: ['storage', 'activeTab', 'scripting', 'alarms', 'idle', 'offscreen', 'clipboardWrite', 'identity'],
         // Only the Supabase project. Pages are reached through activeTab (a user gesture), never in the background.
         host_permissions: [`${supabaseOrigin}/*`, ...(testHosts ? ['http://localhost/*', 'http://127.0.0.1/*'] : [])],
         commands: {
@@ -79,7 +87,7 @@ export default defineConfig(({ mode }) => {
     root: here,
     envDir: appRoot,
     publicDir: false,
-    plugins: [swapSupabaseClient(), react(), manifest(env, testHosts)],
+    plugins: [swapSupabaseClient(), react(), manifest(env, testHosts, mode === 'store')],
     build: {
       outDir: resolve(appRoot, testHosts ? 'dist-extension-test' : 'dist-extension'),
       emptyOutDir: true,

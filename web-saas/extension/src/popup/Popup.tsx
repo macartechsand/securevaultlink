@@ -1,5 +1,7 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../../src/components/ui/Icon';
+import { ProviderIcon } from '../../../src/components/ui/ProviderIcon';
+import { OAUTH_PROVIDERS, type OAuthProvider } from '../../../src/lib/oauthProviders';
 import { generatePassword } from '../../../src/lib/passwordGenerator';
 import { analyzeUrl, safeHref } from '../../../src/lib/urlCheck';
 import { type FillResponse, type ItemSummary, type StatusResponse, send } from '../protocol';
@@ -57,7 +59,48 @@ function useAsync() {
 
 /* ------------------------------------------------------------------ screens before the vault */
 
-function SignIn({ onDone }: { onDone: () => void }) {
+function OAuthSignIn({ onDone, initialError }: { onDone: () => void; initialError?: string }) {
+  const [enabled, setEnabled] = useState<OAuthProvider[]>([]);
+  const [pending, setPending] = useState<OAuthProvider | null>(null);
+  const [error, setError] = useState(initialError ?? '');
+
+  useEffect(() => {
+    send<OAuthProvider[]>({ type: 'providers' }).then(setEnabled, () => setEnabled([]));
+  }, []);
+
+  if (enabled.length === 0) return error ? <div className="alert alert--error">{error}</div> : null;
+  return (
+    <div className="stack-sm">
+      {OAUTH_PROVIDERS.filter((p) => enabled.includes(p.key)).map((p) => (
+        <button
+          key={p.key}
+          type="button"
+          className="btn btn--block"
+          disabled={pending !== null}
+          onClick={() => {
+            setError('');
+            setPending(p.key);
+            // The popup usually closes when the provider window opens; the background finishes the
+            // sign-in and reopens the popup.
+            send({ type: 'signInOAuth', provider: p.key }).then(onDone, (err: Error) => {
+              setError(err.message);
+              setPending(null);
+            });
+          }}
+        >
+          <ProviderIcon provider={p.key} />
+          {pending === p.key ? 'Aguardando o login…' : `Continuar com ${p.name}`}
+        </button>
+      ))}
+      {error && <div className="alert alert--error">{error}</div>}
+      <div className="divider">
+        <span>ou com e-mail</span>
+      </div>
+    </div>
+  );
+}
+
+function SignIn({ onDone, authError }: { onDone: () => void; authError?: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, run } = useAsync();
@@ -74,6 +117,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
         <p className="eyebrow">Conta</p>
         <h2>Entrar</h2>
       </div>
+      <OAuthSignIn onDone={onDone} initialError={authError} />
       <form className="form" onSubmit={submit}>
         <label className="field">
           E-mail
@@ -88,9 +132,6 @@ function SignIn({ onDone }: { onDone: () => void }) {
           {busy ? 'Entrando…' : 'Entrar'}
         </button>
       </form>
-      <p className="subtle">
-        Entrou no app com Google ou GitHub? Crie uma senha da conta em "Esqueci a senha da conta" no app web.
-      </p>
       <button type="button" className="btn btn--ghost btn--block" onClick={openWebApp}>
         Abrir o app web
       </button>
@@ -479,7 +520,7 @@ export function Popup() {
   }
   switch (state.status) {
     case 'signed-out':
-      return <SignIn onDone={refresh} />;
+      return <SignIn onDone={refresh} authError={state.authError} />;
     case 'needs-mfa':
       return <Mfa email={state.email} onDone={refresh} onSignOut={signOut} />;
     case 'needs-setup':

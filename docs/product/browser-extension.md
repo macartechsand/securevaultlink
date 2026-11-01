@@ -23,7 +23,7 @@ Levar o cofre para onde a senha é usada: **preencher e salvar logins direto nos
 ### Fase 1: MVP (Chrome e Edge, Manifest V3)
 | # | Funcionalidade | Critério de aceite |
 |---|---|---|
-| 1 | Entrar na conta (e-mail/senha da conta + TOTP) dentro da extensão | Sessão Supabase própria da extensão; recusa sem MFA quando exigido |
+| 1 | Entrar na conta (e-mail/senha da conta, Google ou GitHub + TOTP) dentro da extensão | Sessão Supabase própria da extensão; recusa sem MFA quando exigido |
 | 2 | Desbloquear com a senha mestra; bloquear manualmente | Senha errada falha pela tag GCM, igual ao app |
 | 3 | Bloqueio automático: 10 min sem uso, fechar o navegador, bloqueio do sistema | Após bloqueio, nenhuma chave ou item em memória |
 | 4 | Popup: itens que correspondem à aba no topo, busca por título/usuário/site, favoritos | Busca nunca considera a senha |
@@ -153,5 +153,6 @@ Edição completa de itens (fica no app web; a extensão só cria pelo "salvar" 
 - **Só logins** aparecem na extensão; notas, segredos e cartões continuam no app web.
 - O **selo no ícone** foi para a fase 2 (precisaria da permissão de ler a URL de todas as abas).
 - A **área de transferência** é limpa após 30 s sem conferir o conteúdo (conferir exigiria a permissão de leitura da área de transferência).
-- Contas criadas **só com Google/GitHub** precisam definir uma senha da conta no app web para entrar na extensão (login social na extensão fica para a fase 2).
+- **Login com Google e GitHub** (adicionado em 2026-11-01): mesmo fluxo do app (Supabase, Authorization Code + PKCE) via `chrome.identity.launchWebAuthFlow`. O provedor devolve o código só para o endereço da própria extensão (`https://<id>.chromiumapp.org/`), e o `code_verifier` fica no armazenamento dela, então um código vazado não serve para outra pessoa. A resposta é validada (origem exata, formato do código) e testada (`oauthCallback.test.ts`).
+- **ID fixo da extensão** em instalações sem loja: `mcljapeloopnadipmhmojkmbjjgbpdij` (chave pública em `extension/manifest-key.json`). Nas lojas o ID é outro e precisa ser incluído nas Redirect URLs do projeto de produção.
 - **Preenchimento:** a extensão injeta o script sob demanda (`activeTab`); sem script permanente nas páginas.

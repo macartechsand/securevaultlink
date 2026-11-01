@@ -11,6 +11,18 @@ npm run build:ext          # gera dist-extension/ (usa VITE_SUPABASE_URL e VITE_
 
 Para gerar contra o projeto de **produção**, crie `web-saas/.env.production.local` com `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `VITE_WEB_APP_URL` (endereço do app web) de produção; ele tem prioridade sobre o `.env.local` no `npm run build:ext`. A única permissão de rede do pacote é o Supabase configurado ali. **Atenção:** esse arquivo também vale para o `npm run build` do app web; apague-o depois de gerar o pacote de produção para não publicar o site de desenvolvimento apontando para a produção.
 
+## Login com Google e GitHub
+
+A extensão usa o mesmo login social do app web. Uma configuração única por projeto Supabase:
+
+1. Supabase → **Authentication → URL Configuration → Redirect URLs** → **Add URL**:
+   `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/`
+2. Salvar. Os provedores Google e GitHub já configurados para o app web servem para a extensão; não é preciso mexer neles.
+
+Sem esse passo, o Supabase devolve o login para o site do app em vez da extensão e a janela não fecha.
+
+O ID `mcljapeloopnadipmhmojkmbjjgbpdij` é fixo para instalações sem loja (chave pública em `manifest-key.json`). Para as lojas, gere com `npx vite build -c extension/vite.config.ts --mode store` (sem a chave; a loja atribui o ID) e acrescente `https://<id-da-loja>.chromiumapp.org/` às Redirect URLs.
+
 ## Instalar no beta (sem loja)
 
 1. Edge: `edge://extensions` (Chrome: `chrome://extensions`).

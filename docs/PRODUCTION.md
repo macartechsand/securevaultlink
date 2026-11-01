@@ -167,3 +167,4 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 | 13 | PR #1 revisado e mesclado em `master` | ⬜ |
 | 14 | MFA em todas as contas de plataforma; e-mail administrativo dedicado | ⬜ |
 | 15 | Rotação automática desligada; recertificação de acesso revisada (`security/access-recertification.md`) | ⬜ |
+| 16 | Extensão: Redirect URL `https://<id>.chromiumapp.org/` no projeto de produção (ID sem loja `mcljapeloopnadipmhmojkmbjjgbpdij`; com loja, o ID atribuído) | ⬜ |

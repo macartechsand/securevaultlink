@@ -1,12 +1,9 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { appRedirectUrl } from '../lib/authRedirect';
+import { type OAuthProvider, oauthOptions } from '../lib/oauthProviders';
 import { supabase } from '../lib/supabase';
 
-export type OAuthProvider = 'google' | 'github';
-export const OAUTH_PROVIDERS: { key: OAuthProvider; name: string }[] = [
-  { key: 'google', name: 'Google' },
-  { key: 'github', name: 'GitHub' },
-];
+export { OAUTH_PROVIDERS, type OAuthProvider, fetchEnabledProviders } from '../lib/oauthProviders';
 
 export const ACCOUNT_PASSWORD_MIN_LENGTH = 10;
 
@@ -39,26 +36,8 @@ export async function setAccountPassword(password: string) {
 export async function signInWithOAuth(provider: OAuthProvider) {
   return supabase.auth.signInWithOAuth({
     provider,
-    options: {
-      redirectTo: appRedirectUrl(),
-      scopes: provider === 'github' ? 'read:user user:email' : 'openid email profile',
-      queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
-    },
+    options: { redirectTo: appRedirectUrl(), ...oauthOptions(provider) },
   });
-}
-
-/** Which OAuth providers are enabled on the Supabase project (public settings endpoint). */
-export async function fetchEnabledProviders(): Promise<OAuthProvider[]> {
-  try {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const res = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { external?: Record<string, boolean> };
-    return OAUTH_PROVIDERS.map((p) => p.key).filter((k) => data.external?.[k] === true);
-  } catch {
-    return [];
-  }
 }
 
 /** Redeems an admin-generated invite / reset link (hashed one-time token). */
