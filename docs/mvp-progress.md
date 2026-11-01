@@ -51,6 +51,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-10-29 | Rotação automática de **senhas de login** do Microsoft 365 / Entra ID e do Google Workspace, com credencial administrativa vinculada de outro item do cofre. Páginas diretas de troca de senha para Instagram, Facebook, Gmail e conta Microsoft pessoal, que não têm API. |
 | 2026-11-01 | **Licenças** (Administração → Licenças): 10 licenças Premium por padrão, atribuição com prazo, observação, controle de vagas e vencimentos. Documento de produção [`PRODUCTION.md`](PRODUCTION.md) para 10 usuários Premium com credenciais reais. **130/130 testes.** |
 | 2026-11-02 | Escopo do beta reduzido a **5 licenças Premium de 30 dias** (manual, sem cobrança; 6 contas). **Auditoria imutável e encadeada por SHA-256**, com verificação no painel. **Backup externo cifrado** (banco + arquivos, AES-256-GCM/scrypt) e restauração verificada (`scripts/backup`). Documentos de armazenamento/backup e de aderência à CyberArk. |
+| 2026-11-02 (tarde) | **Recertificação de acesso**: só o dono e o destinatário ativo acessam cada item (matriz, evidências, riscos residuais). Novos testes: recompartilhamento recusado, destinatário não vê outros compartilhamentos nem chaves do dono, expiração imediata. **Interruptor global da rotação automática** (desligado por padrão em instalação nova). **132/132 testes.** |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---
@@ -107,6 +108,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | `20261022000000_vault_status.sql` | `my_vault_status()` (desbloqueio mesmo com política de MFA) |
 | `20261023000000_premium_invites.sql` | Convites Premium com prazo; validade da licença |
 | `20261101000000_licenses.sql` | Licenças: vagas Premium (`premium_seats`), atribuição com prazo e observação, resumo para o painel |
+| `20261103000000_auto_rotation_switch.sql` | Interruptor global `auto_rotation` (desligado em instalação nova; ligado onde já foi usado) |
 | `20261102000000_beta_scope_audit_integrity.sql` | Beta com 5 licenças/6 contas; auditoria append-only com cadeia de hashes, verificação, retenção que preserva a cadeia; Conformidade com integridade da auditoria e idade do backup externo |
 
 ### 3.4 Edge Functions (`supabase/functions/`)

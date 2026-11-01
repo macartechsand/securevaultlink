@@ -10,6 +10,7 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 | [`PRODUCTION.md`](PRODUCTION.md) | **Ir para produção (beta: 5 usuários Premium por 30 dias, sem cobrança)**: projeto de produção, licenças, backups, segurança, rotinas e checklist de go-live |
 | [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |
 | [`security/cyberark-alignment.md`](security/cyberark-alignment.md) | Aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) |
+| [`security/access-recertification.md`](security/access-recertification.md) | Quem acessa cada item: matriz de acesso, controles com evidência de teste e riscos residuais |
 | [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de segurança detalhado e limitações |
 | [`security/oauth.md`](security/oauth.md) | Login com Google e GitHub (OAuth + PKCE) |
 | [`architecture/connectors-rotation.md`](architecture/connectors-rotation.md) | Conectores e rotação de senhas |
@@ -135,7 +136,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 17 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261102…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 18 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261103…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url

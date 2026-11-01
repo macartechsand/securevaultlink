@@ -6,7 +6,8 @@
 
 Roteiro para sair do ambiente de testes e operar o SecureLink Vault de forma **produtiva e consistente**: dados preservados, backups testados, acessos controlados e licenças geridas. Complementa o [`HANDOVER.md`](HANDOVER.md), que traz a visão completa do sistema e a montagem de ambiente. Antes de dados reais, leia também:
 - [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md): onde cada dado fica, o que é cifrado, as camadas de backup e o teste de restauração;
-- [`security/cyberark-alignment.md`](security/cyberark-alignment.md): aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) e o que falta.
+- [`security/cyberark-alignment.md`](security/cyberark-alignment.md): aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) e o que falta;
+- [`security/access-recertification.md`](security/access-recertification.md): recertificação de que só o dono e quem recebeu o compartilhamento acessam cada item.
 
 ---
 
@@ -33,7 +34,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 
 ### 2.1 Supabase (projeto novo, plano Pro)
 1. [ ] Criar o projeto (região **São Paulo**, `sa-east-1`) com uma senha de banco forte, guardada no próprio cofre.
-2. [ ] `npx supabase link --project-ref <REF_PROD>` e `npx supabase db push`. Aplica as **17 migrations**, de `20261009…` a `20261102…`.
+2. [ ] `npx supabase link --project-ref <REF_PROD>` e `npx supabase db push`. Aplica as **18 migrations**, de `20261009…` a `20261103…`.
 3. [ ] Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -72,7 +73,8 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
    - modo de cadastro **somente convidados**;
    - **máximo de contas: 6** (5 usuários + o administrador);
    - **cota Premium: 200 MB** (ou mais, com R2);
-   - **MFA obrigatório para todos: ligado**.
+   - **MFA obrigatório para todos: ligado**;
+   - **Rotação automática pelo servidor: desligada** (já nasce assim em instalação nova). Só ligue depois de validar cada conector com contas de teste.
 3. [ ] Administração → **Licenças**: total de licenças Premium = **5** (padrão da migration `20261102000000`).
 4. [ ] Convidar os 5 usuários já como **Premium por 30 dias** (Beta e limites → e-mail → Premium; o prazo já vem 30) e enviar cada link por mensagem direta.
 
@@ -150,7 +152,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 
 | # | Item | Situação |
 |---|---|---|
-| 1 | Projeto Supabase de produção no **Pro**, com as 17 migrations, Network Restrictions e SSL obrigatório | ⬜ |
+| 1 | Projeto Supabase de produção no **Pro**, com as 18 migrations, Network Restrictions e SSL obrigatório | ⬜ |
 | 2 | Funções publicadas e secrets novos, inclusive `ALLOWED_ORIGIN` | ⬜ |
 | 3 | Auth: URLs, Confirm email, senha mínima, SMTP, TOTP, OAuth de produção | ⬜ |
 | 4 | Site de produção com cabeçalhos verificados | ⬜ |
@@ -164,3 +166,4 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 | 12 | Onboarding enviado (seção 7) | ⬜ |
 | 13 | PR #1 revisado e mesclado em `master` | ⬜ |
 | 14 | MFA em todas as contas de plataforma; e-mail administrativo dedicado | ⬜ |
+| 15 | Rotação automática desligada; recertificação de acesso revisada (`security/access-recertification.md`) | ⬜ |

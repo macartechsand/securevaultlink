@@ -116,4 +116,44 @@ describe.skipIf(!configured)('secured items isolation (dev project)', () => {
     expect(rename.data ?? []).toEqual([])
     expect((await b.client.from('vault_folders').insert({ id: crypto.randomUUID(), user_id: a.userId, name_ciphertext: 'eA==' })).error).not.toBeNull()
   })
+
+  // Recertification (2026-11-02): only the owner and an active recipient ever reach an item.
+  it('a recipient cannot re-share the item, see other shares or reach the owner keys', async () => {
+    const share = await a.client
+      .from('item_shares')
+      .insert({ item_id: v2, recipient_id: b.userId, permission: 'edit', sealed_key: 'c2VhbGVk', expires_at: inOneHour() })
+      .select('id')
+      .single()
+    expect(share.error).toBeNull()
+    // Re-share to someone else (here: back to the owner) is refused: only the owner shares.
+    expect((await b.client.from('item_shares').insert({ item_id: v2, recipient_id: a.userId, sealed_key: 'x', expires_at: inOneHour() })).error).not.toBeNull()
+    // The recipient sees only their own share row.
+    const rows = (await b.client.from('item_shares').select('id, recipient_id').eq('item_id', v2)).data ?? []
+    expect(rows.every((r) => r.recipient_id === b.userId)).toBe(true)
+    // Owner key material stays private: profile (wrapped DEK) and wrapped private key.
+    expect((await b.client.from('vault_profiles').select('user_id').eq('user_id', a.userId)).data ?? []).toEqual([])
+    expect((await b.client.from('user_keys').select('user_id').eq('user_id', a.userId)).data ?? []).toEqual([])
+    // The owner-only recipient key list is empty for anyone but the owner.
+    expect((await b.client.rpc('item_share_recipient_keys', { p_item: v2 })).data ?? []).toEqual([])
+    expect((await a.client.from('item_shares').delete().eq('id', share.data!.id)).error).toBeNull()
+  })
+
+  it('an expired share stops access at the expiry time, before any cleanup runs', async () => {
+    // Expiry is evaluated with the server clock; the local clock may drift by seconds.
+    const health = await fetch(`${env.SUPABASE_TEST_URL}/auth/v1/health`, { headers: { apikey: env.SUPABASE_TEST_ANON_KEY! } })
+    const serverNow = Date.parse(health.headers.get('date') ?? '') || Date.now()
+    const share = await a.client
+      .from('item_shares')
+      .insert({ item_id: v2, recipient_id: b.userId, permission: 'edit', sealed_key: 'c2VhbGVk', expires_at: new Date(serverNow + 5000).toISOString() })
+      .select('id')
+      .single()
+    expect(share.error).toBeNull()
+    expect((await b.client.from('vault_entries').select('id').eq('id', v2)).data).toEqual([{ id: v2 }])
+    await new Promise((r) => setTimeout(r, 7000))
+    expect((await b.client.from('vault_entries').select('id').eq('id', v2)).data ?? []).toEqual([])
+    expect((await b.client.from('item_shares').select('id').eq('id', share.data!.id)).data ?? []).toEqual([])
+    const write = await b.client.from('vault_entries').update({ ciphertext: 'eA==' }).eq('id', v2).select('id')
+    expect(write.data ?? []).toEqual([])
+    await a.client.from('item_shares').delete().eq('id', share.data!.id)
+  }, 20_000)
 })

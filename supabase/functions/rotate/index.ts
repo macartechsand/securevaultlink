@@ -245,6 +245,11 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+  // Platform-wide switch (migration 20261103000000). Missing setting = older project = on.
+  const { data: switchRow } = await admin.from('app_settings').select('value').eq('key', 'auto_rotation').maybeSingle()
+  if (switchRow?.value === 'off') {
+    return json({ error: 'A rotação automática está desligada nesta instalação. Use a troca assistida.' }, 403)
+  }
   const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId: user.id })
   if ((factors?.factors ?? []).some((f) => f.status === 'verified') && jwtClaims(authHeader).aal !== 'aal2') {
     return json({ error: 'Entre com a verificação em duas etapas para rotacionar.' }, 403)

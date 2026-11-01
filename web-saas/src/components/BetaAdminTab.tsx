@@ -111,6 +111,17 @@ export function BetaAdminTab({ canAct }: { canAct: boolean }) {
             </select>
             <span className="field__hint">Quando obrigatória, quem não tiver segundo fator precisa ativar antes de acessar o cofre.</span>
           </label>
+          <label className="field">
+            Rotação automática pelo servidor
+            <select value={draft.auto_rotation ?? 'on'} onChange={(e) => setDraft((d) => ({ ...d, auto_rotation: e.target.value }))} disabled={!canAct}>
+              <option value="off">Desligada: nenhuma credencial passa pelo servidor (máxima confidencialidade)</option>
+              <option value="on">Ligada: itens com consentimento podem ser trocados via API</option>
+            </select>
+            <span className="field__hint">
+              Na rotação automática, a credencial passa pela função do servidor por alguns segundos, sem ser gravada. Mantenha
+              desligada até validar cada conector com contas de teste. A troca assistida, feita no navegador, continua disponível.
+            </span>
+          </label>
           <div className="grid grid--2">
             {NUMERIC.map((f) => (
               <label key={f.key} className="field">
