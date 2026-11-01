@@ -21,6 +21,20 @@ export function CenterLayout({ children }: { children: ReactNode }) {
           <ThemeToggle compact />
         </div>
         <section className="card">{children}</section>
+        <ul className="trust-list" aria-label="Como seus dados são protegidos">
+          <li>
+            <Icon name="lock" size={16} />
+            Cifrado no seu dispositivo
+          </li>
+          <li>
+            <Icon name="server" size={16} />
+            Servidor sem acesso ao conteúdo
+          </li>
+          <li>
+            <Icon name="shieldCheck" size={16} />
+            Verificação em duas etapas
+          </li>
+        </ul>
         <div className="center-footer">
           <PrivacyNoticeLink />
         </div>

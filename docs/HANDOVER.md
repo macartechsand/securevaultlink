@@ -10,6 +10,7 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 | [`PRODUCTION.md`](PRODUCTION.md) | **Ir para produção (beta: 5 usuários Premium por 30 dias, sem cobrança)**: projeto de produção, licenças, backups, segurança, rotinas e checklist de go-live |
 | [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |
 | [`security/cyberark-alignment.md`](security/cyberark-alignment.md) | Aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) |
+| [`product/open-source-and-business.md`](product/open-source-and-business.md) | Open source (licença, preparação), web + mobile, modelo de negócio e posicionamento contra o 1Password |
 | [`security/access-recertification.md`](security/access-recertification.md) | Quem acessa cada item: matriz de acesso, controles com evidência de teste e riscos residuais |
 | [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de segurança detalhado e limitações |
 | [`security/oauth.md`](security/oauth.md) | Login com Google e GitHub (OAuth + PKCE) |

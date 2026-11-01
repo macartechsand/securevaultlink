@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityView } from './components/ActivityView';
 import { AdminView } from './components/AdminView';
 import { DiagnosticsCard } from './components/DiagnosticsCard';
@@ -18,7 +18,7 @@ import { QuickRotate, startAssistedRotation } from './components/QuickRotate';
 import { RotationView, quickRotateMode } from './components/RotationView';
 import { SetAccountPassword } from './components/SetAccountPassword';
 import { Settings } from './components/Settings';
-import { ADMIN_ITEM, NAV_ITEMS, Sidebar } from './components/Sidebar';
+import { ADMIN_ITEM, BottomNav, NAV_ITEMS, type NavCounts, Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
 import { TransferDownload } from './components/TransferDownload';
 import { VaultGate } from './components/VaultGate';
@@ -102,6 +102,22 @@ function VaultApp() {
   const [vaultFilter, setVaultFilter] = useState<{ value?: string; key: number }>({ key: 0 });
 
   const [adminStatus, setAdminStatus] = useState<AdminStatus>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // "/" or Ctrl/Cmd+K focuses the vault search (ignored while typing in a field).
+  useEffect(() => {
+    if (status !== 'unlocked') return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if ((e.key === '/' && !typing) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [status]);
 
   useEffect(() => {
     if (status !== 'unlocked') return;
@@ -318,6 +334,19 @@ function VaultApp() {
     sessions: sessionCount,
     exposure,
   });
+  const navCounts: NavCounts = {
+    dashboard: { value: posture.recommendations.filter((r) => r.severity === 'high').length },
+    vault: { value: health.counts.exposed + health.counts.unsafe },
+    rotation: { value: health.counts.due, tone: 'warn' },
+  };
+  const navProps = {
+    activeView,
+    onSelect: setActiveView,
+    onLock: session.lock,
+    onSignOut: () => void session.signOut(),
+    showAdmin: Boolean(adminStatus),
+    counts: navCounts,
+  };
   const goTo = (view: string, filter?: string) => {
     if (view === 'dashboard' && !filter) {
       void runSecurityCheck();
@@ -329,34 +358,37 @@ function VaultApp() {
 
   return (
     <div className="shell">
-      <Sidebar
-        activeView={activeView}
-        onSelect={setActiveView}
-        onLock={session.lock}
-        onSignOut={() => void session.signOut()}
-        showAdmin={Boolean(adminStatus)}
-      />
+      <Sidebar {...navProps} email={user?.email ?? ''} idleMinutes={IDLE_LOCK_MS / 60000} />
 
       <main className="main">
         <header className="topbar">
+          <div className="topbar__brand brand__mark" aria-hidden="true">
+            <Icon name="shieldCheck" size={18} />
+          </div>
           <label className="search">
             <Icon name="search" size={16} />
             <span className="sr-only">Buscar no cofre</span>
             <input
+              ref={searchRef}
               type="search"
-              placeholder="Buscar no cofre (título, usuário, tags, campos)"
+              placeholder="Buscar no cofre…"
+              title="Busca em título, usuário, tags e campos (nunca em senhas)"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 if (activeView !== 'vault') setActiveView('vault');
               }}
             />
+            {!searchTerm && <kbd className="kbd">/</kbd>}
           </label>
-          <div className="row">
-            <span className="subtle">{user?.email}</span>
-            <button type="button" className="btn btn--primary" onClick={() => setEditing({})}>
+          <div className="topbar__actions">
+            <span className="e2ee-pill" title="Os dados são cifrados e decifrados só neste dispositivo">
+              <Icon name="shieldCheck" size={14} />
+              <span>Criptografia de ponta a ponta</span>
+            </span>
+            <button type="button" className="btn btn--primary" onClick={() => setEditing({})} aria-label="Novo item">
               <Icon name="plus" />
-              Novo item
+              <span className="topbar__label">Novo item</span>
             </button>
           </div>
         </header>
@@ -450,27 +482,72 @@ function VaultApp() {
 
           {activeView === 'dashboard' && (
             <>
+              <section className="quick-actions" aria-label="Ações rápidas">
+                <button type="button" className="quick-action" onClick={() => setEditing({ type: 'login' })}>
+                  <span className="quick-action__icon">
+                    <Icon name="key" />
+                  </span>
+                  <span>
+                    Novo login
+                    <small>Site, usuário e senha</small>
+                  </span>
+                </button>
+                <button type="button" className="quick-action" onClick={() => setActiveView('generator')}>
+                  <span className="quick-action__icon">
+                    <Icon name="wand" />
+                  </span>
+                  <span>
+                    Gerar senha
+                    <small>Forte e única</small>
+                  </span>
+                </button>
+                <button type="button" className="quick-action" onClick={() => setActiveView('files')}>
+                  <span className="quick-action__icon">
+                    <Icon name="upload" />
+                  </span>
+                  <span>
+                    Enviar arquivo
+                    <small>Cifrado antes do envio</small>
+                  </span>
+                </button>
+                <button type="button" className="quick-action" onClick={runSecurityCheck} disabled={checking || items.length === 0}>
+                  <span className="quick-action__icon">
+                    <Icon name="shield" />
+                  </span>
+                  <span>
+                    {checking ? 'Verificando…' : 'Verificar segurança'}
+                    <small>Vazamentos e sites perigosos</small>
+                  </span>
+                </button>
+              </section>
+
               <PostureCard posture={posture} onAction={goTo} />
 
               <section className="grid grid--stats">
-                <StatCard label="Itens no cofre" value={String(items.length)} />
+                <StatCard label="Itens no cofre" icon="key" value={String(items.length)} onClick={() => goTo('vault')} />
                 <StatCard
                   label="Senhas fracas"
+                  icon="alert"
                   value={String(health.counts.weak)}
                   note={checkable ? (health.counts.weak ? 'Corrigir' : 'OK') : undefined}
-                  tone={health.counts.weak ? 'bad' : 'good'}
+                  tone={checkable ? (health.counts.weak ? 'bad' : 'good') : 'neutral'}
+                  onClick={health.counts.weak ? () => goTo('vault', 'weak') : undefined}
                 />
                 <StatCard
                   label="Senhas reutilizadas"
+                  icon="copy"
                   value={String(health.counts.reused)}
                   note={checkable ? (health.counts.reused ? 'Corrigir' : 'OK') : undefined}
-                  tone={health.counts.reused ? 'bad' : 'good'}
+                  tone={checkable ? (health.counts.reused ? 'bad' : 'good') : 'neutral'}
+                  onClick={health.counts.reused ? () => goTo('vault', 'reused') : undefined}
                 />
                 <StatCard
                   label="Vazadas em incidentes"
+                  icon="shield"
                   value={checkedCount ? String(health.counts.exposed) : '—'}
                   note={checkedCount ? `${checkedCount} verificadas` : 'Não verificado'}
                   tone={checkedCount ? (health.counts.exposed ? 'bad' : 'good') : 'neutral'}
+                  onClick={health.counts.exposed ? () => goTo('vault', 'exposed') : undefined}
                 />
               </section>
 
@@ -592,6 +669,8 @@ function VaultApp() {
           {activeView === 'admin' && adminStatus && <AdminView status={adminStatus} />}
         </div>
       </main>
+
+      <BottomNav {...navProps} />
     </div>
   );
 }

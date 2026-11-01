@@ -82,7 +82,7 @@ export function ItemList({ title, items, health, emptyText, onNew, onOpen, onSha
         <p className="empty">{emptyText}</p>
       ) : (
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--items">
             <thead>
               <tr>
                 <th>Item</th>
