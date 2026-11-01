@@ -34,7 +34,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 
 ### 2.1 Supabase (projeto novo, plano Pro)
 1. [ ] Criar o projeto (região **São Paulo**, `sa-east-1`) com uma senha de banco forte, guardada no próprio cofre.
-2. [ ] `npx supabase link --project-ref <REF_PROD>` e `npx supabase db push`. Aplica as **18 migrations**, de `20261009…` a `20261103…`.
+2. [ ] `npx supabase link --project-ref <REF_PROD>` e `npx supabase db push`. Aplica as **19 migrations**, de `20261009…` a `20261104…`.
 3. [ ] Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -152,7 +152,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 
 | # | Item | Situação |
 |---|---|---|
-| 1 | Projeto Supabase de produção no **Pro**, com as 18 migrations, Network Restrictions e SSL obrigatório | ⬜ |
+| 1 | Projeto Supabase de produção no **Pro**, com as 19 migrations, Network Restrictions e SSL obrigatório | ⬜ |
 | 2 | Funções publicadas e secrets novos, inclusive `ALLOWED_ORIGIN` | ⬜ |
 | 3 | Auth: URLs, Confirm email, senha mínima, SMTP, TOTP, OAuth de produção | ⬜ |
 | 4 | Site de produção com cabeçalhos verificados | ⬜ |

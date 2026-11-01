@@ -1,6 +1,6 @@
 # Extensão de navegador: objetivo, escopo e requisitos
 
-> Especificação de 2026-11-01, antes do desenvolvimento. Base: [`open-source-and-business.md`](open-source-and-business.md), seção 4 (a extensão é o item nº 1 para disputar clientes do 1Password).
+> Especificação de 2026-11-01. **Fase 1 implementada** (seção 12); código em [`web-saas/extension/`](../../web-saas/extension/README.md). Base: [`open-source-and-business.md`](open-source-and-business.md), seção 4 (a extensão é o item nº 1 para disputar clientes do 1Password).
 
 ## 1. Objetivo
 
@@ -25,19 +25,19 @@ Levar o cofre para onde a senha é usada: **preencher e salvar logins direto nos
 |---|---|---|
 | 1 | Entrar na conta (e-mail/senha da conta + TOTP) dentro da extensão | Sessão Supabase própria da extensão; recusa sem MFA quando exigido |
 | 2 | Desbloquear com a senha mestra; bloquear manualmente | Senha errada falha pela tag GCM, igual ao app |
-| 3 | Bloqueio automático: inatividade (padrão 5 min), fechar o navegador, bloqueio do sistema | Após bloqueio, nenhuma chave ou item em memória |
+| 3 | Bloqueio automático: 10 min sem uso, fechar o navegador, bloqueio do sistema | Após bloqueio, nenhuma chave ou item em memória |
 | 4 | Popup: itens que correspondem à aba no topo, busca por título/usuário/site, favoritos | Busca nunca considera a senha |
 | 5 | **Preencher** usuário e senha na aba atual (clique no item ou `Ctrl+Shift+L`) | Só no frame do domínio correspondente; nunca em `http://` sem aviso; nunca em iframe de outro domínio |
 | 6 | Copiar usuário/senha com limpeza da área de transferência em 30 s | Igual ao app |
 | 7 | Abrir o site do item | Só `http(s)` (reaproveita `safeHref`) |
 | 8 | Gerador de senha no popup | Mesmo gerador do app (`crypto.getRandomValues`) |
 | 9 | Itens compartilhados comigo (leitura/edição) | Abertos com a chave privada ECDH; respeitam a expiração |
-| 10 | Selo no ícone com o número de logins para o site atual | Calculado localmente |
 | 11 | Avisos de segurança no popup: site sem HTTPS, domínio parecido (punycode/homógrafo), senha vazada já conhecida | Reaproveita `urlCheck` e a saúde já calculada |
 
 ### Fase 2: salvar e preencher no campo
 | # | Funcionalidade | Critério de aceite |
 |---|---|---|
+| 10 | Selo no ícone com o número de logins para o site atual (movido da fase 1: exige ler a URL de todas as abas) | Calculado localmente |
 | 12 | Detectar envio de login/cadastro e oferecer **salvar** ou **atualizar** a senha | Pergunta em barra própria da extensão; nada é enviado sem confirmação |
 | 13 | Ícone dentro do campo de login com menu de sugestões | Menu renderizado em **iframe da própria extensão** (a página não lê nem sobrepõe), resistente a *clickjacking* |
 | 14 | Gerar senha forte direto no campo de cadastro e salvar o item | Item criado cifrado antes do envio |
@@ -54,7 +54,7 @@ Levar o cofre para onde a senha é usada: **preencher e salvar logins direto nos
 ## 4. Arquitetura
 
 ```
-extension/                  (novo pacote no monorepo, build com Vite)
+web-saas/extension/         (usa as dependências do web-saas; build com Vite)
   manifest.json             MV3, permissões mínimas
   src/background/           service worker: sessão, cofre em memória, correspondência de domínio, bloqueio
   src/popup/                React + o mesmo design system (theme.css)
@@ -118,13 +118,13 @@ Durante o beta, a distribuição pode ser como extensão **não listada** (link 
 
 Edição completa de itens (fica no app web; a extensão só cria pelo "salvar" da fase 2), arquivos e transferências, administração, rotação e configurações de conta.
 
-## 10. Decisões pendentes
+## 10. Decisões (aprovadas em 2026-11-01)
 
-| Decisão | Recomendação |
+| Decisão | Escolha |
 |---|---|
-| Manter o cofre aberto entre reinícios do service worker (`storage.session`) ou pedir a senha mestra de novo | `storage.session` com bloqueio por inatividade de 5 min |
-| Login próprio na extensão ou parear com o app web aberto | Login próprio (mais simples e sem canal entre site e extensão) |
-| Extensão grátis ou só Premium | Grátis em todos os planos: é a porta de entrada contra o 1Password |
+| Cofre aberto entre reinícios do service worker | Sim, em `chrome.storage.session`, com **bloqueio após 10 min sem uso** |
+| Login próprio na extensão | Sim |
+| Extensão grátis ou só Premium | Grátis em todos os planos |
 | Navegadores do MVP | Chrome e Edge (mesmo pacote) |
 
 ## 11. Entregáveis da fase 1
@@ -136,3 +136,22 @@ Edição completa de itens (fica no app web; a extensão só cria pelo "salvar" 
 5. Testes unitários, de integração e ponta a ponta.
 6. Atualização de `mvp-security-model.md` e `access-recertification.md` com a extensão como novo cliente.
 7. Pacote `.zip` para instalação não listada no Edge e no Chrome.
+
+## 12. Situação da fase 1
+
+| Entregável | Situação |
+|---|---|
+| Pacote, build (`npm run build:ext`) e manifesto | ✅ `web-saas/extension/`, saída em `dist-extension/` |
+| Biblioteca compartilhada | ✅ importa `web-saas/src` (criptografia, itens, serviços); o cliente Supabase é trocado no build |
+| Popup | ✅ entrar (e-mail/senha + TOTP), desbloquear, lista com "Para este site", busca, preencher, copiar, abrir site, gerador, bloquear, sair |
+| Correspondência de domínio | ✅ `domainMatch.ts` com 10 testes (sufixo enganoso, punycode, `@` na URL, `github.io`/`netlify.app`/`gov.br`, http×https, IP e porta) |
+| Testes ponta a ponta | ✅ 6 testes no Edge real com a conta de teste A: login, senha errada, lista sem senhas, preenchimento, confirmação em outro site, iframe de terceiro ignorado, página web sem acesso à extensão, bloqueio limpa as chaves |
+| Auditoria | ✅ desbloqueio, falha e bloqueio com `client: extension`; preenchimento como `item.filled` (só o ID do item) após a migration `20261104000000_extension_fill_event.sql` |
+| Documentos de segurança | ✅ `mvp-security-model.md` e `access-recertification.md` |
+
+**Diferenças em relação à especificação:**
+- **Só logins** aparecem na extensão; notas, segredos e cartões continuam no app web.
+- O **selo no ícone** foi para a fase 2 (precisaria da permissão de ler a URL de todas as abas).
+- A **área de transferência** é limpa após 30 s sem conferir o conteúdo (conferir exigiria a permissão de leitura da área de transferência).
+- Contas criadas **só com Google/GitHub** precisam definir uma senha da conta no app web para entrar na extensão (login social na extensão fica para a fase 2).
+- **Preenchimento:** a extensão injeta o script sob demanda (`activeTab`); sem script permanente nas páginas.

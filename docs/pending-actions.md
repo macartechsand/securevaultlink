@@ -8,6 +8,13 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Extensão de navegador, fase 1 (2026-11-01)
+
+1. [ ] **SQL Editor (desenvolvimento):** rodar `20261104000000_extension_fill_event.sql` (permite o evento de auditoria `item.filled`). Sem ela a extensão funciona, só não registra os preenchimentos.
+2. [ ] `cd web-saas` → `npm run build:ext` → no Edge, `edge://extensions` → Modo de desenvolvedor → **Carregar sem compactação** → `web-saas/dist-extension`.
+3. [ ] Testar com a sua conta: entrar, desbloquear, preencher em 2 ou 3 sites reais, `Ctrl+Shift+L`, copiar senha e conferir que a área de transferência limpa em 30 s.
+4. [ ] Conferir em Atividade (app web) os eventos de desbloqueio e preenchimento.
+
 ## Beta de produção: 5 Premium por 30 dias (2026-11-02)
 
 1. [ ] **SQL Editor (desenvolvimento):** rodar `20261102000000_beta_scope_audit_integrity.sql` e depois `20261103000000_auto_rotation_switch.sql`. Conferir em Conformidade → **Verificar log de auditoria** ("Cadeia íntegra") e, em Beta e limites, o campo **Rotação automática pelo servidor**.

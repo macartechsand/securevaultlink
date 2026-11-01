@@ -152,9 +152,13 @@ export async function createVault(masterPassword: string): Promise<{
   return { profile, dek }
 }
 
-export async function unlockWithPassword(profile: VaultProfile, masterPassword: string) {
+/**
+ * `extractable` exists only for the browser extension, which keeps the raw DEK in
+ * memory-only `chrome.storage.session` across service-worker restarts. The web app never sets it.
+ */
+export async function unlockWithPassword(profile: VaultProfile, masterPassword: string, extractable = false) {
   const kek = await deriveKek(masterPassword, profile.kdf)
-  return unwrap(kek, profile.wrappedDekPassword, WRAP_AAD_PASSWORD, false)
+  return unwrap(kek, profile.wrappedDekPassword, WRAP_AAD_PASSWORD, extractable)
 }
 
 /** Re-wraps the DEK under a new master password (new salt). Entries stay valid. */

@@ -10,7 +10,8 @@ export type ClientAuditEvent =
   | 'mfa.enrolled'
   | 'mfa.disabled'
   | 'session.others_signed_out'
-  | 'client.error';
+  | 'client.error'
+  | 'item.filled';
 
 /**
  * Records a client-side event in the audit log. Best effort: never throws and never blocks the

@@ -138,7 +138,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 18 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261103…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 19 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261104…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
