@@ -8,6 +8,10 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Produção: piloto de 15 dias no plano Free (2026-11-01)
+
+Infraestrutura pronta (projeto `securelink-prod`, app https://securelinkvault.netlify.app). Siga os 7 passos da seção 0 de [`PRODUCTION.md`](PRODUCTION.md): SQL inicial, URLs de autenticação, MFA, administrador master, **primeiro backup antes de convidar**, convites de 15 dias e Safe Browsing opcional.
+
 ## Extensão de navegador, fase 1 (2026-11-01)
 
 1. [ ] **SQL Editor (desenvolvimento):** rodar `20261104000000_extension_fill_event.sql` (permite o evento de auditoria `item.filled`). Sem ela a extensão funciona, só não registra os preenchimentos.
