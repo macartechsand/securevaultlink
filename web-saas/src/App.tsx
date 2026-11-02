@@ -30,9 +30,11 @@ import { computeItemHealth } from './lib/itemHealth';
 import { type ItemType, adminKeyKind, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
 import { type PostureInput, computePosture } from './lib/posture';
+import { isNativeShell } from './lib/nativeShell';
 import { isSupabaseConfigured } from './lib/supabase';
 import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
 import { type AdminStatus, fetchAdminStatus } from './services/adminService';
+import { exchangeOAuthCode } from './services/authService';
 import { listVerifiedTotpFactors } from './services/mfaService';
 import { reportPosture } from './services/supportService';
 import { fetchSessions, fetchSharingExposure } from './services/postureService';
@@ -103,6 +105,36 @@ function VaultApp() {
 
   const [adminStatus, setAdminStatus] = useState<AdminStatus>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [nativeAuthError, setNativeAuthError] = useState('');
+
+  // Native app only: finish Google/GitHub sign-in from the deep link.
+  useEffect(() => {
+    if (!isNativeShell()) return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void import('./lib/platform').then((p) => {
+      if (!cancelled) stop = p.listenForNativeAuth(exchangeOAuthCode, setNativeAuthError);
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
+
+  // Native app only: lock after more than a minute in the background.
+  const { lock } = session;
+  useEffect(() => {
+    if (!isNativeShell() || status !== 'unlocked') return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void import('./lib/platform').then((p) => {
+      if (!cancelled) stop = p.lockAfterBackground(lock);
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [status, lock]);
 
   // "/" or Ctrl/Cmd+K focuses the vault search (ignored while typing in a field).
   useEffect(() => {
@@ -256,11 +288,12 @@ function VaultApp() {
         {status === 'loading' && <p className="muted">Carregando…</p>}
         {status === 'signed-out' && (
           <AuthScreen
+            key={nativeAuthError}
             onSignIn={session.signIn}
             onSignUp={session.signUp}
             onResetPassword={session.requestPasswordReset}
             onResendConfirmation={session.resendConfirmation}
-            initialError={session.linkError}
+            initialError={nativeAuthError || session.linkError}
           />
         )}
         {status === 'load-error' && (

@@ -867,6 +867,7 @@ input[type='range'] {
   gap: 12px;
   padding: 12px 28px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   position: sticky;
@@ -1443,6 +1444,7 @@ input[type='range'] {
     z-index: 30;
     height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
+    background: var(--bg-elevated);
     background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
     backdrop-filter: saturate(1.4) blur(12px);
     border-top: 1px solid var(--border);

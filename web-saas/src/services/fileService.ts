@@ -15,6 +15,7 @@ import {
   unwrapUserPrivateKey,
   wrapFileKeyForOwner,
 } from '../lib/crypto';
+import { isNativeShell } from '../lib/nativeShell';
 import { supabase } from '../lib/supabase';
 import { logClientEvent } from './auditService';
 
@@ -252,6 +253,13 @@ export function safeFileName(name: string) {
 
 /** Saves decrypted bytes. Always served as octet-stream so nothing is rendered inside the app origin. */
 export function saveToDisk(bytes: Uint8Array<ArrayBuffer>, name: string) {
+  if (isNativeShell()) {
+    // App: private cache → system share sheet → temporary copy deleted.
+    void import('../lib/platform').then((p) => p.shareDecryptedFile(bytes, safeFileName(name))).catch((err: unknown) => {
+      window.alert(err instanceof Error && err.message ? `Não foi possível salvar o arquivo: ${err.message}` : 'Não foi possível salvar o arquivo.');
+    });
+    return;
+  }
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
   const a = document.createElement('a');
   a.href = url;

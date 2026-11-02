@@ -1,5 +1,6 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { appRedirectUrl } from '../lib/authRedirect';
+import { NATIVE_AUTH_REDIRECT, isNativeShell } from '../lib/nativeShell';
 import { type OAuthProvider, oauthOptions } from '../lib/oauthProviders';
 import { supabase } from '../lib/supabase';
 
@@ -34,10 +35,26 @@ export async function setAccountPassword(password: string) {
  * code_verifier, the provider only returns a one-time code, provider tokens are not stored by the app.
  */
 export async function signInWithOAuth(provider: OAuthProvider) {
+  if (isNativeShell()) {
+    // App: the provider page opens in the system browser and returns through a deep link
+    // (handled in App.tsx), never inside the app's WebView.
+    const result = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true, ...oauthOptions(provider) },
+    });
+    if (!result.error && result.data.url) await (await import('../lib/platform')).openInSystemBrowser(result.data.url);
+    return result;
+  }
   return supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo: appRedirectUrl(), ...oauthOptions(provider) },
   });
+}
+
+/** Finishes an OAuth sign-in in the app: exchanges the one-time PKCE code for a session. */
+export async function exchangeOAuthCode(code: string) {
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw new Error(error.message);
 }
 
 /** Redeems an admin-generated invite / reset link (hashed one-time token). */

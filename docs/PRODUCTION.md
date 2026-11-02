@@ -21,6 +21,7 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
 | App | https://securelinkvault.netlify.app (site Netlify `securelinkvault`, separado do de desenvolvimento) |
 | Código | `master` (PR #1 mesclado em `d5bf916`) |
 | Extensão | Pacote de produção gerado fora do repositório (`~/.securelink-prod/securelink-extension-prod.zip`) |
+| App Android | APK assinado de produção: `~/.securelink-prod/securelink-vault-0.9.0.apk` (instalação direta no piloto; ver `product/mobile-app.md`, seção 8) |
 | Segredos locais | `~/.securelink-prod/` (só o seu usuário do Windows lê): senha do banco, `CLEANUP_SECRET`, SQL inicial |
 
 **Feito (pelo Claude, com autorização):**
@@ -50,14 +51,14 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
    Conferir que aparecem 7 ajustes e 1 job.
 2. [ ] **Authentication → URL Configuration:**
    - Site URL `https://securelinkvault.netlify.app`;
-   - Redirect URLs `https://securelinkvault.netlify.app/**` e `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/`.
+   - Redirect URLs `https://securelinkvault.netlify.app/**`, `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/` e `app.securelink.vault://auth-callback`.
 3. [ ] **Authentication → Sign In / Providers → Email:** senha mínima 10, Confirm email ligado. **Multi-Factor:** TOTP habilitado.
 4. [ ] **Administrador master:**
    1. Authentication → Users → **Add user** (mesmo e-mail do passo 1, senha forte, "Auto Confirm User").
    2. Rodar a parte B de `supabase/admin/create-master-admin.sql`, trocando o e-mail.
    3. Entrar no app, criar o cofre e ativar o MFA.
 5. [ ] **Backup:** abrir o Docker Desktop e rodar o primeiro backup externo. Pode pedir ao Claude, que lê a senha do banco do arquivo privado.
-6. [ ] **Convites:** Administração → Beta e limites → e-mail → Premium → **outro prazo: 15 dias**. Enviar o link e o `.zip` da extensão por mensagem direta, com o onboarding (seção 7).
+6. [ ] **Convites:** Administração → Beta e limites → e-mail → Premium → **outro prazo: 15 dias**. Enviar o link, o `.zip` da extensão e o APK por mensagem direta, com o onboarding (seção 7).
 7. [ ] Opcional: chave do Safe Browsing (`npx supabase secrets set --project-ref exglsdylytdjwrlmyptk SAFE_BROWSING_API_KEY=...`, digitada por você no terminal). Sem ela, a verificação de sites aparece como indisponível. Google/GitHub exigem novos clientes OAuth apontando para a produção (`security/oauth.md`); até lá, login por e-mail e senha.
 
 **Ao fim dos 15 dias:** decidir entre migrar para o Pro, que mantém o mesmo projeto e os dados (Settings → Billing → upgrade), ou encerrar. Se encerrar, **exportar e avisar os usuários antes**; apagar dados reais exige a sua aprovação explícita.

@@ -27,3 +27,6 @@ dist-ssr
 dist-extension
 dist-extension-test
 dist-extension-prod
+
+# Native app build output
+dist-mobile

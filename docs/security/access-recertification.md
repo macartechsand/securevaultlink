@@ -76,6 +76,8 @@ O que protege o conteúdo em claro é a **criptografia no navegador**. As regras
 | 9 | Links de transferência: qualquer pessoa com o link completo baixa o arquivo | Por projeto | Validade de até 7 dias, até 20 downloads, senha opcional, revogação a qualquer momento |
 | 10 | Administrador redefine senha da conta ou MFA de um usuário | Baixa | Não dá acesso ao cofre (exige a senha mestra); fica registrado (`admin.*`) |
 | 11 | **Extensão de navegador**: a DEK fica exportável em `chrome.storage.session` (memória) enquanto o cofre está aberto; malware local com acesso ao processo do navegador poderia lê-la | Média | Bloqueio após 10 min sem uso, ao bloquear o sistema e ao fechar o navegador; nunca vai para o disco; o mesmo malware já leria a senha mestra na digitação |
+| 13 | **App Android**: outro app pode registrar o mesmo esquema `app.securelink.vault://auth-callback` e receber o código do login social | Baixa | O código sem o `code_verifier` (que fica só no app) não serve. Fase 2: App Links verificados (`https`) |
+| 14 | **App Android no piloto**: APK instalado fora da loja pode ser trocado por uma versão adulterada no caminho | Média | Enviar por canal direto e informar o SHA-256; versões novas só instalam com a mesma assinatura. Fase 2: Play Store |
 | 12 | **Extensão**: preenchimento numa página de phishing | Média | Correspondência por domínio base com lista de sufixos públicos; só com gesto do usuário; confirmação explícita com aviso quando o site não corresponde; nunca em iframe de terceiro (testado ponta a ponta) |
 
 ---

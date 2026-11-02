@@ -12,6 +12,17 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 Infraestrutura pronta (projeto `securelink-prod`, app https://securelinkvault.netlify.app). Siga os 7 passos da seção 0 de [`PRODUCTION.md`](PRODUCTION.md): SQL inicial, URLs de autenticação, MFA, administrador master, **primeiro backup antes de convidar**, convites de 15 dias e Safe Browsing opcional.
 
+## App Android, fase 1 (2026-11-01)
+
+1. [ ] Supabase (desenvolvimento **e** produção) → Authentication → URL Configuration → Redirect URLs → adicionar `app.securelink.vault://auth-callback` (login com Google/GitHub no app).
+2. [ ] Instalar `~/.securelink-prod/securelink-vault-0.9.0.apk` num celular real e conferir:
+   - entrar, desbloquear e copiar uma senha;
+   - baixar um arquivo;
+   - ficar mais de 1 minuto fora e voltar (deve pedir a senha mestra);
+   - tentar uma captura de tela (deve sair bloqueada);
+   - **layout no Android 15/16** (barras do sistema).
+3. [ ] Guardar uma cópia da chave de assinatura (`~/.securelink-prod/securelink-release.jks` e `android-signing.properties`) no envelope de emergência.
+
 ## Extensão de navegador, fase 1 (2026-11-01)
 
 1. [ ] **SQL Editor (desenvolvimento):** rodar `20261104000000_extension_fill_event.sql` (permite o evento de auditoria `item.filled`). Sem ela a extensão funciona, só não registra os preenchimentos.
