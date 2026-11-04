@@ -24,6 +24,14 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
 | App Android | APK assinado de produção: `~/.securelink-prod/securelink-vault-0.9.0.apk` (instalação direta no piloto; ver `product/mobile-app.md`, seção 8) |
 | Segredos locais | `~/.securelink-prod/` (só o seu usuário do Windows lê): senha do banco, `CLEANUP_SECRET`, SQL inicial |
 
+**Publicado em 2026-11-04 (pelo Claude, com autorização):**
+- `master` em `e9ec261` (PR #2);
+- migration `20261105000000_entitlements_usage.sql` aplicada (20 migrations);
+- funções `check-url`, `admin` e `cleanup-files` atualizadas; sem login elas recusam o acesso (401/403);
+- site publicado e cabeçalhos conferidos, com `/.well-known/security.txt`;
+- extensão de produção refeita (`~/.securelink-prod/securelink-extension-prod.zip`);
+- **APK 0.9.1** (`~/.securelink-prod/securelink-vault-0.9.1.apk`, SHA-256 `2465f9b9288330b98f3cededc1c12342ea235b04b65bf305b423b7d6c58f4733`), com a mesma assinatura da 0.9.0.
+
 **Feito (pelo Claude, com autorização):**
 - projeto criado;
 - 19 migrations aplicadas;

@@ -7,7 +7,7 @@
  * - Writes manifest.json with the Supabase project as the only host permission.
  */
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { type Plugin, defineConfig, loadEnv } from 'vite'
@@ -16,6 +16,22 @@ const here = dirname(fileURLToPath(import.meta.url))
 const appRoot = resolve(here, '..')
 const sharedClient = resolve(appRoot, 'src/lib/supabase.ts')
 const extensionClient = resolve(here, 'src/supabase.ts')
+
+/**
+ * emptyOutDir deletes the output folder before writing. A mistyped --outDir (for example the app
+ * folder itself) would erase source files, so only folders named dist* are accepted.
+ */
+function guardOutDir(): Plugin {
+  return {
+    name: 'securelink-guard-outdir',
+    configResolved(config) {
+      const out = resolve(config.root, config.build.outDir)
+      if (!basename(out).startsWith('dist') || out === appRoot || appRoot.startsWith(out)) {
+        throw new Error(`Refusing to build into ${out}: the output folder must be a dist* folder.`)
+      }
+    },
+  }
+}
 
 function swapSupabaseClient(): Plugin {
   return {
@@ -87,7 +103,7 @@ export default defineConfig(({ mode }) => {
     root: here,
     envDir: appRoot,
     publicDir: false,
-    plugins: [swapSupabaseClient(), react(), manifest(env, testHosts, mode === 'store')],
+    plugins: [guardOutDir(), swapSupabaseClient(), react(), manifest(env, testHosts, mode === 'store')],
     build: {
       outDir: resolve(appRoot, testHosts ? 'dist-extension-test' : 'dist-extension'),
       emptyOutDir: true,
