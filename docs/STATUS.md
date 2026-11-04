@@ -4,6 +4,13 @@ Retrato de **2026-11-04** · Versão **0.9.0-beta** · Desenvolvimento em `dev` 
 
 Esta página serve para **retomar o trabalho**: onde o projeto está, o que está no ar, o que falta e qual é o próximo passo. O detalhe técnico está em [`HANDOVER.md`](HANDOVER.md), e o plano até a versão paga em [`product/roadmap-v1.md`](product/roadmap-v1.md).
 
+**Planejamento da versão paga (Fase A, 2026-11-04):**
+- [`product/plan-strategy.md`](product/plan-strategy.md): planos e matriz Free/Pro/Enterprise;
+- [`product/feature-review.md`](product/feature-review.md): inventário com evidências e lacunas P0–P4;
+- [`operations/finops.md`](operations/finops.md): custos, receita e ponto de equilíbrio;
+- [`operations/scaling-triggers.md`](operations/scaling-triggers.md): quando escalar;
+- [`operations/release-readiness.md`](operations/release-readiness.md): portões do beta, das assinaturas e das lojas.
+
 > O status antigo (protótipo de 2024, app Expo) foi substituído; ele continua no histórico do git.
 
 ---
@@ -56,7 +63,7 @@ Lista completa e marcável: [`pending-actions.md`](pending-actions.md). Resumo:
 
 ## 5. Próximos passos (ordem combinada)
 
-1. **Concluir o piloto** e colher o retorno dos convidados.
+1. **Concluir o piloto** e colher o retorno dos convidados. A produção fica no Supabase **Free** durante o beta, com até 25 usuários; o Pro entra ao abrir as assinaturas.
 2. **Revisar funcionalidades, features e visual** ([`product/roadmap-v1.md`](product/roadmap-v1.md), Etapa 1). O resultado é o escopo da versão 1.0.
 3. **Assinaturas** (Etapa 2):
    - planos, preços e gateway (cartão e Pix);

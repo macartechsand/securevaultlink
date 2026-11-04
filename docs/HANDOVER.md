@@ -8,6 +8,8 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 |---|---|
 | [`STATUS.md`](STATUS.md) | **Retrato atual em uma página**: o que existe, ambientes, pendências, próximos passos e como retomar |
 | [`product/roadmap-v1.md`](product/roadmap-v1.md) | **Caminho para a versão 1.0 paga**: revisão, assinaturas, garantia de segurança e de funcionamento, lojas |
+| [`product/plan-strategy.md`](product/plan-strategy.md) · [`product/feature-review.md`](product/feature-review.md) | Planos Free/Pro/Enterprise e inventário de funcionalidades com evidências e prioridades |
+| [`operations/finops.md`](operations/finops.md) · [`operations/scaling-triggers.md`](operations/scaling-triggers.md) · [`operations/release-readiness.md`](operations/release-readiness.md) | Custos e receita, gatilhos de escala e portões de prontidão |
 | **Este arquivo** | Visão completa, ambiente novo, operação, testes |
 | [`PRODUCTION.md`](PRODUCTION.md) | **Produção**: piloto de 15 dias no plano Free (seção 0: o que está no ar e o que falta), depois beta Pro com licenças, backups, segurança, rotinas e checklist de go-live |
 | [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |

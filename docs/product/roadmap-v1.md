@@ -4,6 +4,24 @@
 
 **Decisão do dono (2026-11-03):** o produto só vai para as lojas (Play Store, App Store e lojas de extensões) quando a **primeira versão produtiva completa** estiver pronta. Isso significa funcionalidades e adequação revisadas, assinaturas funcionando e segurança e funcionamento garantidos com evidência.
 
+## Revisão de 2026-11-04: plano de implementação produtiva
+
+Esta revisão compara o plano externo (feito com Gemini e GPT) com o código real. As fases de **fundação de segurança**, **MVP beta** e boa parte da **expansão** (extensão, rotação assistida, conectores) já estão prontas e testadas. As fases a seguir cobrem só o que falta, **sem reduzir funcionalidades**.
+
+| Fase | Conteúdo | Documentos |
+|---|---|---|
+| **A. Planejamento** ✅ | Matriz de planos, inventário com evidências, FinOps, gatilhos de escala, prontidão | [`plan-strategy.md`](plan-strategy.md), [`feature-review.md`](feature-review.md), [`../operations/finops.md`](../operations/finops.md), [`../operations/scaling-triggers.md`](../operations/scaling-triggers.md), [`../operations/release-readiness.md`](../operations/release-readiness.md) |
+| **B. Produção do beta** | Portão 1 da prontidão. **Supabase Free**, até 25 usuários, backup externo, SMTP, monitoramento gratuito, teste de restauração | `release-readiness.md`, Portão 1 |
+| **C. Competitividade** | Itens P0 e P1 do `feature-review`: entitlements (Free = 7 itens), limites no banco, Web Risk, ancoragem da auditoria, passkey, biometria, CI | `feature-review.md`, seção 10 |
+| **D. Assinaturas** | Etapa 2 deste documento, **mais a migração para o Supabase Pro** no momento da abertura | `release-readiness.md`, Portão 2 |
+| **E. Garantia** | Etapas 3 e 4 deste documento | `release-readiness.md`, Portão 3 |
+| **F. Lojas e Micro-PAM** | Etapa 5 deste documento; depois, organizações e o restante do P4 | `feature-review.md`, P4 |
+
+**Decisões do dono (2026-11-04):**
+1. Free com **itens limitados** (proposta: 7, configurável) e **todas as funcionalidades**.
+2. **Supabase Free** até o fim do beta com usuários limitados. O Pro entra ao abrir as assinaturas.
+3. Documentar só o que faltava: 5 documentos novos; os existentes continuam valendo.
+
 ## Visão geral
 
 | Etapa | O que é | Sai quando |
@@ -28,7 +46,7 @@ As etapas 2, 3 e 4 podem andar em paralelo depois da revisão. A etapa 5 só com
   - O que faltou para trocar o seu gerenciador atual?
   - Você pagaria? Quanto?
 - Juntar os dados de uso, que são só metadados: itens criados, arquivos, compartilhamentos, rotações, extensão e app. Use a aba Administração → Visão geral e Eventos.
-- Decidir: migrar a produção para o **Supabase Pro** (backups diários e sem pausa) antes da Etapa 2.
+- **Decidido (2026-11-04):** a produção fica no **Supabase Free** durante o beta, com até 25 usuários (capacidade em [`../operations/finops.md`](../operations/finops.md), seção 3). A migração para o **Pro** acontece ao abrir as assinaturas.
 
 ## Etapa 1. Revisão de funcionalidades, features e visual
 
@@ -144,9 +162,10 @@ Se o código for aberto (AGPL, ver [`open-source-and-business.md`](open-source-a
 ---
 
 ## Decisões em aberto do dono
-1. Migrar para o Supabase Pro ao fim do piloto?
-2. Escopo 1.0 (Etapa 1): sobretudo arquivos grandes, extensão fase 2, iPhone nativo e biometria.
-3. Planos, preços, teste grátis e gateway de pagamento.
-4. Nome final, domínio próprio e CNPJ.
-5. Quem faz o pentest e a revisão de criptografia, e o orçamento.
-6. Abrir o código (AGPL) antes ou depois da 1.0.
+1. ~~Migrar para o Supabase Pro ao fim do piloto?~~ **Decidido:** Free até o fim do beta; Pro ao abrir as assinaturas.
+2. Número exato de itens do Free (proposta: 7) e demais cotas do [`plan-strategy.md`](plan-strategy.md).
+3. Escopo 1.0 (Etapa 1): sobretudo arquivos grandes, extensão fase 2, iPhone nativo e biometria.
+4. Planos, preços, teste grátis e gateway de pagamento.
+5. Nome final, domínio próprio e CNPJ.
+6. Quem faz o pentest e a revisão de criptografia, e o orçamento.
+7. Abrir o código (AGPL) antes ou depois da 1.0.
