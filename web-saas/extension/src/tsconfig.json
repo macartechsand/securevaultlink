@@ -1,0 +1,10 @@
+{
+  // Gives the test files a tsconfig (extension/tsconfig.json excludes them), so the test transformer
+  // never walks up to the legacy Expo tsconfig at the repository root.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.extension-test.tsbuildinfo"
+  },
+  "include": ["./**/*.test.ts"],
+  "exclude": []
+}

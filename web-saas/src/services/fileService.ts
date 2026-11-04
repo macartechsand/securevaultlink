@@ -15,6 +15,7 @@ import {
   unwrapUserPrivateKey,
   wrapFileKeyForOwner,
 } from '../lib/crypto';
+import { isNativeShell } from '../lib/nativeShell';
 import { supabase } from '../lib/supabase';
 import { logClientEvent } from './auditService';
 
@@ -252,6 +253,13 @@ export function safeFileName(name: string) {
 
 /** Saves decrypted bytes. Always served as octet-stream so nothing is rendered inside the app origin. */
 export function saveToDisk(bytes: Uint8Array<ArrayBuffer>, name: string) {
+  if (isNativeShell()) {
+    // App: private cache → system share sheet → temporary copy deleted.
+    void import('../lib/platform').then((p) => p.shareDecryptedFile(bytes, safeFileName(name))).catch((err: unknown) => {
+      window.alert(err instanceof Error && err.message ? `Não foi possível salvar o arquivo: ${err.message}` : 'Não foi possível salvar o arquivo.');
+    });
+    return;
+  }
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
   const a = document.createElement('a');
   a.href = url;
@@ -271,7 +279,7 @@ async function uploadEncrypted(
   kind: 'vault' | 'transfer',
   expiresAt: string | null,
 ): Promise<{ file: VaultFile; fileKey: Uint8Array<ArrayBuffer> }> {
-  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('No plano gratuito, cada arquivo pode ter até 25 MB.');
+  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('Cada arquivo pode ter até 25 MB (qualquer formato). Para arquivos maiores, compacte ou divida o arquivo.');
   const id = crypto.randomUUID();
   const fileKey = generateFileKey();
   const meta: FileMetadata = { name: file.name, type: file.type || 'application/octet-stream', size: file.size };

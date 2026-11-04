@@ -1,6 +1,6 @@
 # Produção: beta com 5 usuários Premium e credenciais reais
 
-Última atualização: 2026-11-02 · Branch: `dev` (PR #1 para `master`)
+Última atualização: 2026-11-01 · Produção: `securelink-prod` (Free, piloto de 15 dias) · Código: `master`
 
 **Escopo atual:** beta fechado, **5 licenças Premium de 30 dias**, atribuídas e renovadas **manualmente** pelo administrador, **sem pagamento**. São 6 contas no total (5 usuários + o administrador master).
 
@@ -8,6 +8,66 @@ Roteiro para sair do ambiente de testes e operar o SecureLink Vault de forma **p
 - [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md): onde cada dado fica, o que é cifrado, as camadas de backup e o teste de restauração;
 - [`security/cyberark-alignment.md`](security/cyberark-alignment.md): aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) e o que falta;
 - [`security/access-recertification.md`](security/access-recertification.md): recertificação de que só o dono e quem recebeu o compartilhamento acessam cada item.
+
+---
+
+## 0. Piloto em produção no plano Free (2026-11-01)
+
+Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num piloto de **15 dias** com os convidados (licenças Premium de 15 dias). Os dados são **preservados** ao fim do prazo; nada é apagado automaticamente.
+
+| Recurso | Produção |
+|---|---|
+| Projeto Supabase | `securelink-prod` · ref `exglsdylytdjwrlmyptk` · São Paulo (`sa-east-1`) · **Free** |
+| App | https://securelinkvault.netlify.app (site Netlify `securelinkvault`, separado do de desenvolvimento) |
+| Código | `master` (PR #1 mesclado em `d5bf916`) |
+| Extensão | Pacote de produção gerado fora do repositório (`~/.securelink-prod/securelink-extension-prod.zip`) |
+| App Android | APK assinado de produção: `~/.securelink-prod/securelink-vault-0.9.0.apk` (instalação direta no piloto; ver `product/mobile-app.md`, seção 8) |
+| Segredos locais | `~/.securelink-prod/` (só o seu usuário do Windows lê): senha do banco, `CLEANUP_SECRET`, SQL inicial |
+
+**Feito (pelo Claude, com autorização):**
+- projeto criado;
+- 19 migrations aplicadas;
+- 7 funções publicadas;
+- secrets `CLEANUP_SECRET`, `APP_ORIGINS` e `ALLOWED_ORIGIN`;
+- site publicado com cabeçalhos verificados;
+- função de limpeza testada (200 com o secret, 403 sem ele);
+- pacote da extensão de produção gerado.
+
+**Diferenças do Free em relação ao plano Pro deste documento:**
+| Limite do Free | Impacto | Mitigação |
+|---|---|---|
+| **Sem backup automático** | Uma exclusão acidental não tem volta pelo painel | **Backup externo cifrado obrigatório**: o primeiro antes de convidar, depois 2 vezes por semana (`scripts/backup/backup.mjs`, exige o Docker Desktop aberto). Usuários fazem a exportação cifrada |
+| **Pausa após 7 dias sem uso** | O app para de responder até alguém retomar o projeto no painel | Uso diário do piloto evita; se pausar, **Restore project** no painel (os dados ficam) |
+| 1 GB de arquivos, 500 MB de banco | Cotas menores | Premium 150 MB × 5 + admin 80 MB = 830 MB |
+| E-mail padrão do Supabase só envia para membros da organização | Convites e redefinições por e-mail não chegam | Os convites do app já são **links** enviados por mensagem direta; não depende de e-mail |
+| No máximo 2 projetos ativos por organização | Não há onde fazer o teste de restauração completo (dev + prod ocupam as vagas) | Teste parcial: `restore.mjs` sem `--apply` (decifra e confere os hashes). Teste completo ao migrar para o Pro |
+
+**Falta (você, no painel ou no app):**
+1. [ ] **SQL Editor da produção** → colar e rodar `~/.securelink-prod/prod-setup.sql`, que contém:
+   - a autorização do administrador master;
+   - os limites do piloto;
+   - o cron de limpeza.
+
+   Conferir que aparecem 7 ajustes e 1 job.
+2. [ ] **Authentication → URL Configuration:**
+   - Site URL `https://securelinkvault.netlify.app`;
+   - Redirect URLs `https://securelinkvault.netlify.app/**`, `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/` e `app.securelink.vault://auth-callback`.
+3. [ ] **Authentication → Sign In / Providers → Email:** senha mínima 10, Confirm email ligado. **Multi-Factor:** TOTP habilitado.
+4. [ ] **Administrador master:**
+   1. Authentication → Users → **Add user** (mesmo e-mail do passo 1, senha forte, "Auto Confirm User").
+   2. Rodar a parte B de `supabase/admin/create-master-admin.sql`, trocando o e-mail.
+   3. Entrar no app, criar o cofre e ativar o MFA.
+5. [ ] **Backup:** abrir o Docker Desktop e rodar o primeiro backup externo. Pode pedir ao Claude, que lê a senha do banco do arquivo privado.
+6. [ ] **Convites:** Administração → Beta e limites → e-mail → Premium → **outro prazo: 15 dias**. Enviar o link, o `.zip` da extensão e o APK por mensagem direta, com o onboarding (seção 7).
+7. [ ] **Limites do beta (2026-11-04):** o `prod-setup.sql` já traz até **25 contas**, cota de **20 MB** no Free e **80 MB** no Premium (pior caso: 20 × 20 + 5 × 80 = 800 MB de 1 GB). Free com **7 itens** e as verificações de sites por dia vêm da migration `20261105000000`. Tudo é ajustável em Administração → Beta e limites.
+8. [ ] **Monitoramento gratuito** (Better Stack ou UptimeRobot):
+   - monitor HTTP de `https://securelinkvault.netlify.app` a cada 3–5 min;
+   - monitor HTTP de `https://exglsdylytdjwrlmyptk.supabase.co/auth/v1/health` com o header `apikey: <chave anon>` (a anon é pública). As requisições também mantêm o projeto ativo, contra a pausa de 7 dias do Free;
+   - **heartbeat** de 1 hora: `npx supabase secrets set --project-ref exglsdylytdjwrlmyptk HEARTBEAT_URL=<url do heartbeat>`. A limpeza de hora em hora chama essa URL; se parar, chega o alerta.
+9. [ ] **Âncoras da auditoria:** cada backup grava `audit-anchors.jsonl` ao lado do `.svbk`. Uma vez por semana: `node scripts/backup/verify-anchors.mjs` (variáveis no cabeçalho do script). Guarde uma cópia do arquivo de âncoras fora do computador.
+10. [ ] Opcional: chave do Safe Browsing ou, de preferência, do **Web Risk** (`WEB_RISK_API_KEY`; `npx supabase secrets set --project-ref exglsdylytdjwrlmyptk SAFE_BROWSING_API_KEY=...`, digitada por você no terminal). Sem ela, a verificação de sites aparece como indisponível. Google/GitHub exigem novos clientes OAuth apontando para a produção (`security/oauth.md`); até lá, login por e-mail e senha.
+
+**Ao fim dos 15 dias:** decidir entre migrar para o Pro, que mantém o mesmo projeto e os dados (Settings → Billing → upgrade), ou encerrar. Se encerrar, **exportar e avisar os usuários antes**; apagar dados reais exige a sua aprovação explícita.
 
 ---
 
@@ -152,10 +212,10 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 
 | # | Item | Situação |
 |---|---|---|
-| 1 | Projeto Supabase de produção no **Pro**, com as 19 migrations, Network Restrictions e SSL obrigatório | ⬜ |
-| 2 | Funções publicadas e secrets novos, inclusive `ALLOWED_ORIGIN` | ⬜ |
+| 1 | Projeto Supabase de produção no **Pro**, com as 19 migrations, Network Restrictions e SSL obrigatório | 🟡 Free com as 19 migrations (piloto); Pro e restrições de rede depois |
+| 2 | Funções publicadas e secrets novos, inclusive `ALLOWED_ORIGIN` | ✅ (falta só o Safe Browsing, opcional) |
 | 3 | Auth: URLs, Confirm email, senha mínima, SMTP, TOTP, OAuth de produção | ⬜ |
-| 4 | Site de produção com cabeçalhos verificados | ⬜ |
+| 4 | Site de produção com cabeçalhos verificados | ✅ securelinkvault.netlify.app |
 | 5 | Administrador master com MFA | ⬜ |
 | 6 | Limites: 6 contas, 5 licenças Premium (30 dias), MFA obrigatório para todos | ⬜ |
 | 7 | Cron da limpeza rodando (Conformidade) | ⬜ |
@@ -164,7 +224,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 | 10 | Conectores de rotação usados em produção validados com contas de teste | ⬜ |
 | 11 | Aviso de privacidade revisado | ⬜ |
 | 12 | Onboarding enviado (seção 7) | ⬜ |
-| 13 | PR #1 revisado e mesclado em `master` | ⬜ |
+| 13 | PR #1 revisado e mesclado em `master` | ✅ `d5bf916` |
 | 14 | MFA em todas as contas de plataforma; e-mail administrativo dedicado | ⬜ |
 | 15 | Rotação automática desligada; recertificação de acesso revisada (`security/access-recertification.md`) | ⬜ |
 | 16 | Extensão: Redirect URL `https://<id>.chromiumapp.org/` no projeto de produção (ID sem loja `mcljapeloopnadipmhmojkmbjjgbpdij`; com loja, o ID atribuído) | ⬜ |

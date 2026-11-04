@@ -56,7 +56,7 @@ export function computePosture(p: PostureInput): Posture {
   if (p.rotationDue)
     recommendations.push({ id: 'due', severity: 'medium', title: `${p.rotationDue} troca(s) programada(s) vencida(s)`, detail: 'Use a fila de rotação para trocar com a ajuda do app.', action: { label: 'Abrir fila', view: 'rotation' } })
   if (p.checkable > 0 && !p.securityCheckRan)
-    recommendations.push({ id: 'check', severity: 'low', title: 'Rode a verificação de segurança', detail: 'Confere vazamentos (Have I Been Pwned) e sites perigosos (Safe Browsing).', action: { label: 'Verificar agora', view: 'dashboard' } })
+    recommendations.push({ id: 'check', severity: 'low', title: 'Rode a verificação de segurança', detail: 'Confere vazamentos (Have I Been Pwned) e sites perigosos (Google).', action: { label: 'Verificar agora', view: 'dashboard' } })
 
   // Account protection (30): MFA 20, recovery key 10.
   const account = (p.mfaEnabled ? 20 : 0) + (p.recoveryEnabled ? 10 : 0)
@@ -70,7 +70,7 @@ export function computePosture(p: PostureInput): Posture {
   const web = clamp(15 - p.unsafeSites * 5, 15)
   categories.push({ key: 'web', label: 'Sites salvos', score: web, max: 15 })
   if (p.unsafeSites > 0)
-    recommendations.push({ id: 'unsafe', severity: 'high', title: `${p.unsafeSites} site(s) perigoso(s) no cofre`, detail: 'O Google Safe Browsing marcou esses endereços como maliciosos. Não entre neles.', action: { label: 'Ver sites', view: 'vault', filter: 'unsafe' } })
+    recommendations.push({ id: 'unsafe', severity: 'high', title: `${p.unsafeSites} site(s) perigoso(s) no cofre`, detail: 'O Google marcou esses endereços como maliciosos. Não entre neles.', action: { label: 'Ver sites', view: 'vault', filter: 'unsafe' } })
 
   // Sharing exposure (10).
   let sharing = 10

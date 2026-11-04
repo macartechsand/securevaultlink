@@ -1,0 +1,26 @@
+# Static analysis (SAST) of the TypeScript/JavaScript code: web app, extension, Edge Functions and scripts.
+# Free for public repositories. Findings appear under Security → Code scanning.
+name: CodeQL
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+  schedule:
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
+      - uses: github/codeql-action/analyze@v3

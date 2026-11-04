@@ -80,14 +80,23 @@ export function FilesView({ getKeyContext, getKeyPair }: FilesViewProps) {
     setError('');
     try {
       const ctx = getKeyContext();
-      const keys = await getKeyPair();
       setLimits(await fetchPlanLimits());
-      const [mine, sharedWithMe] = await Promise.all([listOwnFiles(ctx), listSharedWithMe(ctx, keys)]);
+      // Own files and transfers only need the vault key; a sharing-key problem must not hide them.
+      const mine = await listOwnFiles(ctx);
       setOwn(mine.files);
-      setShared(sharedWithMe.files);
-      setUndecryptable(mine.undecryptable + sharedWithMe.undecryptable);
       setTransfers(await listTransfers(mine.files));
-      setFingerprint(await publicKeyFingerprint(keys.publicKey));
+      let sharedUndecryptable = 0;
+      try {
+        const keys = await getKeyPair();
+        const sharedWithMe = await listSharedWithMe(ctx, keys);
+        setShared(sharedWithMe.files);
+        sharedUndecryptable = sharedWithMe.undecryptable;
+        setFingerprint(await publicKeyFingerprint(keys.publicKey));
+      } catch (err) {
+        setShared([]);
+        setError(friendlyError(err, 'Não foi possível abrir a chave de compartilhamento; os arquivos compartilhados com você não aparecem.'));
+      }
+      setUndecryptable(mine.undecryptable + sharedUndecryptable);
     } catch (err) {
       setError(friendlyError(err, 'Não foi possível carregar os arquivos.'));
     } finally {

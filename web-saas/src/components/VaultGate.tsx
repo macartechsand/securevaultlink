@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { friendlyError } from '../lib/messages';
 import { MASTER_PASSWORD_MIN_LENGTH, validateMasterPassword } from '../state/useVaultSession';
 
@@ -15,6 +15,32 @@ type VaultGateProps = {
 
 const RESET_PHRASE = 'APAGAR COFRE';
 
+// Progressive delay after wrong master passwords or recovery keys (per tab; survives a reload).
+// The real defense is the KDF cost; this slows down guessing at an unattended, signed-in device.
+const FAILS_KEY = 'sv.unlockFails';
+const FREE_ATTEMPTS = 3;
+type Fails = { n: number; until: number };
+function readFails(): Fails {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(FAILS_KEY) ?? 'null') as Fails | null;
+    return v && typeof v.n === 'number' && typeof v.until === 'number' ? v : { n: 0, until: 0 };
+  } catch {
+    return { n: 0, until: 0 };
+  }
+}
+function writeFails(v: Fails | null) {
+  try {
+    if (v) sessionStorage.setItem(FAILS_KEY, JSON.stringify(v));
+    else sessionStorage.removeItem(FAILS_KEY);
+  } catch {
+    /* storage unavailable: the delay then lasts only while this screen is open */
+  }
+}
+/** Seconds to wait after n failures: 0 for the first 3, then 5, 10, 20… up to 5 minutes. */
+export function unlockDelaySeconds(n: number) {
+  return n < FREE_ATTEMPTS ? 0 : Math.min(300, 5 * 2 ** (n - FREE_ATTEMPTS));
+}
+
 export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecover, onResetVault, onSignOut }: VaultGateProps) {
   const [resetting, setResetting] = useState(false);
   const [resetTyped, setResetTyped] = useState('');
@@ -25,10 +51,20 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
   const [understood, setUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [fails, setFails] = useState<Fails>(readFails);
+  const [now, setNow] = useState(() => Date.now());
   const setup = mode === 'needs-setup';
+  const waitSeconds = setup ? 0 : Math.max(0, Math.ceil((fails.until - now) / 1000));
+
+  useEffect(() => {
+    if (fails.until <= Date.now()) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [fails.until]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (waitSeconds > 0) return;
     setError('');
     setBusy(true);
     try {
@@ -46,8 +82,16 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
       setPassword('');
       setConfirm('');
       setRecoveryKey('');
+      writeFails(null);
     } catch (err) {
       setError(friendlyError(err));
+      if (!setup) {
+        const n = fails.n + 1;
+        const next = { n, until: Date.now() + unlockDelaySeconds(n) * 1000 };
+        writeFails(next);
+        setFails(next);
+        setNow(Date.now());
+      }
     } finally {
       setBusy(false);
     }
@@ -152,8 +196,13 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
           </label>
         )}
         {error && <div className="alert alert--error">{error}</div>}
-        <button type="submit" className="btn btn--primary btn--block" disabled={busy || (setup && !understood)}>
-          {busy ? 'Processando…' : setup ? 'Criar cofre' : useRecovery ? 'Recuperar cofre' : 'Desbloquear'}
+        {waitSeconds > 0 && (
+          <div className="alert alert--warn" role="status">
+            {fails.n} tentativas erradas. Aguarde {waitSeconds} s para tentar de novo.
+          </div>
+        )}
+        <button type="submit" className="btn btn--primary btn--block" disabled={busy || waitSeconds > 0 || (setup && !understood)}>
+          {busy ? 'Processando…' : waitSeconds > 0 ? `Aguarde ${waitSeconds} s` : setup ? 'Criar cofre' : useRecovery ? 'Recuperar cofre' : 'Desbloquear'}
         </button>
         {!setup && hasRecovery && (
           <button type="button" className="btn btn--ghost btn--block" onClick={() => setUseRecovery((v) => !v)}>

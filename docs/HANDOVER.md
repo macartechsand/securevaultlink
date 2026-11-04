@@ -1,17 +1,23 @@
 # SecureLink Vault: documento de continuidade do MVP
 
-Última atualização: 2026-11-01 · Branch: `dev` (no GitHub, PR #1 para `master`)
+Última atualização: 2026-11-04 · Código de produção: `master` · Desenvolvimento: `dev`
 
 Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reúne o que existe, como montar um ambiente novo do zero, como operar no dia a dia e o que falta.
 
 | Documento | Para quê |
 |---|---|
+| [`STATUS.md`](STATUS.md) | **Retrato atual em uma página**: o que existe, ambientes, pendências, próximos passos e como retomar |
+| [`product/roadmap-v1.md`](product/roadmap-v1.md) | **Caminho para a versão 1.0 paga**: revisão, assinaturas, garantia de segurança e de funcionamento, lojas |
+| [`product/plan-strategy.md`](product/plan-strategy.md) · [`product/feature-review.md`](product/feature-review.md) | Planos Free/Pro/Enterprise e inventário de funcionalidades com evidências e prioridades |
+| [`operations/finops.md`](operations/finops.md) · [`operations/scaling-triggers.md`](operations/scaling-triggers.md) · [`operations/release-readiness.md`](operations/release-readiness.md) | Custos e receita, gatilhos de escala e portões de prontidão |
 | **Este arquivo** | Visão completa, ambiente novo, operação, testes |
-| [`PRODUCTION.md`](PRODUCTION.md) | **Ir para produção (beta: 5 usuários Premium por 30 dias, sem cobrança)**: projeto de produção, licenças, backups, segurança, rotinas e checklist de go-live |
+| [`PRODUCTION.md`](PRODUCTION.md) | **Produção**: piloto de 15 dias no plano Free (seção 0: o que está no ar e o que falta), depois beta Pro com licenças, backups, segurança, rotinas e checklist de go-live |
 | [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |
 | [`security/cyberark-alignment.md`](security/cyberark-alignment.md) | Aderência às boas práticas CyberArk (Vault, Server Security Standard, Secured Items) |
 | [`product/open-source-and-business.md`](product/open-source-and-business.md) | Open source (licença, preparação), web + mobile, modelo de negócio e posicionamento contra o 1Password |
-| [`product/browser-extension.md`](product/browser-extension.md) | Extensão de navegador: objetivo, fases, arquitetura, correspondência de domínio, ameaças e decisões pendentes |
+| [`product/browser-extension.md`](product/browser-extension.md) | Extensão de navegador: objetivo, fases, arquitetura, correspondência de domínio, ameaças, decisões e situação |
+| [`../web-saas/extension/README.md`](../web-saas/extension/README.md) | Extensão: build, instalação sem loja, login Google/GitHub, testes |
+| [`product/mobile-app.md`](product/mobile-app.md) | App para celular (Android e iOS): objetivo, arquitetura, segurança e fases |
 | [`security/access-recertification.md`](security/access-recertification.md) | Quem acessa cada item: matriz de acesso, controles com evidência de teste e riscos residuais |
 | [`security/mvp-security-model.md`](security/mvp-security-model.md) | Modelo de segurança detalhado e limitações |
 | [`security/oauth.md`](security/oauth.md) | Login com Google e GitHub (OAuth + PKCE) |
@@ -25,10 +31,13 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 
 | Item | Valor |
 |---|---|
-| App publicado | `https://securelinkvaultdev.netlify.app` (Netlify, site `securelinkvaultdev`, deploy por CLI) |
-| Supabase | Projeto de **desenvolvimento**, ref `sueemdqyhwnmbqokpefz`, plano **Free**. É onde rodam os testes de integração; a produção deve ser um projeto separado (ver `PRODUCTION.md`) |
+| **Produção (piloto)** | App `https://securelinkvault.netlify.app` (site `securelinkvault`) · Supabase `securelink-prod`, ref `exglsdylytdjwrlmyptk`, São Paulo, plano **Free** por 15 dias. Situação e passos restantes: `PRODUCTION.md`, seção 0. Segredos locais em `~/.securelink-prod/` (fora do repositório) |
+| Desenvolvimento | App `https://securelinkvaultdev.netlify.app` (site `securelinkvaultdev`) · Supabase ref `sueemdqyhwnmbqokpefz`, plano Free. É onde rodam os testes de integração; **nunca** rode testes contra a produção |
+| Publicação | Por CLI. Desenvolvimento: `netlify deploy --prod --dir web-saas/dist`. Produção: build com as variáveis da produção e `--site 074110e2-19ba-4fdc-82f8-ad7a5d7cab4f` (ver `PRODUCTION.md`). A CLI do Supabase fica vinculada ao **desenvolvimento**; comandos de produção usam `--project-ref exglsdylytdjwrlmyptk` |
+| Extensão | `web-saas/extension/` (Chrome e Edge, MV3). Pacote de desenvolvimento em `web-saas/dist-extension`; de produção, fora do repositório |
+| App Android | `web-saas/android/` (Capacitor 7). APK de produção assinado em `~/.securelink-prod/`; como gerar em `product/mobile-app.md`, seção 8 |
 | Código | `web-saas/` (app), `supabase/migrations/` (banco), `supabase/functions/` (Edge Functions), `supabase/admin/` (scripts de operação) |
-| Repositório | GitHub `macartechsand/securevaultlink`. Branch `dev` enviada; **PR #1** (`dev` → `master`) aberto. O `master` antigo (protótipo Bolt) foi ligado ao histórico com um merge `-s ours` |
+| Repositório | GitHub `macartechsand/securevaultlink`. **PR #1 mesclado** em `master` (`d5bf916`); o desenvolvimento segue em `dev`. O `master` antigo (protótipo Bolt) foi ligado ao histórico com um merge `-s ours` |
 | Legado | O app Expo da raiz está congelado; não usar |
 
 ---
@@ -52,7 +61,8 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 | **Privacidade (LGPD)** | Aviso de privacidade; controle das métricas enviadas ao suporte; **excluir conta e todos os dados** |
 | **Diagnóstico** | Testes do navegador, conexão, cofre, chaves, armazenamento e funções; relatório copiável ou **enviado ao suporte** |
 | **Recomeçar o cofre** | Sem chave de recuperação, "Esqueci a senha mestra" permite apagar o cofre (digitando `APAGAR COFRE`) e criar outro, mantendo conta, MFA e papéis |
-| **Interface** | Tema escuro e claro, português, responsiva |
+| **Interface** | Tema escuro e claro, português. Menu agrupado (Cofre, Proteção, Conta) com contadores de pendências e quadro "Cofre desbloqueado" (o que protege a sessão); busca com atalho `/` ou `Ctrl+K`; visão geral com ações rápidas, medidor de postura e cartões que abrem o cofre filtrado. **Celular:** barra de navegação inferior, itens em cartões, janelas como painéis inferiores. **PWA:** instalável no Android e no iPhone |
+| **Extensão de navegador** (Chrome/Edge) | Entrar com e-mail/senha, **Google ou GitHub** + TOTP; desbloquear com a senha mestra; bloqueio após 10 min, ao bloquear o sistema e ao fechar o navegador; **preencher** logins só no site correspondente (domínio base, http×https, IP e porta exatos), com gesto do usuário e nunca em iframe de terceiro; `Ctrl+Shift+L`; copiar com limpeza em 30 s; gerador. Detalhes: `product/browser-extension.md` |
 
 ### 2.2 Administração
 Nenhuma função administrativa devolve conteúdo de cofre.
@@ -95,6 +105,11 @@ Navegador (React 19 + Vite, web-saas/)
 Terceiros: Have I Been Pwned (k-anonimato) · Google Safe Browsing (pela função check-url)
            APIs de rotação (pela função rotate): AWS IAM/STS, Google OAuth/IAM/Admin SDK, Microsoft Graph, GitLab, Cloudflare
 Hospedagem: Netlify (CSP, HSTS, noindex)
+
+Extensão (web-saas/extension/, MV3)
+  ├─ service worker: sessão própria (chrome.storage.local), DEK só em memória (chrome.storage.session)
+  ├─ mesma criptografia e serviços do app (importados de web-saas/src; cliente Supabase trocado no build)
+  └─ preenchimento: varre os frames sem segredos → envia usuário/senha a um único frame do mesmo site
 ```
 
 ### 3.1 Banco (principais tabelas)
@@ -114,7 +129,7 @@ Hospedagem: Netlify (CSP, HSTS, noindex)
 ### 3.2 Edge Functions
 | Função | JWT | Papel | Secrets |
 |---|---|---|---|
-| `check-url` | sim | Reputação de URLs (Safe Browsing) | `SAFE_BROWSING_API_KEY` |
+| `check-url` | sim | Reputação de URLs: **Web Risk** (uso comercial) ou Safe Browsing (só sem cobrança). Uso justo por plano e dia contado no banco (`consume_url_checks`) | `WEB_RISK_API_KEY` ou `SAFE_BROWSING_API_KEY` |
 | `transfer` | **não** (público) | Download de transferências por link | (service role, automático) |
 | `cleanup-files` | **não** (protegida por header) | Limpeza de vencidos e abandonados; heartbeat | `CLEANUP_SECRET` |
 | `admin` | sim | MFA reset, suspender, links de convite e redefinição, saúde | `APP_ORIGINS` |
@@ -138,7 +153,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 19 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261104…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 20 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261105…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -151,7 +166,8 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    ```
 4. Secrets (gere o `CLEANUP_SECRET` com o gerador seguro, ver `pending-actions.md`):
    ```powershell
-   npx supabase secrets set SAFE_BROWSING_API_KEY=<chave> CLEANUP_SECRET=<64 hex> APP_ORIGINS=https://<dominio-do-app> ALLOWED_ORIGIN=https://<dominio-do-app>
+   npx supabase secrets set WEB_RISK_API_KEY=<chave> CLEANUP_SECRET=<64 hex> APP_ORIGINS=https://<dominio-do-app> ALLOWED_ORIGIN=https://<dominio-do-app>
+   # opcional: HEARTBEAT_URL=<url de heartbeat do monitoramento>, chamada a cada limpeza (de hora em hora)
    ```
 5. **Authentication:**
    - **URL Configuration:**
@@ -232,7 +248,13 @@ npm test -- integration        # integração contra o Supabase de DESENVOLVIMEN
 | `session.integration` | Caminho real de desbloqueio (perfil → senha mestra → itens → histórico) e "recomeçar cofre" |
 | `rotate.integration` | Função `rotate` contra as APIs **reais** de AWS, Google, Microsoft, GitLab e Cloudflare com credenciais **falsas**: autenticação, validação, anti-SSRF, nenhum valor ecoado |
 
-Última execução (2026-11-01): **130 de 130**, duas vezes seguidas. Os arquivos de teste rodam um de cada vez (`fileParallelism: false`), porque as suítes de integração compartilham as contas A e B. A suíte `rotate.integration` faz cerca de 10 chamadas às plataformas por execução (o limite é 20 por hora).
+**Extensão:**
+```powershell
+npm test -- extension            # regras de domínio (phishing) e retorno do OAuth
+npm run build:ext:test; npm run test:ext:e2e   # Edge real + desenvolvimento + conta A
+```
+
+Última execução (2026-11-04): **154 de 154** (inclui `entitlements.integration`: limite de itens e contador de verificações no banco real) e **6 de 6** ponta a ponta no Edge (2026-11-01). O app Android foi conferido em emulador (ver `product/mobile-app.md`, seção 7). Os arquivos de teste rodam um de cada vez (`fileParallelism: false`), porque as suítes de integração compartilham as contas A e B. A suíte `rotate.integration` faz cerca de 10 chamadas às plataformas por execução (o limite é 20 por hora).
 
 ---
 
@@ -251,12 +273,21 @@ O checklist de go-live para o **beta com 5 usuários Premium e credenciais reais
 - **Confirmação por e-mail com PKCE:** precisa ser aberta no mesmo navegador do cadastro.
 - **Sem API de troca de senha:** Instagram, Facebook, Gmail e conta Microsoft pessoal; o 1 clique só abre a página de troca de cada um.
 - **Licenças:** não há cobrança automática (Stripe); o Premium é atribuído pelo admin.
-- **Supabase Free:** sem backup automático e pausa após 7 dias sem uso.
+- **Supabase Free:** sem backup automático e pausa após 7 dias sem uso. A produção do piloto está no Free; o backup externo é obrigatório.
+- **Extensão:** só logins (notas, segredos e cartões ficam no app); não oferece salvar senha ao fazer login nem ícone dentro do campo (fase 2); a área de transferência é limpa após 30 s sem conferir o conteúdo.
+- **Login social na produção:** exige novos clientes OAuth do Google e do GitHub apontando para o projeto de produção.
 
-## 9. Próximos passos sugeridos
-1. Produção: seguir `PRODUCTION.md` (projeto Pro separado, licenças, backups testados).
-2. Validar os conectores de rotação com contas de teste e marcá-los como "Disponível".
-3. Agente local para bancos e servidores (PostgreSQL primeiro), conforme `architecture/connectors-rotation.md`.
-4. Cifragem em streaming para arquivos grandes (Premium no R2).
-5. Cobrança (Stripe) ligada às licenças; equipes e organizações (MVP 4).
-6. Auditoria externa / pentest.
+## 9. Próximos passos (ordem combinada em 2026-11-03)
+O plano detalhado, com critérios de saída de cada etapa, está em [`product/roadmap-v1.md`](product/roadmap-v1.md).
+1. Concluir o piloto de produção (`PRODUCTION.md`, seção 0), colher o retorno dos convidados e decidir o Pro ao fim dos 15 dias.
+2. **Revisar funcionalidades, features e visual** e fechar o escopo da 1.0. Em discussão:
+   - extensão fase 2;
+   - arquivos grandes por streaming;
+   - biometria e iPhone nativo;
+   - conectores de rotação validados com conta real;
+   - agente local para bancos e servidores.
+3. **Assinaturas:** cobrança recorrente (cartão e Pix) ligada às licenças, Termos de Uso, Política de Privacidade, CNPJ e NFS-e.
+4. **Garantia de segurança:** pentest externo, revisão da criptografia, Supabase Pro com restauração testada, plano de incidentes.
+5. **Garantia de funcionalidade:** testes automáticos em todo PR, matriz de aparelhos, monitoramento, suporte.
+6. **Lojas** (Play Store, App Store, lojas de extensões): só com a versão 1.0 completa.
+7. Depois da 1.0: equipes e organizações (plano Business).

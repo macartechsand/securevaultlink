@@ -7,7 +7,7 @@
 //   node scripts/backup/crypt.mjs self-test
 import { createCipheriv, createDecipheriv, randomBytes, scrypt as scryptCb } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { open, rename, rm, stat, writeFile, readFile, mkdtemp } from 'node:fs/promises';
+import { open, rename, rm, writeFile, readFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -38,9 +38,13 @@ export async function encryptFile(input, output, pass = passphrase()) {
 }
 
 export async function decryptFile(input, output, pass = passphrase()) {
-  const { size } = await stat(input);
-  if (size < HEADER + TAG) throw new Error('Not a SecureVault backup file.');
+  // Size and reads come from the same open handle (no check-then-open race on the path).
   const fh = await open(input, 'r');
+  const { size } = await fh.stat();
+  if (size < HEADER + TAG) {
+    await fh.close();
+    throw new Error('Not a SecureVault backup file.');
+  }
   const head = Buffer.alloc(HEADER);
   const tag = Buffer.alloc(TAG);
   await fh.read(head, 0, HEADER, 0);

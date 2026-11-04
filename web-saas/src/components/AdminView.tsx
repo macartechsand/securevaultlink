@@ -19,7 +19,8 @@ const HEALTH_LABELS: Record<string, string> = {
   database: 'Banco de dados',
   bucket_exists: 'Bucket de arquivos existe',
   bucket_private: 'Bucket de arquivos privado',
-  safe_browsing_key: 'Chave do Safe Browsing configurada',
+  safe_browsing_key: 'Chave de reputação de URLs (Web Risk ou Safe Browsing) configurada',
+  web_risk_key: 'Web Risk configurado (obrigatório ao cobrar pelo produto)',
   cleanup_secret: 'Segredo da limpeza configurado',
 };
 

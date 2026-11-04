@@ -77,5 +77,9 @@ Deno.serve(async (req) => {
   // Heartbeat for the admin health panel (no user data).
   await admin.from('audit_events').insert({ user_id: null, event: 'system.cleanup', source: 'server', details: { removed, sharesRemoved, itemSharesRemoved } })
 
+  // Optional external heartbeat (e.g. Better Stack): a missed hourly ping alerts the owner that the cron,
+  // the functions or the database stopped. The URL carries no data; failures never break the cleanup.
+  const heartbeat = Deno.env.get('HEARTBEAT_URL')
+  if (heartbeat?.startsWith('https://')) await fetch(heartbeat, { method: 'GET' }).catch(() => null)
   return new Response(JSON.stringify({ removed, sharesRemoved, itemSharesRemoved }), { headers: { 'Content-Type': 'application/json' } })
 })

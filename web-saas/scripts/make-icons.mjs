@@ -1,6 +1,8 @@
-// Renders the app icons (PNG) for the PWA manifest and iOS home screen, without dependencies.
-// Usage: node scripts/make-icons.mjs  (writes into public/icons/)
-import { mkdirSync, writeFileSync } from 'node:fs'
+// Renders the app icons (PNG) without dependencies:
+//  - PWA manifest and iOS home screen (public/icons/);
+//  - Android launcher icons, legacy and adaptive (android/app/src/main/res/mipmap-*), when android/ exists.
+// Usage: node scripts/make-icons.mjs
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
 
 const OUT = new URL('../public/icons/', import.meta.url)
@@ -41,16 +43,21 @@ const TOP = [0x82, 0xa6, 0xff]
 const BOTTOM = [0x3a, 0x5f, 0xd9]
 const WHITE = [255, 255, 255]
 
-/** Returns the RGBA color at a point in unit space [0,1]². `rounded` keeps transparent corners. */
-function sample(u, v, rounded) {
-  if (rounded) {
+/**
+ * Returns the RGBA color at a point in unit space [0,1]², or null for transparent.
+ * shape: 'square' | 'rounded' (transparent corners) | 'circle' | 'foreground' (adaptive-icon layer:
+ * transparent background, shield inside the 66/108 safe zone).
+ */
+function sample(u, v, shape) {
+  if (shape === true || shape === 'rounded') {
     const r = 0.22
     const cx = Math.min(Math.max(u, r), 1 - r)
     const cy = Math.min(Math.max(v, r), 1 - r)
     if (Math.hypot(u - cx, v - cy) > r) return null
   }
+  if (shape === 'circle' && Math.hypot(u - 0.5, v - 0.5) > 0.5) return null
   // Shield fills 56% of the height, centered (inside the maskable safe zone).
-  const scale = 0.56 / 18
+  const scale = (shape === 'foreground' ? 0.56 * (66 / 108) * 0.95 : 0.56) / 18
   const gx = (u - 0.5) / scale + 12
   const gy = (v - 0.5) / scale + 12
   const bg = TOP.map((c, i) => Math.round(c + (BOTTOM[i] - c) * v))
@@ -58,7 +65,7 @@ function sample(u, v, rounded) {
     const onCheck = Math.min(distToSegment(gx, gy, CHECK[0], CHECK[1]), distToSegment(gx, gy, CHECK[1], CHECK[2])) < 1.1
     return onCheck ? BOTTOM : WHITE
   }
-  return bg
+  return shape === 'foreground' ? null : bg
 }
 
 function render(size, rounded) {
@@ -129,4 +136,17 @@ for (const [name, size, rounded] of [
 ]) {
   writeFileSync(new URL(name, OUT), render(size, rounded))
   console.log('wrote', name)
+}
+
+// Android launcher icons (48 dp legacy, 108 dp adaptive foreground) when the native project exists.
+const RES = new URL('../android/app/src/main/res/', import.meta.url)
+if (existsSync(RES)) {
+  for (const [density, factor] of [['mdpi', 1], ['hdpi', 1.5], ['xhdpi', 2], ['xxhdpi', 3], ['xxxhdpi', 4]]) {
+    const dir = new URL(`mipmap-${density}/`, RES)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(new URL('ic_launcher.png', dir), render(Math.round(48 * factor), 'rounded'))
+    writeFileSync(new URL('ic_launcher_round.png', dir), render(Math.round(48 * factor), 'circle'))
+    writeFileSync(new URL('ic_launcher_foreground.png', dir), render(Math.round(108 * factor), 'foreground'))
+  }
+  console.log('wrote Android launcher icons')
 }

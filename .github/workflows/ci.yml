@@ -1,0 +1,53 @@
+# Runs on every push and pull request. A PR into master must be green before merging.
+# Integration suites skip themselves here (no test accounts in CI); run them locally against the
+# development project before opening the PR (docs/HANDOVER.md, section 6).
+name: CI
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Lint, build and unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-saas
+    env:
+      # Placeholders: the build needs values, but CI never talks to a real project.
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web-saas/package-lock.json
+      - run: npm ci
+      - run: npx oxlint
+      - run: npm run build
+      - run: npm run build:ext
+      - run: npm test
+      # Fails on high or critical advisories in runtime dependencies.
+      - run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

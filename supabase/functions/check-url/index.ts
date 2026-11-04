@@ -1,10 +1,13 @@
-// Supabase Edge Function: URL reputation via Google Safe Browsing (Lookup API v4).
-// The API key lives only in the function secrets (SAFE_BROWSING_API_KEY), never in the browser.
-// Provider is isolated in lookupThreats() so it can be swapped for a paid service (e.g. Web Risk).
+// Supabase Edge Function: URL reputation.
+// Provider: Google Web Risk (Lookup API, licensed for commercial use) when WEB_RISK_API_KEY is set;
+// otherwise Google Safe Browsing v4 (non-commercial use only: development and the unpaid beta).
+// Keys live only in the function secrets, never in the browser.
 //
 // Deploy:  supabase functions deploy check-url
-// Secret:  supabase secrets set SAFE_BROWSING_API_KEY=<key>
+// Secret:  supabase secrets set WEB_RISK_API_KEY=<key>      (or SAFE_BROWSING_API_KEY=<key>)
 // JWT verification stays ON (default): only signed-in users can call it.
+// Fair use per plan and day is enforced by the database (public.consume_url_checks, migration
+// 20261105000000); the in-memory limit below only absorbs bursts within one instance.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
@@ -35,8 +38,30 @@ function allowed(userId: string) {
 
 const MAX_URLS = 50
 
-/** Returns url -> threat types (empty array = no known threats). */
-async function lookupThreats(urls: string[], apiKey: string): Promise<Map<string, string[]>> {
+const WEB_RISK_TYPES = ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'SOCIAL_ENGINEERING_EXTENDED_COVERAGE']
+
+/** Web Risk Lookup: one call per URL (each call counts toward the free 100k/month), 5 at a time. */
+async function lookupWebRisk(urls: string[], apiKey: string): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>()
+  const queue = [...urls]
+  const worker = async () => {
+    for (let url = queue.shift(); url !== undefined; url = queue.shift()) {
+      const params = new URLSearchParams({ uri: url })
+      for (const t of WEB_RISK_TYPES) params.append('threatTypes', t)
+      const response = await fetch(`https://webrisk.googleapis.com/v1/uris:search?${params}`, {
+        headers: { 'X-Goog-Api-Key': apiKey },
+      })
+      if (!response.ok) throw new Error(`provider status ${response.status}`)
+      const data = await response.json() as { threat?: { threatTypes?: string[] } }
+      result.set(url, [...new Set(data.threat?.threatTypes ?? [])])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(5, urls.length) }, worker))
+  return result
+}
+
+/** Safe Browsing v4: one batched call. Returns url -> threat types (empty array = no known threats). */
+async function lookupSafeBrowsing(urls: string[], apiKey: string): Promise<Map<string, string[]>> {
   const response = await fetch('https://safebrowsing.googleapis.com/v4/threatMatches:find', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey },
@@ -94,11 +119,17 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid url' }, 400)
   }
 
-  const apiKey = Deno.env.get('SAFE_BROWSING_API_KEY')
-  if (!apiKey) return json({ error: 'reputation provider not configured' }, 503)
+  const webRiskKey = Deno.env.get('WEB_RISK_API_KEY')
+  const safeBrowsingKey = Deno.env.get('SAFE_BROWSING_API_KEY')
+  if (!webRiskKey && !safeBrowsingKey) return json({ error: 'reputation provider not configured' }, 503)
+
+  // Reserve the checks in the database before calling the provider (counts URLs, never stores them).
+  const { data: allowedToday, error: quotaError } = await supabase.rpc('consume_url_checks', { p_count: urls.length })
+  if (quotaError) return json({ error: 'quota unavailable' }, 503)
+  if (allowedToday !== true) return json({ error: 'daily limit reached', code: 'url_checks_daily_limit' }, 429)
 
   try {
-    const threats = await lookupThreats(urls, apiKey)
+    const threats = webRiskKey ? await lookupWebRisk(urls, webRiskKey) : await lookupSafeBrowsing(urls, safeBrowsingKey!)
     const results = urls.map((url) => {
       const found = threats.get(url) ?? []
       return { url, status: found.length ? 'unsafe' : 'no-known-threats', threats: found }

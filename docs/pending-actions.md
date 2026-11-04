@@ -8,6 +8,29 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Beta pronto para usuários (2026-11-04)
+
+1. [x] **Desenvolvimento → SQL Editor:** rodar `supabase/migrations/20261105000000_entitlements_usage.sql` (limite de itens por plano, contador diário de verificações de sites, novos campos em Beta e limites).
+2. [x] **Desenvolvimento → Administração → Beta e limites:** desligar **"MFA obrigatório para todos"**. Ele está exigindo MFA das contas de teste A e B, que não têm autenticador, e 15 testes de integração falham com `vault_files_require_mfa`. Na produção ele continua **ligado** (`prod-setup.sql`).
+3. [ ] Avisar o Claude para rodar a suíte completa de novo. Com ela verde, segue o PR `dev` → `master` (a CI do GitHub precisa passar) e a publicação na produção: migration, funções `check-url`, `admin` e `cleanup-files`, e o site.
+4. [ ] **Abrir o Docker Desktop** para o primeiro backup externo e o teste de restauração.
+5. [ ] Monitoramento gratuito e heartbeat: `PRODUCTION.md`, seção 0, passo 8.
+
+## Produção: piloto de 15 dias no plano Free (2026-11-01)
+
+Infraestrutura pronta (projeto `securelink-prod`, app https://securelinkvault.netlify.app). Siga os 7 passos da seção 0 de [`PRODUCTION.md`](PRODUCTION.md): SQL inicial, URLs de autenticação, MFA, administrador master, **primeiro backup antes de convidar**, convites de 15 dias e Safe Browsing opcional.
+
+## App Android, fase 1 (2026-11-01)
+
+1. [ ] Supabase (desenvolvimento **e** produção) → Authentication → URL Configuration → Redirect URLs → adicionar `app.securelink.vault://auth-callback` (login com Google/GitHub no app).
+2. [ ] Instalar `~/.securelink-prod/securelink-vault-0.9.0.apk` num celular real e conferir:
+   - entrar, desbloquear e copiar uma senha;
+   - baixar um arquivo;
+   - ficar mais de 1 minuto fora e voltar (deve pedir a senha mestra);
+   - tentar uma captura de tela (deve sair bloqueada);
+   - **layout no Android 15/16** (barras do sistema).
+3. [ ] Guardar uma cópia da chave de assinatura (`~/.securelink-prod/securelink-release.jks` e `android-signing.properties`) no envelope de emergência.
+
 ## Extensão de navegador, fase 1 (2026-11-01)
 
 1. [ ] **SQL Editor (desenvolvimento):** rodar `20261104000000_extension_fill_event.sql` (permite o evento de auditoria `item.filled`). Sem ela a extensão funciona, só não registra os preenchimentos.
