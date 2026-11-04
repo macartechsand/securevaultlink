@@ -1,0 +1,19 @@
+# Security and version updates. The cooldown keeps the project rule of using releases that are at
+# least 2 weeks old (security updates are not delayed by the cooldown).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web-saas
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    target-branch: dev
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
+    target-branch: dev

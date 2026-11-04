@@ -44,7 +44,7 @@ export function PrivacyNoticeLink() {
               <h3>Serviços de terceiros</h3>
               <p className="muted">
                 Hospedagem: Supabase (banco, autenticação, arquivos) e Netlify (site). Verificações que você aciona: Have I Been Pwned
-                (recebe só os 5 primeiros caracteres do hash da senha) e Google Safe Browsing (recebe os endereços dos sites
+                (recebe só os 5 primeiros caracteres do hash da senha) e Google Web Risk ou Safe Browsing (recebe os endereços dos sites
                 verificados). Premium pode usar Cloudflare R2 para arquivos, sempre criptografados.
               </p>
               <h3>Seus direitos (LGPD)</h3>

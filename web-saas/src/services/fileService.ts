@@ -279,7 +279,7 @@ async function uploadEncrypted(
   kind: 'vault' | 'transfer',
   expiresAt: string | null,
 ): Promise<{ file: VaultFile; fileKey: Uint8Array<ArrayBuffer> }> {
-  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('No plano gratuito, cada arquivo pode ter até 25 MB.');
+  if (file.size > MAX_FILE_BYTES) throw new FileServiceError('Cada arquivo pode ter até 25 MB (qualquer formato). Para arquivos maiores, compacte ou divida o arquivo.');
   const id = crypto.randomUUID();
   const fileKey = generateFileKey();
   const meta: FileMetadata = { name: file.name, type: file.type || 'application/octet-stream', size: file.size };

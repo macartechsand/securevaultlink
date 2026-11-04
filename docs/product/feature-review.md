@@ -22,7 +22,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 | Recuperação do **cofre** | ✅ | Chave de recuperação opcional (`src/components/RecoverySettings.tsx`); sem ela, "recomeçar o cofre" (`fn/account`, ação `reset_vault`) |
 | Sessões ativas e encerramento remoto | ✅ | `mig/20261019000100_posture_sessions.sql`, `src/components/SessionsCard.tsx` |
 | Proteção contra força bruta no login | 🔌 | Limites do próprio Supabase Auth, mais o MFA |
-| Força bruta na senha mestra | ⚠️ | O desbloqueio é local. A defesa é o PBKDF2 com 600 mil iterações, e cada falha é auditada (`vault.unlock_failed`). Falta um atraso progressivo na interface |
+| Força bruta na senha mestra | ✅ | O desbloqueio é local. A defesa é o PBKDF2 com 600 mil iterações, e cada falha é auditada (`vault.unlock_failed`). Atraso progressivo após 3 erros (5 s, 10 s… até 5 min) na web e na extensão |
 | Admin sem acesso ao conteúdo do cofre | ✅ | Nenhuma função administrativa devolve conteúdo cifrado (`mig/20261021000000_iam_pam_support.sql`; testes `iam.integration`) |
 
 ## 2. Cofre zero-knowledge
@@ -50,7 +50,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 | Pastas (nome cifrado), tags, favoritos, busca, filtros | ✅ | `src/components/VaultView.tsx`, `ItemList.tsx` |
 | Histórico das últimas 10 senhas, com restaurar | ✅ | Histórico cifrado em `vault_entries`, visível só para o dono |
 | Histórico completo de versões do item | ❌ | Só a senha tem histórico |
-| **Limite de itens por plano (Free = 7)** | ❌ | Não existe limite de itens no servidor. Item P1 da Fase D |
+| **Limite de itens por plano (Free = 7)** | 🟡 | `mig/20261105000000_entitlements_usage.sql`: gatilho no banco, configurável; contador no cofre (`VaultView`). Falta aplicar nos projetos |
 | Passkeys guardadas como item do cofre | ❌ | Futuro (P3) |
 
 **Impacto de armazenamento** (estimativa): um item cifrado ocupa de 2 a 5 KB e pode chegar a cerca de 20 KB com o histórico cheio. Mil usuários com 200 itens ocupam cerca de 1 a 4 GB de banco. Os arquivos dominam o consumo; os itens são baratos.
@@ -74,7 +74,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 |---|---|---|
 | Fraca, reutilizada, antiga, troca vencida (local) | ✅ | `src/lib/health/passwordHealth.ts`, `itemHealth.ts` |
 | Vazadas (HIBP, k-anonimato, só o prefixo do hash) | ✅ 🔌 | `src/lib/health/pwned.ts` |
-| URLs perigosas | ✅ 🔌 ⚠️ | `fn/check-url` usa o **Google Safe Browsing**, que é para uso não comercial. Trocar pelo **Web Risk** antes de cobrar. O limite de uso fica em memória e vale **por instância** da função; precisa de contador no banco |
+| URLs perigosas | ✅ 🔌 | `fn/check-url`: **Web Risk** quando `WEB_RISK_API_KEY` existe (uso comercial), senão Safe Browsing. Uso justo por plano e dia **no banco** (`consume_url_checks`): conta endereços, nunca os guarda |
 | Pontuação de 0 a 100 com recomendações | ✅ | `src/lib/posture.ts`, com pesos: senhas 40, proteção da conta 30, sites 15, compartilhamentos 10, sessões 5 (testes em `posture.test.ts`). **Falta documentar a fórmula para o usuário** |
 | Fila de risco | ✅ | `src/components/RotationView.tsx` |
 | Monitoramento contínuo, verificação agendada, alertas | ❌ | Hoje a verificação é feita sob demanda. Agendar exige notificação (e-mail ou push) |
@@ -93,7 +93,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 ## 7. Auditoria
 | Funcionalidade | Estado | Evidência |
 |---|---|---|
-| Log só de inclusão, com cadeia de hashes e verificação | ✅ ⚠️ | `mig/20261102000000_beta_scope_audit_integrity.sql`. **Limite:** a cadeia fica no mesmo banco, então quem tem acesso total a ele pode reescrevê-la inteira. Falta ancorar periodicamente o último hash, assinado, fora do banco (P1, barato) |
+| Log só de inclusão, com cadeia de hashes e verificação | ✅ | `mig/20261102000000_beta_scope_audit_integrity.sql`. Âncoras externas: cada backup grava o último hash em `audit-anchors.jsonl`, fora do banco, e `scripts/backup/verify-anchors.mjs` detecta uma cadeia reescrita por inteiro |
 | Retenção de 365 dias, preservando a cadeia | ✅ | `fn/cleanup-files` |
 
 ## 8. Plataformas
@@ -113,7 +113,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 | Backup | 🟡 | Externo e cifrado (`scripts/backup`). O Free não tem backup automático. **Restauração completa ainda não testada** |
 | SMTP próprio | ❌ | Necessário para confirmação, avisos e cobrança |
 | Monitoramento de erros e disponibilidade | 🟡 | Relatórios de erro vão para o próprio banco (`client.error`). Sem alerta externo |
-| Testes automáticos em todo PR (CI) | ❌ | Os testes rodam localmente |
+| Testes automáticos em todo PR (CI) | ✅ | `.github/workflows/ci.yml` (lint, build, unitários, `npm audit`, Gitleaks), `codeql.yml`, `dependabot.yml` (com espera de 14 dias) |
 | Termos de Uso, Política de Privacidade | 🟡 | Existe o aviso de privacidade no app. Faltam os termos completos |
 | Cobrança | ❌ | O Premium é atribuído pelo admin |
 

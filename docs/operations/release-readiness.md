@@ -16,7 +16,12 @@
 | URLs de autenticação, senha mínima de 10, confirmação de e-mail, TOTP | ❌ (dono, no painel) |
 | Admin master com MFA | ❌ |
 | **Primeiro backup externo cifrado** antes do primeiro convidado; 2 por semana depois | ❌ |
-| Cotas ajustadas à capacidade do Free (30 MB Free, 60 MB Premium do beta; limite de 25 contas) | ❌ (ver [`finops.md`](finops.md), seção 3) |
+| Cotas ajustadas à capacidade do Free (20 MB Free, 80 MB Premium com 5 licenças; até 25 contas) | 🟡 no `prod-setup.sql`, falta rodar |
+| Limite de itens (Free = 7) e de verificações de sites por dia **no banco** | 🟡 migration `20261105000000` testada localmente (PGlite); falta aplicar no desenvolvimento e na produção |
+| Monitoramento: site, saúde da autenticação e heartbeat da limpeza | 🟡 heartbeat implementado (`HEARTBEAT_URL`); falta criar os monitores (`PRODUCTION.md`, seção 0, passo 8) |
+| Âncoras externas da cadeia de auditoria | ✅ `backup.mjs` grava `audit-anchors.jsonl`; `verify-anchors.mjs` confere |
+| Atraso progressivo após senhas mestras erradas | ✅ web (`VaultGate`) e extensão |
+| CI no GitHub: lint, build, testes, `npm audit`, segredos (Gitleaks), CodeQL, Dependabot | ✅ `.github/` |
 | Forma de coletar o retorno dos convidados (formulário ou conversa ao fim do prazo) | ❌ |
 
 ## Portão 2: abertura das assinaturas
@@ -56,11 +61,11 @@
 | Logs sem segredos (rotação não registra valores; relatórios de erro sem dados) | ✅ |
 | Proteções da extensão (domínio, iframe, gesto) com teste ponta a ponta | ✅ |
 | Proteções do Android (captura, backup, depuração) conferidas em build de usuário | ✅ |
-| CI em todo PR: testes, `npm audit`, análise de código (Semgrep), segredos (Gitleaks) | ❌ |
+| CI em todo PR: testes, `npm audit`, análise de código (CodeQL), segredos (Gitleaks) | ✅ `.github/workflows` |
 | Varredura dinâmica gratuita (OWASP ZAP) contra o desenvolvimento | ❌ |
 | **Pentest externo** sem achado crítico ou alto em aberto | ❌ |
 | Revisão independente da criptografia | ❌ |
-| Política de divulgação de vulnerabilidades (`security.txt`) | ❌ |
+| Política de divulgação de vulnerabilidades (`security.txt`) | 🟡 `/.well-known/security.txt` aponta para o relato privado do GitHub; falta ativar *Private vulnerability reporting* em Settings → Security do repositório |
 | Matriz de aparelhos e navegadores testada | ❌ |
 | 2 semanas com clientes pagantes iniciais sem incidente grave | ❌ |
 | App Links verificados, biometria e passkey (se no escopo da 1.0) | ❌ |

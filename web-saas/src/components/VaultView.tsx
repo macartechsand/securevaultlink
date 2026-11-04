@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { type ItemHealth, RISK_LABELS, type RiskFlag } from '../lib/itemHealth';
 import { ITEM_TYPES, type ItemType, matchesQuery } from '../lib/items';
 import { friendlyError } from '../lib/messages';
+import { type Entitlements, fetchEntitlements } from '../services/vaultService';
 import type { Folder, VaultItem } from '../state/itemOps';
 import { ItemList } from './ItemList';
 import { Icon } from './ui/Icon';
@@ -48,6 +49,19 @@ export function VaultView({
   const [favorites, setFavorites] = useState(false);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [ent, setEnt] = useState<Entitlements | null>(null);
+  const ownCount = items.filter((i) => i.access === 'owner').length;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEntitlements()
+      .then((e) => !cancelled && setEnt(e))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [ownCount]);
+  const atLimit = ent !== null && ent.plan !== 'premium' && ent.items >= ent.maxItems;
 
   const tags = useMemo(() => {
     const all = new Map<string, string>();
@@ -230,6 +244,12 @@ export function VaultView({
           >
             Limpar filtros
           </button>
+        )}
+        {ent && ent.plan !== 'premium' && (
+          <p className={atLimit ? 'alert alert--warn' : 'subtle'}>
+            Plano gratuito: {ent.items} de {ent.maxItems} itens.
+            {atLimit && ' Limite atingido: seus itens continuam disponíveis; para criar outro, exclua um item ou passe para o Premium.'}
+          </p>
         )}
         {error && <div className="alert alert--error">{error}</div>}
       </aside>

@@ -17,7 +17,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { encryptFile } from './crypt.mjs';
@@ -131,10 +131,19 @@ try {
     }),
   });
 
+  // External anchor of the audit chain: a plain, non-sensitive line (sequence + hash) kept OUTSIDE
+  // the database. verify-anchors.mjs later proves the chain was not rewritten since this point.
+  if (head) {
+    await appendFile(
+      join(outDir, 'audit-anchors.jsonl'),
+      JSON.stringify({ at: manifest.created_at, project: manifest.project, seq: head.chain_seq, hash: head.row_hash, backup: `${name}.svbk` }) + '\n',
+    );
+  }
+
   console.log(`\nDone: ${encFile}`);
   console.log(`SHA-256: ${encHash}`);
   console.log(`Audit head: #${head?.chain_seq ?? '-'} ${head?.row_hash ?? '(chain not enabled yet)'}`);
-  console.log('Copy the .svbk file to a second location (external disk or another cloud). Test a restore monthly.');
+  console.log('Copy the .svbk file and audit-anchors.jsonl to a second location (external disk or another cloud). Test a restore monthly.');
 } finally {
   await rm(work, { recursive: true, force: true });
 }

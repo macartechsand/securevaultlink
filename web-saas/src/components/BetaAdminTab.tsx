@@ -6,8 +6,12 @@ import { Icon } from './ui/Icon';
 
 const NUMERIC = [
   { key: 'max_users', label: 'Máximo de contas', hint: 'Cadastros param ao atingir este número (contas existentes contam).' },
-  { key: 'free_quota_mb', label: 'Cota do plano gratuito (MB por usuário)', hint: 'Supabase Free tem 1 GB no total: 10 usuários × 80 MB = 800 MB.' },
-  { key: 'premium_quota_mb', label: 'Cota do Premium (MB por usuário)', hint: 'Aumente quando os arquivos Premium estiverem no Cloudflare R2.' },
+  { key: 'free_quota_mb', label: 'Cota do plano gratuito (MB por usuário)', hint: 'Supabase Free tem 1 GB no total: (contas Free × esta cota) + (licenças Premium × cota Premium) deve ficar abaixo de 800 MB.' },
+  { key: 'premium_quota_mb', label: 'Cota do Premium (MB por usuário)', hint: 'Aumente quando os arquivos Premium estiverem no Cloudflare R2 ou no Supabase Pro.' },
+  { key: 'free_max_items', label: 'Itens no cofre: plano gratuito', hint: 'Só bloqueia criar itens novos; os existentes continuam disponíveis.' },
+  { key: 'premium_max_items', label: 'Itens no cofre: Premium', hint: 'Uso justo.' },
+  { key: 'free_url_checks_day', label: 'Verificações de sites por dia: gratuito', hint: 'Cada endereço conta 1. Web Risk: 100 mil grátis por mês no total.' },
+  { key: 'premium_url_checks_day', label: 'Verificações de sites por dia: Premium', hint: 'Uso justo.' },
 ];
 
 /** Closed-beta controls: invite list, account cap and quotas (admin role only). */

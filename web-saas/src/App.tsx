@@ -606,8 +606,8 @@ function VaultApp() {
                     )}
                     <p className="subtle">
                       Baseado em {checkable} login(s). A verificação de vazamentos usa a API do Have I Been Pwned com
-                      k-anonimato (só os 5 primeiros caracteres do hash SHA-1 saem do dispositivo). Os sites são verificados no
-                      Google Safe Browsing.
+                      k-anonimato (só os 5 primeiros caracteres do hash SHA-1 saem do dispositivo). Os sites são verificados nas
+                      listas de sites perigosos do Google (Web Risk ou Safe Browsing).
                     </p>
                     {health.reusedGroups.length > 0 && (
                       <div className="alert alert--warn">
@@ -616,7 +616,7 @@ function VaultApp() {
                     )}
                     {health.counts.unsafe > 0 && (
                       <div className="alert alert--error">
-                        {health.counts.unsafe} site(s) marcado(s) como perigoso(s) pelo Google Safe Browsing. Filtre por risco no
+                        {health.counts.unsafe} site(s) marcado(s) como perigoso(s) pelo Google. Filtre por risco no
                         Cofre para revisar.
                       </div>
                     )}

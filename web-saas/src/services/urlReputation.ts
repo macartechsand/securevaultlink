@@ -8,11 +8,15 @@ export type UrlReputation =
 
 const UNAVAILABLE: UrlReputation = { status: 'error', message: 'A verificação de reputação está indisponível no momento.' };
 const BATCH = 50;
+const DAILY_LIMIT: UrlReputation = {
+  status: 'error',
+  message: 'Limite diário de verificações de sites do seu plano atingido. Tente de novo amanhã.',
+};
 
 type ResultRow = { url: string; status: string; threats?: string[] };
 
 /**
- * Asks the `check-url` Edge Function (Google Safe Browsing). URLs are sent to the backend and the
+ * Asks the `check-url` Edge Function (Google Web Risk, or Safe Browsing outside commercial use). URLs are sent to the backend and the
  * provider only on an explicit user action (save, security check). "No known threats" is not a guarantee.
  * Returns a map keyed by the original input string.
  */
@@ -30,10 +34,11 @@ export async function checkUrlsReputation(inputs: string[]): Promise<Map<string,
     const chunk = urls.slice(i, i + BATCH);
     const { data, error } = await supabase.functions.invoke('check-url', { body: { urls: chunk } });
     const rows: ResultRow[] | undefined = error ? undefined : data?.results;
+    const limited = (error as { context?: Response } | null)?.context?.status === 429;
     for (const url of chunk) {
       const row = rows?.find((r) => r.url === url);
       const value: UrlReputation = !row
-        ? UNAVAILABLE
+        ? limited ? DAILY_LIMIT : UNAVAILABLE
         : row.status === 'unsafe'
           ? { status: 'unsafe', threats: row.threats ?? [] }
           : row.status === 'no-known-threats'

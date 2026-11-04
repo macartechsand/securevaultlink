@@ -59,7 +59,13 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
    3. Entrar no app, criar o cofre e ativar o MFA.
 5. [ ] **Backup:** abrir o Docker Desktop e rodar o primeiro backup externo. Pode pedir ao Claude, que lê a senha do banco do arquivo privado.
 6. [ ] **Convites:** Administração → Beta e limites → e-mail → Premium → **outro prazo: 15 dias**. Enviar o link, o `.zip` da extensão e o APK por mensagem direta, com o onboarding (seção 7).
-7. [ ] Opcional: chave do Safe Browsing (`npx supabase secrets set --project-ref exglsdylytdjwrlmyptk SAFE_BROWSING_API_KEY=...`, digitada por você no terminal). Sem ela, a verificação de sites aparece como indisponível. Google/GitHub exigem novos clientes OAuth apontando para a produção (`security/oauth.md`); até lá, login por e-mail e senha.
+7. [ ] **Limites do beta (2026-11-04):** o `prod-setup.sql` já traz até **25 contas**, cota de **20 MB** no Free e **80 MB** no Premium (pior caso: 20 × 20 + 5 × 80 = 800 MB de 1 GB). Free com **7 itens** e as verificações de sites por dia vêm da migration `20261105000000`. Tudo é ajustável em Administração → Beta e limites.
+8. [ ] **Monitoramento gratuito** (Better Stack ou UptimeRobot):
+   - monitor HTTP de `https://securelinkvault.netlify.app` a cada 3–5 min;
+   - monitor HTTP de `https://exglsdylytdjwrlmyptk.supabase.co/auth/v1/health` com o header `apikey: <chave anon>` (a anon é pública). As requisições também mantêm o projeto ativo, contra a pausa de 7 dias do Free;
+   - **heartbeat** de 1 hora: `npx supabase secrets set --project-ref exglsdylytdjwrlmyptk HEARTBEAT_URL=<url do heartbeat>`. A limpeza de hora em hora chama essa URL; se parar, chega o alerta.
+9. [ ] **Âncoras da auditoria:** cada backup grava `audit-anchors.jsonl` ao lado do `.svbk`. Uma vez por semana: `node scripts/backup/verify-anchors.mjs` (variáveis no cabeçalho do script). Guarde uma cópia do arquivo de âncoras fora do computador.
+10. [ ] Opcional: chave do Safe Browsing ou, de preferência, do **Web Risk** (`WEB_RISK_API_KEY`; `npx supabase secrets set --project-ref exglsdylytdjwrlmyptk SAFE_BROWSING_API_KEY=...`, digitada por você no terminal). Sem ela, a verificação de sites aparece como indisponível. Google/GitHub exigem novos clientes OAuth apontando para a produção (`security/oauth.md`); até lá, login por e-mail e senha.
 
 **Ao fim dos 15 dias:** decidir entre migrar para o Pro, que mantém o mesmo projeto e os dados (Settings → Billing → upgrade), ou encerrar. Se encerrar, **exportar e avisar os usuários antes**; apagar dados reais exige a sua aprovação explícita.
 

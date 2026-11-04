@@ -205,3 +205,13 @@ export async function fetchShareRecipientKeys(itemId: string): Promise<{ share_i
   if (error) fail('Falha ao carregar as chaves dos destinatários', error);
   return (data ?? []) as { share_id: string; recipient_id: string; public_key: string }[];
 }
+
+export type Entitlements = { plan: string; maxItems: number; items: number; urlChecksDay: number; urlChecksUsed: number };
+
+/** Plan limits enforced by the database (migration 20261105000000). Null when not available yet. */
+export async function fetchEntitlements(): Promise<Entitlements | null> {
+  const { data, error } = await supabase.rpc('my_entitlements');
+  if (error || !data) return null;
+  const d = data as { plan: string; max_items: number; items: number; url_checks_day: number; url_checks_used: number };
+  return { plan: d.plan, maxItems: d.max_items, items: d.items, urlChecksDay: d.url_checks_day, urlChecksUsed: d.url_checks_used };
+}

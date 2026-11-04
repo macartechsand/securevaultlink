@@ -129,7 +129,7 @@ Extensão (web-saas/extension/, MV3)
 ### 3.2 Edge Functions
 | Função | JWT | Papel | Secrets |
 |---|---|---|---|
-| `check-url` | sim | Reputação de URLs (Safe Browsing) | `SAFE_BROWSING_API_KEY` |
+| `check-url` | sim | Reputação de URLs: **Web Risk** (uso comercial) ou Safe Browsing (só sem cobrança). Uso justo por plano e dia contado no banco (`consume_url_checks`) | `WEB_RISK_API_KEY` ou `SAFE_BROWSING_API_KEY` |
 | `transfer` | **não** (público) | Download de transferências por link | (service role, automático) |
 | `cleanup-files` | **não** (protegida por header) | Limpeza de vencidos e abandonados; heartbeat | `CLEANUP_SECRET` |
 | `admin` | sim | MFA reset, suspender, links de convite e redefinição, saúde | `APP_ORIGINS` |
@@ -153,7 +153,7 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    npx supabase link --project-ref <REF_NOVO>
    npx supabase db push            # aplica TODAS as migrations, em ordem
    ```
-   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 19 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261104…`).
+   Isso cria tabelas, RLS, triggers, o bucket `vault-files`, o beta fechado, os papéis e as licenças. As 20 migrations ficam em `supabase/migrations/` e já estão na ordem certa (`20261009…` → `20261105…`).
 3. Edge Functions:
    ```powershell
    npx supabase functions deploy check-url
@@ -166,7 +166,8 @@ Use este roteiro para um projeto de **produção** separado do de desenvolviment
    ```
 4. Secrets (gere o `CLEANUP_SECRET` com o gerador seguro, ver `pending-actions.md`):
    ```powershell
-   npx supabase secrets set SAFE_BROWSING_API_KEY=<chave> CLEANUP_SECRET=<64 hex> APP_ORIGINS=https://<dominio-do-app> ALLOWED_ORIGIN=https://<dominio-do-app>
+   npx supabase secrets set WEB_RISK_API_KEY=<chave> CLEANUP_SECRET=<64 hex> APP_ORIGINS=https://<dominio-do-app> ALLOWED_ORIGIN=https://<dominio-do-app>
+   # opcional: HEARTBEAT_URL=<url de heartbeat do monitoramento>, chamada a cada limpeza (de hora em hora)
    ```
 5. **Authentication:**
    - **URL Configuration:**

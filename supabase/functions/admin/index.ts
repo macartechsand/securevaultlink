@@ -118,7 +118,8 @@ Deno.serve(async (req) => {
         database: true,
         bucket_exists: !bucket.error,
         bucket_private: bucket.data ? bucket.data.public === false : null,
-        safe_browsing_key: Boolean(Deno.env.get('SAFE_BROWSING_API_KEY')),
+        safe_browsing_key: Boolean(Deno.env.get('WEB_RISK_API_KEY') || Deno.env.get('SAFE_BROWSING_API_KEY')),
+        web_risk_key: Boolean(Deno.env.get('WEB_RISK_API_KEY')),
         cleanup_secret: (Deno.env.get('CLEANUP_SECRET') ?? '').length >= 32,
       },
     })

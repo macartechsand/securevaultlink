@@ -60,9 +60,9 @@ usuários_máx ≈ 1.000 MB × 0,8 (margem) ÷ cota média por usuário
 | 30 MB | 26 |
 | 10 MB | 80 |
 
-**Recomendação para o beta no Free:**
+**Recomendação para o beta no Free (aplicada no `prod-setup.sql` em 2026-11-04):**
 - **até 25 usuários**;
-- cota de **30 MB** no Free e **60 MB** no Premium do beta;
+- cota de **20 MB** no Free e **80 MB** no Premium, com 5 licenças. O pior caso é 20 × 20 + 5 × 80 = 800 MB;
 - banco de 500 MB folgado (25 usuários × 7 a 200 itens é menos de 30 MB);
 - 5 GB de tráfego por mês: limitar a 5 downloads por transferência.
 

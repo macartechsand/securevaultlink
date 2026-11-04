@@ -416,7 +416,7 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                 />
                 {reputation?.status === 'unsafe' && (
                   <span className="finding finding--high">
-                    Marcado como perigoso pelo Google Safe Browsing ({reputation.threats.join(', ')}). Não digite senhas neste site.
+                    Marcado como perigoso pelo Google ({reputation.threats.join(', ')}). Não digite senhas neste site.
                   </span>
                 )}
                 {reputation?.status === 'no-known-threats' && <span className="finding finding--low">Nenhuma ameaça conhecida (não é garantia).</span>}
