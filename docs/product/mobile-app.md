@@ -59,7 +59,8 @@ Biometria, autopreenchimento em outros apps, iOS, publicação nas lojas e notif
 | Identificador do app | `app.securelink.vault` |
 | Plataforma inicial | Android (o iOS exige Mac ou build na nuvem) |
 | Bloqueio em segundo plano | Após 1 minuto (dá tempo de copiar uma senha e colar em outro app) |
-| Distribuição no piloto | APK assinado enviado por mensagem direta; Play Store na fase 2 (taxa única de US$ 25) |
+| Distribuição no piloto | APK assinado enviado por mensagem direta (Android); no iPhone, o app web instalado pela tela de início do Safari |
+| Lojas (Play Store e App Store) | **Decisão do dono (2026-11-03):** só depois da primeira versão produtiva completa, com revisão de funcionalidades e adequação, assinaturas prontas e segurança garantida. Até lá, nada de publicação nem de TestFlight |
 
 ## 7. Situação da fase 1 (2026-11-01)
 

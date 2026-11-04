@@ -1,205 +1,92 @@
-# Status do Projeto SecureLink Vault
+# Status do projeto SecureLink Vault
 
-## Estado Atual (Data: 2024)
+Retrato de **2026-11-04** · Versão **0.9.0-beta** · Desenvolvimento em `dev` · Produção a partir de `master`
 
-### 1. Configurações Implementadas
+Esta página serve para **retomar o trabalho**: onde o projeto está, o que está no ar, o que falta e qual é o próximo passo. O detalhe técnico está em [`HANDOVER.md`](HANDOVER.md), e o plano até a versão paga em [`product/roadmap-v1.md`](product/roadmap-v1.md).
 
-#### 1.1 Ambiente de Desenvolvimento
-- ✅ TypeScript configurado
-- ✅ ESLint configurado
-- ✅ Jest configurado para testes
-- ✅ Babel configurado com preset-expo
+> O status antigo (protótipo de 2024, app Expo) foi substituído; ele continua no histórico do git.
 
-#### 1.2 Estrutura de Testes
-```javascript
-// jest.config.js
-module.exports = {
-  preset: 'jest-expo',
-  transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)'
-  ],
-  setupFiles: ["<rootDir>/jest.setup.js"],
-  // ...
-}
-```
+---
 
-#### 1.3 Mocks Implementados
-- ✅ AsyncStorage
-- ✅ expo-crypto
-- ✅ react-native Alert
+## 1. Em uma frase
+Cofre de senhas e arquivos **zero-knowledge** com governança de nível corporativo, ou seja, rotação, recertificação de acesso e auditoria à prova de adulteração. Ele funciona na **web**, como **extensão** do Chrome e do Edge e como **app Android**, e está num **piloto de 15 dias** em produção, sem cobrança.
 
-### 2. Funcionalidades Implementadas
+## 2. O que existe hoje
 
-#### 2.1 Segurança
-- ✅ Serviço de encriptação (AES-256)
-- ✅ Geração segura de senhas
-- ✅ Verificação de vazamentos (HIBP)
-- ✅ Análise de URLs suspeitas (VirusTotal)
+| Componente | Situação | Onde |
+|---|---|---|
+| App web (React + Supabase) | ✅ Completo para o beta: cofre, Secured Items, arquivos, compartilhamento, transferências, MFA, saúde e postura, rotação, administração (IAM, PAM, licenças, conformidade, auditoria), LGPD | `web-saas/` · [`HANDOVER.md`](HANDOVER.md), seção 2 |
+| Interface | ✅ Nova (2026-11-01): menu agrupado, ações rápidas, medidor de postura, navegação inferior no celular, temas claro e escuro, PWA | `web-saas/src/styles/theme.css` |
+| Extensão Chrome/Edge | ✅ Fase 1: entrar (inclusive Google e GitHub), desbloquear, preencher só no site certo, copiar, gerador, bloqueio após 10 min | `web-saas/extension/` · [`product/browser-extension.md`](product/browser-extension.md) |
+| App Android | ✅ Fase 1: mesmo app empacotado e assinado, bloqueio em segundo plano, bloqueio de captura, sem backup e sem depuração | `web-saas/android/` · [`product/mobile-app.md`](product/mobile-app.md) |
+| iPhone | 🟡 Pelo app web instalado na tela de início do Safari. App nativo só na versão 1.0 | [`product/mobile-app.md`](product/mobile-app.md) |
+| Cobrança / assinaturas | ❌ Não existe; o Premium é atribuído manualmente pelo admin | [`product/roadmap-v1.md`](product/roadmap-v1.md), Etapa 2 |
+| Testes | ✅ 149/149 (unitários e integração contra o desenvolvimento) e 6/6 ponta a ponta da extensão no Edge | [`HANDOVER.md`](HANDOVER.md), seção 6 |
 
-#### 2.2 Interface
-- ✅ Formulário de senha com validações
-- ✅ Medidor de força de senha
-- ✅ Feedback visual de segurança
-- ✅ Gestão de senhas salvas
+## 3. Ambientes
 
-### 3. Resultados dos Testes
+| | Desenvolvimento | Produção (piloto) |
+|---|---|---|
+| App | https://securelinkvaultdev.netlify.app | https://securelinkvault.netlify.app |
+| Supabase | `sueemdqyhwnmbqokpefz` (Free) | `securelink-prod`, ref `exglsdylytdjwrlmyptk`, São Paulo (Free, piloto de 15 dias) |
+| Código publicado | `dev` | `master` (`d5bf916`) |
+| Extensão | `web-saas/dist-extension` | `~/.securelink-prod/securelink-extension-prod.zip` |
+| App Android | Build de debug local | `~/.securelink-prod/securelink-vault-0.9.0.apk` (SHA-256 `75725e16…4c202829`) |
 
-#### 3.1 Testes de Segurança
-- ⚠️ Cobertura atual: 0% (necessita implementação completa)
-- ✅ Estrutura de testes configurada
-- ✅ Testes unitários iniciais implementados
+Os segredos de produção ficam em `~/.securelink-prod/`, fora do repositório: senha do banco, `CLEANUP_SECRET`, SQL inicial, chave de assinatura do Android e pacotes.
 
-#### 3.2 Problemas Identificados
-1. Erro no teste de encriptação:
+**Diferença entre `dev` e produção:** o `dev` tem 2 commits a mais que o `master`. São a documentação do piloto e o app Android, que inclui uma correção da tela de Arquivos: falha na chave de compartilhamento não esconde mais os arquivos próprios. Para levar a correção à produção, abra um PR de `dev` para `master` e publique o build de produção.
+
+## 4. Pendências do dono (antes e durante o piloto)
+
+Lista completa e marcável: [`pending-actions.md`](pending-actions.md). Resumo:
+1. **Produção** ([`PRODUCTION.md`](PRODUCTION.md), seção 0):
+   - rodar `prod-setup.sql`;
+   - URLs de autenticação;
+   - e-mail e MFA;
+   - administrador master;
+   - **primeiro backup** (com o Docker Desktop aberto);
+   - convites Premium de 15 dias.
+2. **Redirect URLs** do Supabase (desenvolvimento e produção):
+   - `app.securelink.vault://auth-callback` (app);
+   - `https://mcljapeloopnadipmhmojkmbjjgbpdij.chromiumapp.org/` (extensão).
+3. **Celular:** instalar o APK num aparelho real e conferir o layout do Android 15/16.
+4. **Chave de assinatura do Android:** cópia cifrada no envelope de emergência.
+5. **Desenvolvimento:** aplicar as migrations pendentes listadas em `pending-actions.md`.
+
+## 5. Próximos passos (ordem combinada)
+
+1. **Concluir o piloto** e colher o retorno dos convidados.
+2. **Revisar funcionalidades, features e visual** ([`product/roadmap-v1.md`](product/roadmap-v1.md), Etapa 1). O resultado é o escopo da versão 1.0.
+3. **Assinaturas** (Etapa 2):
+   - planos, preços e gateway (cartão e Pix);
+   - webhook ligado às licenças;
+   - Termos de Uso, Política de Privacidade e CNPJ/NFS-e.
+4. **Garantia de segurança** (Etapa 3): pentest externo, revisão da criptografia, Supabase Pro com restauração testada, plano de incidentes.
+5. **Garantia de funcionalidade** (Etapa 4): testes em todo PR, matriz de aparelhos, monitoramento, suporte.
+6. **Lojas** (Etapa 5): só depois de 2 a 5 concluídos. Decisão do dono de 2026-11-03.
+
+## 6. Limitações conhecidas (resumo)
+- **Senha mestra:** sem a chave de recuperação opcional, quem a esquece perde o cofre.
+- **Arquivos:** até 25 MB, e a mensagem de erro acima disso cita o plano gratuito por engano.
+- **Conectores de rotação automática:** em beta, testados só com credenciais falsas.
+- **Supabase Free:** sem backup automático e pausa após 7 dias sem uso.
+- **Extensão:** não oferece salvar a senha ao fazer login.
+
+Lista completa: [`HANDOVER.md`](HANDOVER.md), seção 8.
+
+## 7. Como retomar o trabalho
+1. Ler esta página, depois [`product/roadmap-v1.md`](product/roadmap-v1.md) e [`pending-actions.md`](pending-actions.md).
+2. Preparar o ambiente:
+   ```powershell
+   git checkout dev; git pull
+   cd web-saas; npm ci; npm test
    ```
-   TypeError: Object.defineProperty called on non-object
-   ```
-2. Aviso de deprecação:
-   ```
-   expo-router/babel is deprecated in favor of babel-preset-expo in SDK 50
-   ```
-
-### 4. Correções Realizadas
-
-#### 4.1 Serviço de Encriptação
-```typescript
-// Métodos públicos para testes adicionados
-async encryptForTesting(text: string): Promise<string>
-async decryptForTesting(encryptedText: string): Promise<string>
-```
-
-#### 4.2 Configurações
-1. Babel:
-   - Removido 'expo-router/babel'
-   - Mantido apenas 'react-native-reanimated/plugin'
-
-2. Jest:
-   - Adicionado preset jest-expo
-   - Configurado transformIgnorePatterns
-   - Implementado setup de mocks
-
-## Próximos Passos
-
-### 1. Correções Prioritárias
-
-#### 1.1 Dependências
-```bash
-# Instalar dependências de teste
-npm install --save-dev @testing-library/react-native @testing-library/jest-native
-
-# Atualizar dependências existentes
-npm update
-```
-
-#### 1.2 Testes
-```bash
-# Implementar testes pendentes
-npm run test:security -- --coverage
-```
-
-### 2. Implementações Pendentes
-
-#### 2.1 Testes
-- [ ] Testes de componentes React Native
-- [ ] Testes de integração
-- [ ] Testes E2E
-- [ ] Testes de performance
-
-#### 2.2 Segurança
-- [ ] Rate limiting
-- [ ] Logging de segurança
-- [ ] Timeout de sessão
-- [ ] Proteção contra força bruta
-
-#### 2.3 CI/CD
-- [ ] GitHub Actions
-- [ ] Análise de segurança automatizada
-- [ ] Deploy automático
-- [ ] Badges de status
-
-### 3. Melhorias Futuras
-
-#### 3.1 Performance
-- [ ] Implementar cache seguro
-- [ ] Otimizar operações criptográficas
-- [ ] Reduzir bundle size
-
-#### 3.2 UX
-- [ ] Feedback mais detalhado
-- [ ] Animações suaves
-- [ ] Modo offline
-- [ ] Backup automático
-
-## Como Prosseguir
-
-### 1. Para Desenvolvedores
-
-```bash
-# Clone o repositório
-git clone [repo-url]
-
-# Instale as dependências
-npm install
-
-# Configure o ambiente
-cp .env.example .env
-
-# Execute os testes
-npm run test:security
-
-# Inicie o desenvolvimento
-npm start
-```
-
-### 2. Padrões de Código
-
-#### 2.1 Commits
-```bash
-feat: nova funcionalidade
-fix: correção de bug
-docs: atualização de documentação
-test: adição/atualização de testes
-```
-
-#### 2.2 Branches
-```bash
-feature/nome-da-feature
-bugfix/descricao-do-bug
-test/descricao-do-teste
-```
-
-### 3. Métricas e Objetivos
-
-#### 3.1 Cobertura de Código
-- Meta: > 80%
-- Atual: 0%
-- Prazo: Próximo sprint
-
-#### 3.2 Performance
-- Tempo de resposta: < 100ms
-- Uso de memória: < 50MB
-- Bundle size: < 10MB
-
-## Contatos e Suporte
-
-### Equipe de Desenvolvimento
-- Tech Lead: [Nome]
-- Segurança: [Nome]
-- Frontend: [Nome]
-
-### Canais
-- Issues: GitHub Issues
-- Discussões: GitHub Discussions
-- Chat: Discord/Slack
-
-## Notas Adicionais
-
-### Ambiente de Produção
-- Node.js >= 14.0.0
-- React Native >= 0.63.0
-- Expo SDK >= 50.0.0
-
-### Documentação Relacionada
-- [CONTRIBUTING.md](./CONTRIBUTING.md)
-- [SECURITY.md](./SECURITY.md)
-- [API.md](./API.md) 
+   O `.env.local` aponta para o **desenvolvimento**. O `.env.test.local` tem as contas descartáveis de teste.
+3. Para o app Android, o `JAVA_HOME` precisa apontar para o Java do Android Studio (`C:\Program Files\Android\Android Studio\jbr`). Passos em [`product/mobile-app.md`](product/mobile-app.md), seção 8.
+4. Regras que valem sempre:
+   - nunca rodar testes contra a produção;
+   - nunca usar credenciais reais em testes;
+   - mudanças no banco só por migration nova, aplicada pelo dono no SQL Editor;
+   - toda tabela nova com RLS e `revoke all` para `authenticated`;
+   - dependências npm com pelo menos 2 semanas de publicação.

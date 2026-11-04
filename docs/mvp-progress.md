@@ -1,6 +1,6 @@
 # SecureVault MVP: progresso e retomada
 
-Última atualização: 2026-10-20 · Branch: `dev`
+Última atualização: 2026-11-04 · Branch: `dev`
 
 Este documento reúne tudo o que foi feito até agora, o estado dos testes e como retomar o trabalho.
 
@@ -55,6 +55,7 @@ Este documento reúne tudo o que foi feito até agora, o estado dos testes e com
 | 2026-11-01 (extensão) | **Interface renovada** (menu agrupado com estado da proteção, navegação inferior no celular, medidor de postura, ações rápidas, PWA instalável). **Extensão de navegador, fase 1** (Chrome/Edge, MV3): entrar com MFA, desbloquear, preencher com correspondência de domínio anti-phishing, copiar com limpeza, gerador, bloqueio após 10 min. **142/142 testes** + 6 ponta a ponta no Edge. |
 | 2026-11-01 (produção) | **Piloto em produção no plano Free** (15 dias): projeto `securelink-prod` (São Paulo) com as 19 migrations e 7 funções, site https://securelinkvault.netlify.app, PR #1 mesclado em `master`. Extensão com login Google/GitHub e pacote de produção. |
 | 2026-11-01 (mobile) | **App Android** (Capacitor 7, `web-saas/android/`): mesmo código e criptografia do app web, empacotado. Bloqueio após 1 min em segundo plano, captura de tela bloqueada, sem backup do sistema, sem depuração na release, login Google/GitHub por deep link, download pelo menu Compartilhar. Validado em emulador Android 13 (fluxos) e Android 16 de usuário (segurança da release). APK de produção assinado. **149/149 testes.** |
+| 2026-11-04 (planejamento) | Decisão do dono: **lojas só com a versão 1.0 completa** (funcionalidades revisadas, assinaturas, segurança e funcionamento garantidos). No piloto, iPhone usa o app web pela tela de início. Novos documentos: `STATUS.md` (retrato atual e como retomar) e `product/roadmap-v1.md` (etapas até a 1.0 paga). |
 | 2026-10-18 | Migrations e Edge Functions dos arquivos aplicadas. Testes de integração acharam 2 defeitos: recursão nas políticas de compartilhamento e permissões padrão do Supabase que deixavam o dono editar colunas protegidas (status, tamanho, contador de downloads). Corrigidos em `20261018000000`; **15/15 testes de isolamento passando**. Pendente: cron da limpeza e roteiro no navegador. |
 
 ---

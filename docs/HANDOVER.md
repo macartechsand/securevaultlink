@@ -1,11 +1,13 @@
 # SecureLink Vault: documento de continuidade do MVP
 
-Última atualização: 2026-11-01 · Código de produção: `master` · Desenvolvimento: `dev`
+Última atualização: 2026-11-04 · Código de produção: `master` · Desenvolvimento: `dev`
 
 Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reúne o que existe, como montar um ambiente novo do zero, como operar no dia a dia e o que falta.
 
 | Documento | Para quê |
 |---|---|
+| [`STATUS.md`](STATUS.md) | **Retrato atual em uma página**: o que existe, ambientes, pendências, próximos passos e como retomar |
+| [`product/roadmap-v1.md`](product/roadmap-v1.md) | **Caminho para a versão 1.0 paga**: revisão, assinaturas, garantia de segurança e de funcionamento, lojas |
 | **Este arquivo** | Visão completa, ambiente novo, operação, testes |
 | [`PRODUCTION.md`](PRODUCTION.md) | **Produção**: piloto de 15 dias no plano Free (seção 0: o que está no ar e o que falta), depois beta Pro com licenças, backups, segurança, rotinas e checklist de go-live |
 | [`operations/data-storage-and-backup.md`](operations/data-storage-and-backup.md) | Onde cada dado fica, o que é cifrado, camadas de backup, backup externo cifrado e teste de restauração |
@@ -272,12 +274,17 @@ O checklist de go-live para o **beta com 5 usuários Premium e credenciais reais
 - **Extensão:** só logins (notas, segredos e cartões ficam no app); não oferece salvar senha ao fazer login nem ícone dentro do campo (fase 2); a área de transferência é limpa após 30 s sem conferir o conteúdo.
 - **Login social na produção:** exige novos clientes OAuth do Google e do GitHub apontando para o projeto de produção.
 
-## 9. Próximos passos sugeridos
-1. Concluir o piloto de produção (`PRODUCTION.md`, seção 0) e decidir o Pro ao fim dos 15 dias.
-2. **App para celular:** fase 1 (Android) pronta; próximos: biometria, Play Store (teste interno), iOS. Ver `product/mobile-app.md`.
-3. Extensão, fase 2: salvar senha ao fazer login, ícone no campo, vários endereços por login.
-4. Validar os conectores de rotação com contas de teste e marcá-los como "Disponível".
-5. Agente local para bancos e servidores (PostgreSQL primeiro), conforme `architecture/connectors-rotation.md`.
-6. Cifragem em streaming para arquivos grandes (Premium no R2).
-7. Cobrança (Stripe) ligada às licenças; equipes e organizações (MVP 4).
-8. Auditoria externa / pentest.
+## 9. Próximos passos (ordem combinada em 2026-11-03)
+O plano detalhado, com critérios de saída de cada etapa, está em [`product/roadmap-v1.md`](product/roadmap-v1.md).
+1. Concluir o piloto de produção (`PRODUCTION.md`, seção 0), colher o retorno dos convidados e decidir o Pro ao fim dos 15 dias.
+2. **Revisar funcionalidades, features e visual** e fechar o escopo da 1.0. Em discussão:
+   - extensão fase 2;
+   - arquivos grandes por streaming;
+   - biometria e iPhone nativo;
+   - conectores de rotação validados com conta real;
+   - agente local para bancos e servidores.
+3. **Assinaturas:** cobrança recorrente (cartão e Pix) ligada às licenças, Termos de Uso, Política de Privacidade, CNPJ e NFS-e.
+4. **Garantia de segurança:** pentest externo, revisão da criptografia, Supabase Pro com restauração testada, plano de incidentes.
+5. **Garantia de funcionalidade:** testes automáticos em todo PR, matriz de aparelhos, monitoramento, suporte.
+6. **Lojas** (Play Store, App Store, lojas de extensões): só com a versão 1.0 completa.
+7. Depois da 1.0: equipes e organizações (plano Business).
