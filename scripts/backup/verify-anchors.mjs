@@ -35,6 +35,12 @@ const anchors = (await readFile(file, 'utf8'))
   .filter((l) => l.trim())
   .map((l) => JSON.parse(l))
   .filter((a) => a.project === project);
+// The file is local but untrusted input for the query below: only a positive integer and a hex hash pass.
+for (const a of anchors) {
+  if (!Number.isSafeInteger(a.seq) || a.seq < 1 || typeof a.hash !== 'string' || !/^[0-9a-f]{64}$/i.test(a.hash)) {
+    throw new Error(`Invalid anchor line in ${file}: ${JSON.stringify(a).slice(0, 120)}`);
+  }
+}
 if (anchors.length === 0) {
   console.log(`No anchors for project ${project} in ${file}.`);
   process.exit(0);
