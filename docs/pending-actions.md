@@ -12,7 +12,15 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 1. [x] **Desenvolvimento → SQL Editor:** rodar `supabase/migrations/20261105000000_entitlements_usage.sql` (limite de itens por plano, contador diário de verificações de sites, novos campos em Beta e limites).
 2. [x] **Desenvolvimento → Administração → Beta e limites:** desligar **"MFA obrigatório para todos"**. Ele está exigindo MFA das contas de teste A e B, que não têm autenticador, e 15 testes de integração falham com `vault_files_require_mfa`. Na produção ele continua **ligado** (`prod-setup.sql`).
-3. [ ] Avisar o Claude para rodar a suíte completa de novo. Com ela verde, segue o PR `dev` → `master` (a CI do GitHub precisa passar) e a publicação na produção: migration, funções `check-url`, `admin` e `cleanup-files`, e o site.
+2a. [ ] **Recriar `web-saas/.env.test.local`** (apagado por acidente em 2026-11-04 durante um build; o `.env.local` já foi recriado). Formato:
+   ```
+   TEST_USER_A_EMAIL=...
+   TEST_USER_A_PASSWORD=...
+   TEST_USER_B_EMAIL=...
+   TEST_USER_B_PASSWORD=...
+   ```
+   Contas descartáveis do projeto de **desenvolvimento**. Sem esse arquivo, os testes de integração são pulados.
+3. [x] Avisar o Claude para rodar a suíte completa de novo. Com ela verde, segue o PR `dev` → `master` (a CI do GitHub precisa passar) e a publicação na produção: migration, funções `check-url`, `admin` e `cleanup-files`, e o site.
 4. [ ] **Abrir o Docker Desktop** para o primeiro backup externo e o teste de restauração.
 5. [ ] Monitoramento gratuito e heartbeat: `PRODUCTION.md`, seção 0, passo 8.
 
