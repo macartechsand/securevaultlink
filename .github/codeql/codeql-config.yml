@@ -1,0 +1,7 @@
+# The Expo app at the repository root (app/, src/) is frozen legacy: it is not built or deployed and
+# is kept only for history (docs/HANDOVER.md). Its known issues were replaced by web-saas/.
+paths-ignore:
+  - app
+  - src
+  - "**/*.test.ts"
+  - "**/node_modules"

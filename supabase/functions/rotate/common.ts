@@ -44,6 +44,15 @@ export async function eventually(check: () => Promise<boolean>, attempts: number
 
 const ALPHABETS = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!@#$%^&*()_+-=[]{}|']
 
+/** Uniform integer in [0, n) from the CSPRNG (rejection sampling, no modulo bias). */
+function uniform(n: number) {
+  const limit = 0x100000000 - (0x100000000 % n)
+  for (;;) {
+    const [v] = crypto.getRandomValues(new Uint32Array(1))
+    if (v < limit) return v % n
+  }
+}
+
 /** Random password with every character class (unbiased; rejection sampling). */
 export function strongPassword(length = 32) {
   const all = ALPHABETS.join('')
@@ -58,7 +67,7 @@ export function strongPassword(length = 32) {
   while (chars.length < length) chars.push(pick(all))
   // Fisher-Yates with unbiased indexes.
   for (let i = chars.length - 1; i > 0; i--) {
-    const j = Number(crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1))
+    const j = uniform(i + 1)
     ;[chars[i], chars[j]] = [chars[j], chars[i]]
   }
   return chars.join('')
