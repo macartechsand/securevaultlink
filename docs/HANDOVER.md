@@ -254,7 +254,7 @@ npm test -- extension            # regras de domínio (phishing) e retorno do OA
 npm run build:ext:test; npm run test:ext:e2e   # Edge real + desenvolvimento + conta A
 ```
 
-Última execução (2026-11-01): **149 de 149** e **6 de 6** ponta a ponta no Edge. O app Android foi conferido em emulador (ver `product/mobile-app.md`, seção 7). Os arquivos de teste rodam um de cada vez (`fileParallelism: false`), porque as suítes de integração compartilham as contas A e B. A suíte `rotate.integration` faz cerca de 10 chamadas às plataformas por execução (o limite é 20 por hora).
+Última execução (2026-11-04): **154 de 154** (inclui `entitlements.integration`: limite de itens e contador de verificações no banco real) e **6 de 6** ponta a ponta no Edge (2026-11-01). O app Android foi conferido em emulador (ver `product/mobile-app.md`, seção 7). Os arquivos de teste rodam um de cada vez (`fileParallelism: false`), porque as suítes de integração compartilham as contas A e B. A suíte `rotate.integration` faz cerca de 10 chamadas às plataformas por execução (o limite é 20 por hora).
 
 ---
 
