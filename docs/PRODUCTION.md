@@ -18,7 +18,7 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
 | Recurso | Produção |
 |---|---|
 | Projeto Supabase | `securelink-prod` · ref `exglsdylytdjwrlmyptk` · São Paulo (`sa-east-1`) · **Free** |
-| App | https://securelinkvault.netlify.app (site Netlify `securelinkvault`, separado do de desenvolvimento) |
+| App | https://securelinkvault.netlify.app (site Netlify `securelinkvault`, separado do de desenvolvimento). Publicar **só** com `node scripts/deploy-prod-site.mjs` |
 | Código | `master` (PR #1 mesclado em `d5bf916`) |
 | Extensão | Pacote de produção gerado fora do repositório (`~/.securelink-prod/securelink-extension-prod.zip`) |
 | App Android | APK assinado de produção: `~/.securelink-prod/securelink-vault-0.9.0.apk` (instalação direta no piloto; ver `product/mobile-app.md`, seção 8) |
@@ -131,7 +131,7 @@ O roteiro técnico detalhado está no [`HANDOVER.md`](HANDOVER.md), seção 4. R
 9. [ ] **Contas das plataformas:** MFA (de preferência chave física) em Supabase, Netlify, GitHub, Cloudflare, registrador do domínio e no e-mail administrativo; só você como membro das organizações.
 
 ### 2.2 App
-1. [ ] Site Netlify novo (ex.: `securelinkvault`) ou domínio próprio. Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` do projeto de **produção** e publique a partir da raiz (`netlify deploy --prod --dir web-saas/dist`).
+1. [ ] Site Netlify novo (ex.: `securelinkvault`) ou domínio próprio. Defina `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` do projeto de **produção** e publique **só** com `node scripts/deploy-prod-site.mjs` (o `netlify deploy` direto refaz o build com o `.env.local` de dev).
 2. [ ] Conferir os cabeçalhos: `curl -sI https://<dominio-prod>` precisa mostrar `Content-Security-Policy`, `Strict-Transport-Security` e `X-Robots-Tag`.
 3. [ ] O site de desenvolvimento continua apontando para o projeto de desenvolvimento.
 
