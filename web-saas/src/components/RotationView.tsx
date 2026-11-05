@@ -3,6 +3,7 @@ import { CATEGORY_LABELS, CONNECTORS, type ConnectorCategory, EXECUTOR_LABELS, t
 import { formatDate, formatDateTime } from '../lib/messages';
 import { type ItemHealth, RISK_LABELS, type RiskFlag } from '../lib/itemHealth';
 import { rotationDueInDays, typeLabel } from '../lib/items';
+import { type Deadline, deadlineLabel } from '../lib/rotationDeadlines';
 import type { VaultItem } from '../state/itemOps';
 import { Icon } from './ui/Icon';
 
@@ -20,6 +21,8 @@ const EXECUTOR_BADGE: Record<Executor, string> = { assisted: 'badge--ok', cloud:
 type RotationViewProps = {
   items: VaultItem[];
   health: ItemHealth;
+  /** Deadline per item at risk (lib/rotationDeadlines), soonest first. */
+  deadlines: Deadline[];
   /** Full step-by-step assisted wizard. */
   onRotate: (item: VaultItem) => void;
   /** One click: automatic (connector with consent) or quick assisted (logins). */
@@ -60,7 +63,19 @@ function RotateButtons({ item, onRotate, onQuickRotate, onOpen, primary }: { ite
   );
 }
 
-export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }: RotationViewProps) {
+function DeadlineBadge({ deadline }: { deadline?: Deadline }) {
+  if (!deadline) return <span className="subtle">—</span>;
+  const tone = deadline.daysLeft < 0 ? 'badge--danger' : deadline.daysLeft <= 3 ? 'badge--warn' : '';
+  return (
+    <>
+      <span className={`badge ${tone}`}>{deadlineLabel(deadline.daysLeft)}</span>
+      <small className="subtle block">até {formatDate(new Date(deadline.dueAt).toISOString())}</small>
+    </>
+  );
+}
+
+export function RotationView({ items, health, deadlines, onRotate, onQuickRotate, onOpen }: RotationViewProps) {
+  const deadlineById = useMemo(() => new Map(deadlines.map((d) => [d.item.id, d])), [deadlines]);
   const automatic = useMemo(() => items.filter((i) => quickRotateMode(i) === 'auto'), [items]);
   const queue = useMemo(
     () =>
@@ -68,8 +83,12 @@ export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }:
         .filter((i) => i.access !== 'view')
         .map((i) => ({ item: i, risks: (health.risksById.get(i.id) ?? []).filter((r) => r !== 'unsafe' || i.data.type === 'login') }))
         .filter((x) => x.risks.length > 0)
-        .sort((a, b) => Math.min(...a.risks.map((r) => PRIORITY.indexOf(r))) - Math.min(...b.risks.map((r) => PRIORITY.indexOf(r)))),
-    [items, health],
+        .sort(
+          (a, b) =>
+            (deadlineById.get(a.item.id)?.dueAt ?? Infinity) - (deadlineById.get(b.item.id)?.dueAt ?? Infinity) ||
+            Math.min(...a.risks.map((r) => PRIORITY.indexOf(r))) - Math.min(...b.risks.map((r) => PRIORITY.indexOf(r))),
+        ),
+    [items, health, deadlineById],
   );
 
   const scheduled = useMemo(
@@ -96,8 +115,9 @@ export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }:
             O que trocar primeiro <span className="muted">({queue.length})</span>
           </h2>
           <p className="subtle">
-            Ordenado pelo risco: vazadas e sites perigosos primeiro. Rode "Verificar segurança" na Visão geral para incluir
-            vazamentos e sites perigosos.
+            Ordenado pelo prazo de troca: senha vazada ou site perigoso, 7 dias; fraca, reutilizada ou antiga, 30 dias,
+            contados de quando o risco foi encontrado. A verificação de vazamentos roda sozinha uma vez por dia; os avisos
+            por notificação ficam em Configurações.
           </p>
         </div>
         {queue.length === 0 ? (
@@ -111,6 +131,7 @@ export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }:
                 <tr>
                   <th>Item</th>
                   <th>Motivo</th>
+                  <th>Prazo</th>
                   <th>
                     <span className="sr-only">Ação</span>
                   </th>
@@ -134,6 +155,9 @@ export function RotationView({ items, health, onRotate, onQuickRotate, onOpen }:
                           </span>
                         ))}
                       </div>
+                    </td>
+                    <td className="nowrap">
+                      <DeadlineBadge deadline={deadlineById.get(item.id)} />
                     </td>
                     <td>
                       <div className="row-actions">

@@ -30,6 +30,8 @@ import { computeItemHealth } from './lib/itemHealth';
 import { type ItemType, adminKeyKind, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
 import { type PostureInput, computePosture } from './lib/posture';
+import { type RiskSince, computeDeadlines, summarizeDeadlines, updateRiskSince } from './lib/rotationDeadlines';
+import { claimDailyCheck, loadRiskSince, maybeNotify, saveRiskSince } from './lib/rotationReminders';
 import { isNativeShell } from './lib/nativeShell';
 import { isSupabaseConfigured } from './lib/supabase';
 import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
@@ -171,6 +173,21 @@ function VaultApp() {
 
   const health = useMemo(() => computeItemHealth(items, pwnedById, siteById), [items, pwnedById, siteById]);
 
+  // Rotation deadlines: when each risk was first seen lives on this device (item ids and dates only).
+  const userId = user?.id ?? '';
+  const [riskSince, setRiskSince] = useState<RiskSince>({});
+  useEffect(() => {
+    if (status !== 'unlocked' || !userId || items.length === 0) return;
+    const next = updateRiskSince(loadRiskSince(userId), items, health.risksById, securityCheckRan);
+    saveRiskSince(userId, next);
+    setRiskSince(next);
+  }, [status, userId, items, health, securityCheckRan]);
+  const deadlines = useMemo(() => computeDeadlines(items, riskSince), [items, riskSince]);
+  const deadlineSummary = useMemo(() => summarizeDeadlines(deadlines), [deadlines]);
+  useEffect(() => {
+    if (status === 'unlocked' && userId) maybeNotify(userId, deadlineSummary, () => setActiveView('rotation'));
+  }, [status, userId, deadlineSummary]);
+
   // Numeric posture summary for support (counts only; the user can turn it off in Settings).
   useEffect(() => {
     if (status !== 'unlocked') return;
@@ -183,6 +200,8 @@ function VaultApp() {
         exposed: health.counts.exposed,
         stale: health.counts.stale,
         rotationDue: health.counts.due,
+        deadlinesOverdue: deadlineSummary.overdue,
+        deadlinesSoon: deadlineSummary.soon,
         unsafeSites: health.counts.unsafe,
         securityCheckRan,
         mfaEnabled,
@@ -215,7 +234,7 @@ function VaultApp() {
       });
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [status, items, health, securityCheckRan, mfaEnabled, sessionCount, exposure, session.hasRecovery, session.folders.length, session.undecryptable]);
+  }, [status, items, health, deadlineSummary, securityCheckRan, mfaEnabled, sessionCount, exposure, session.hasRecovery, session.folders.length, session.undecryptable]);
 
   const runSecurityCheck = useCallback(async () => {
     setChecking(true);
@@ -240,6 +259,12 @@ function VaultApp() {
       setChecking(false);
     }
   }, [items]);
+
+  // Exposure deadlines need the breach check: it runs by itself once a day per device after unlocking.
+  useEffect(() => {
+    if (status !== 'unlocked' || !userId || items.length === 0 || securityCheckRan || checking) return;
+    if (claimDailyCheck(userId)) void runSecurityCheck().catch(() => undefined);
+  }, [status, userId, items.length, securityCheckRan, checking, runSecurityCheck]);
 
   const handleDelete = async (item: VaultItem) => {
     setActionError('');
@@ -360,6 +385,8 @@ function VaultApp() {
     exposed: health.counts.exposed,
     stale: health.counts.stale,
     rotationDue: health.counts.due,
+    deadlinesOverdue: deadlineSummary.overdue,
+    deadlinesSoon: deadlineSummary.soon,
     unsafeSites: health.counts.unsafe,
     securityCheckRan,
     mfaEnabled,
@@ -370,7 +397,7 @@ function VaultApp() {
   const navCounts: NavCounts = {
     dashboard: { value: posture.recommendations.filter((r) => r.severity === 'high').length },
     vault: { value: health.counts.exposed + health.counts.unsafe },
-    rotation: { value: health.counts.due, tone: 'warn' },
+    rotation: { value: deadlineSummary.overdue + deadlineSummary.soon, tone: deadlineSummary.overdue ? 'danger' : 'warn' },
   };
   const navProps = {
     activeView,
@@ -665,7 +692,7 @@ function VaultApp() {
           )}
 
           {activeView === 'rotation' && (
-            <RotationView items={items} health={health} onRotate={setRotatingItem} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
+            <RotationView items={items} health={health} deadlines={deadlines} onRotate={setRotatingItem} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
@@ -676,6 +703,7 @@ function VaultApp() {
 
           {activeView === 'settings' && (
             <Settings
+              userId={userId}
               email={user?.email ?? ''}
               idleMinutes={IDLE_LOCK_MS / 60000}
               onChangePassword={session.changePassword}

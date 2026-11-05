@@ -1,0 +1,46 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --hover: #f1f5f9;
+  --accent: #0e7490;
+  --accent-fg: #ffffff;
+  --danger: #b91c1c;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --fg: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #1e293b;
+    --hover: #1e293b;
+    --accent: #22d3ee;
+    --accent-fg: #0f172a;
+    --danger: #f87171;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+body { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.head small { margin-left: auto; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.mark { width: 16px; height: 16px; border-radius: 4px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; font-size: 10px; }
+.list { list-style: none; margin: 0; padding: 4px; max-height: 260px; overflow: auto; }
+.list button { all: unset; display: block; width: 100%; padding: 7px 8px; border-radius: 6px; cursor: pointer; box-sizing: border-box; }
+.list button:hover, .list button:focus-visible { background: var(--hover); outline: none; }
+.list strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list span { color: var(--muted); font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.body { padding: 10px; display: grid; gap: 8px; }
+.msg { padding: 8px 10px; color: var(--muted); }
+.error { color: var(--danger); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { all: unset; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; }
+.btn:hover, .btn:focus-visible { background: var(--hover); }
+.btn--primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+.btn--primary:hover { filter: brightness(1.08); background: var(--accent); }
+.btn--link { border: 0; color: var(--muted); padding: 6px 4px; }
+label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }

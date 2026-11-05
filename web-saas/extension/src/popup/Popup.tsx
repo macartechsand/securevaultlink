@@ -4,7 +4,7 @@ import { ProviderIcon } from '../../../src/components/ui/ProviderIcon';
 import { OAUTH_PROVIDERS, type OAuthProvider } from '../../../src/lib/oauthProviders';
 import { generatePassword } from '../../../src/lib/passwordGenerator';
 import { analyzeUrl, safeHref } from '../../../src/lib/urlCheck';
-import { type FillResponse, type ItemSummary, type StatusResponse, send } from '../protocol';
+import { type ExtSettings, type FillResponse, type ItemSummary, type SettingsResponse, type StatusResponse, send } from '../protocol';
 
 const WEB_APP_URL: string = import.meta.env.VITE_WEB_APP_URL || 'https://securelinkvaultdev.netlify.app';
 
@@ -324,11 +324,62 @@ function Generator({ onCopied }: { onCopied: (msg: string) => void }) {
   );
 }
 
+function Options() {
+  const [state, setState] = useState<SettingsResponse | null>(null);
+  const { error, run } = useAsync();
+  useEffect(() => {
+    void run(async () => setState(await send<SettingsResponse>({ type: 'getSettings' })));
+  }, [run]);
+  if (!state) return error ? <div className="alert alert--error">{error}</div> : <p className="muted">Carregando…</p>;
+  const toggle = (key: keyof ExtSettings, value: boolean) =>
+    run(async () => {
+      const settings = await send<ExtSettings>({ type: 'setSettings', settings: { [key]: value } });
+      setState((s) => (s ? { ...s, settings } : s));
+    });
+  const opts: { key: keyof ExtSettings; label: string; hint: string }[] = [
+    { key: 'inlineMenu', label: 'Sugestões no campo de login', hint: 'Mostra seus logins deste site ao clicar no campo de usuário ou senha.' },
+    { key: 'offerSave', label: 'Oferecer para salvar senhas', hint: 'Depois de entrar ou criar conta num site, pergunta se quer salvar ou atualizar no cofre.' },
+    {
+      key: 'autofillOnLoad',
+      label: 'Preencher sozinho ao abrir a página',
+      hint: 'Só quando há exatamente um login salvo para o endereço exato, em https. Desligado por padrão: preencher sem clique facilita que uma página maliciosa do mesmo site capture a senha.',
+    },
+  ];
+  return (
+    <div className="stack">
+      {error && <div className="alert alert--error">{error}</div>}
+      {opts.map((o) => (
+        <label key={o.key} className="check">
+          <input type="checkbox" checked={state.settings[o.key]} onChange={(e) => void toggle(o.key, e.target.checked)} />
+          <span>
+            <strong>{o.label}</strong>
+            <small className="subtle block">{o.hint}</small>
+          </span>
+        </label>
+      ))}
+      {state.neverSaveSites > 0 && (
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() =>
+            void run(async () => {
+              await send({ type: 'clearNeverSave' });
+              setState((s) => (s ? { ...s, neverSaveSites: 0 } : s));
+            })
+          }
+        >
+          Voltar a oferecer em {state.neverSaveSites} site(s) marcados como "Nunca"
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Vault({ onLock, onSignOut }: { onLock: () => void; onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [items, setItems] = useState<ItemSummary[] | null>(null);
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'logins' | 'generator'>('logins');
+  const [view, setView] = useState<'logins' | 'generator' | 'options'>('logins');
   const [confirm, setConfirm] = useState<{ item: ItemSummary; reason: string } | null>(null);
   const [toast, setToast] = useState('');
   const { error, run } = useAsync();
@@ -400,9 +451,13 @@ function Vault({ onLock, onSignOut }: { onLock: () => void; onSignOut: () => voi
           <button type="button" role="tab" aria-selected={view === 'generator'} className={`tab ${view === 'generator' ? 'is-active' : ''}`} onClick={() => setView('generator')}>
             Gerador
           </button>
+          <button type="button" role="tab" aria-selected={view === 'options'} className={`tab ${view === 'options' ? 'is-active' : ''}`} onClick={() => setView('options')}>
+            Opções
+          </button>
         </div>
 
         {view === 'generator' && <Generator onCopied={notify} />}
+        {view === 'options' && <Options />}
 
         {view === 'logins' && (
           <>

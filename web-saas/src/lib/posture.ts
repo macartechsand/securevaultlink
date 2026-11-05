@@ -11,6 +11,9 @@ export type PostureInput = {
   stale: number
   /** Items whose scheduled rotation is overdue. */
   rotationDue?: number
+  /** Rotation deadlines (lib/rotationDeadlines) already past / due within a few days. */
+  deadlinesOverdue?: number
+  deadlinesSoon?: number
   unsafeSites: number
   /** Whether a breach/site check ran in this session. */
   securityCheckRan: boolean
@@ -53,7 +56,12 @@ export function computePosture(p: PostureInput): Posture {
     recommendations.push({ id: 'reused', severity: 'medium', title: `Elimine ${p.reused} senha(s) reutilizada(s)`, detail: 'Se um site vazar, todas as contas com a mesma senha ficam expostas.', action: { label: 'Ver reutilizadas', view: 'vault', filter: 'reused' } })
   if (p.stale > 0)
     recommendations.push({ id: 'stale', severity: 'low', title: `${p.stale} senha(s) sem troca há mais de 1 ano`, detail: 'Troque primeiro as de contas importantes (e-mail, banco, trabalho).', action: { label: 'Ver senhas antigas', view: 'vault', filter: 'stale' } })
-  if (p.rotationDue)
+  if (p.deadlinesOverdue)
+    recommendations.push({ id: 'deadline-overdue', severity: 'high', title: `${p.deadlinesOverdue} troca(s) de senha com prazo vencido`, detail: 'Senhas vazadas têm 7 dias; fracas e reutilizadas, 30 dias. Troque pela fila de rotação.', action: { label: 'Abrir fila', view: 'rotation' } })
+  else if (p.deadlinesSoon)
+    recommendations.push({ id: 'deadline-soon', severity: 'medium', title: `${p.deadlinesSoon} troca(s) de senha vencendo em até 3 dias`, detail: 'Troque antes do prazo pela fila de rotação.', action: { label: 'Abrir fila', view: 'rotation' } })
+  // Without deadlines (older callers), overdue scheduled rotations are reported on their own.
+  if (p.rotationDue && p.deadlinesOverdue === undefined)
     recommendations.push({ id: 'due', severity: 'medium', title: `${p.rotationDue} troca(s) programada(s) vencida(s)`, detail: 'Use a fila de rotação para trocar com a ajuda do app.', action: { label: 'Abrir fila', view: 'rotation' } })
   if (p.checkable > 0 && !p.securityCheckRan)
     recommendations.push({ id: 'check', severity: 'low', title: 'Rode a verificação de segurança', detail: 'Confere vazamentos (Have I Been Pwned) e sites perigosos (Google).', action: { label: 'Verificar agora', view: 'dashboard' } })

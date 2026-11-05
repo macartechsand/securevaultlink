@@ -77,7 +77,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 | URLs perigosas | ✅ 🔌 | `fn/check-url`: **Web Risk** quando `WEB_RISK_API_KEY` existe (uso comercial), senão Safe Browsing. Uso justo por plano e dia **no banco** (`consume_url_checks`): conta endereços, nunca os guarda |
 | Pontuação de 0 a 100 com recomendações | ✅ | `src/lib/posture.ts`, com pesos: senhas 40, proteção da conta 30, sites 15, compartilhamentos 10, sessões 5 (testes em `posture.test.ts`). **Falta documentar a fórmula para o usuário** |
 | Fila de risco | ✅ | `src/components/RotationView.tsx` |
-| Monitoramento contínuo, verificação agendada, alertas | ❌ | Hoje a verificação é feita sob demanda. Agendar exige notificação (e-mail ou push) |
+| Monitoramento contínuo, verificação agendada, alertas | 🟡 | Desde 2026-11-05: a verificação de vazamentos roda sozinha 1x/dia ao abrir o cofre; cada risco vira **prazo de troca** (vazada ou site perigoso 7 dias; fraca, reutilizada ou antiga 30 dias; troca programada na data do item) na fila e na Visão geral, com **notificação do navegador** opcional (só contagem, 1x/dia). `src/lib/rotationDeadlines.ts`. Falta: aviso com o app fechado (e-mail ou push) e notificação nativa no Android |
 | Infostealer, dispositivos desconhecidos, acessos anômalos | ❌ | Futuro (P4). Com telemetria própria dá para detectar sessão nova, país novo e falhas em série. Logs de infostealer só com fonte licenciada |
 
 ## 6. Rotação e Micro-PAM
@@ -100,7 +100,7 @@ Caminhos abreviados: `src/` = `web-saas/src/`, `mig/` = `supabase/migrations/`, 
 | Plataforma | Estado | Evidência |
 |---|---|---|
 | Web/PWA | ✅ | `web-saas/`, manifest e ícones |
-| Extensão Chrome/Edge (MV3) | ✅ fase 1 | `web-saas/extension/`. Domínio por eTLD+1, nunca preenche em iframe de outro site, exige gesto do usuário, 6/6 testes ponta a ponta. Não salva senha ao fazer login (fase 2) |
+| Extensão Chrome/Edge (MV3) | ✅ fase 1 | `web-saas/extension/`. Domínio por eTLD+1, nunca preenche em iframe de outro site, exige gesto do usuário, 6/6 testes ponta a ponta. **Fase 2 (2026-11-05):** sugestões no campo, salvar e atualizar senha após o login, gerar senha no cadastro, preencher sozinho opcional. Ver `browser-extension.md`, seção 13 |
 | Android | ✅ fase 1 | `web-saas/android/`. Bloqueio de captura (`FLAG_SECURE`), sem backup, sem depuração, bloqueio em segundo plano. Faltam biometria e autopreenchimento do sistema |
 | iOS | 🟡 | Só PWA. App nativo na versão 1.0 |
 

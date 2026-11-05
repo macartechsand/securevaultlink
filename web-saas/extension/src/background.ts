@@ -4,22 +4,43 @@
  * - Keys and items live in memory. The raw DEK is also kept in chrome.storage.session (RAM only,
  *   readable by extension pages but not by content scripts) so a service-worker restart does not
  *   ask for the master password again. It is wiped on lock, browser close and after IDLE_MINUTES.
- * - Pages never talk to this worker. Only the popup (an extension page) can send requests.
+ * - Three kinds of senders, each with its own short list of requests (see the router at the end):
+ *   the popup; the extension's own frames shown inside pages (suggestions menu, save bar); and the
+ *   content script, which lives in the page's process and is treated as untrusted (never receives a
+ *   saved secret; its page URL, tab and frame come from the browser, not from the message).
  * - A fill is a two-step injection: scan frames without secrets, then send the credential to one
  *   frame of the same site as the tab, in the same document that was scanned.
+ * - Saving a password typed on a site only happens after a click on the save bar.
  */
 import { unlockWithPassword } from '../../src/lib/crypto';
 import { fromBase64, toBase64 } from '../../src/lib/crypto/encoding';
+import { emptyItem } from '../../src/lib/items';
 import { friendlyError } from '../../src/lib/messages';
+import { generatePassword } from '../../src/lib/passwordGenerator';
 import { type OAuthProvider, OAUTH_PROVIDERS, fetchEnabledProviders, oauthOptions } from '../../src/lib/oauthProviders';
 import { logClientEvent } from '../../src/services/auditService';
 import { ensureUserKeyPair } from '../../src/services/fileService';
 import { fetchProfile } from '../../src/services/vaultService';
-import { loadItems, type VaultItem } from '../../src/state/itemOps';
-import { matchItem, sameSite } from './domainMatch';
+import { type ItemKeys, createItem, loadItems, saveItem, type VaultItem } from '../../src/state/itemOps';
+import { matchItem, pageInfo, sameSite } from './domainMatch';
 import { oauthCodeFrom } from './oauthCallback';
-import { type FrameScan, fillLoginFields, scanLoginFields } from './pageScripts';
-import type { FillResponse, ItemSummary, Request, Response, StatusResponse } from './protocol';
+import { type FrameScan, fillLoginFields, fillNewPasswordFields, scanLoginFields } from './pageScripts';
+import {
+  type ContentCommand,
+  type ContentRequest,
+  DEFAULT_SETTINGS,
+  type ExtSettings,
+  type FillResponse,
+  type FrameRequest,
+  type InlineData,
+  type ItemSummary,
+  type Request,
+  type Response,
+  type SaveData,
+  type SettingsResponse,
+  type StatusResponse,
+} from './protocol';
+import { MAX_USERNAME, decideSave, newToken, siteHash } from './saveLogic';
 import { supabase } from './supabase';
 
 const IDLE_MINUTES = 10;
@@ -28,6 +49,7 @@ const SESSION_KEYS = ['dek', 'userId', 'lastActivity'] as const;
 let dek: CryptoKey | null = null;
 let userId: string | null = null;
 let items: VaultItem[] | null = null;
+let itemKeys: ItemKeys = new Map();
 let loading: Promise<VaultItem[]> | null = null;
 let failedUnlocks = 0;
 
@@ -55,8 +77,10 @@ async function lock(reason: string) {
   dek = null;
   userId = null;
   items = null;
+  itemKeys = new Map();
   loading = null;
-  await chrome.storage.session.remove([...SESSION_KEYS]);
+  // Pending saves hold a typed password: they never outlive the unlocked vault.
+  await chrome.storage.session.remove([...SESSION_KEYS, INLINE_KEY, PENDING_KEY]);
   if (wasUnlocked) logClientEvent('vault.locked', undefined, { client: 'extension', reason });
 }
 
@@ -156,7 +180,9 @@ async function vaultItems(): Promise<VaultItem[]> {
     const ctx = { dek, userId };
     loading = (async () => {
       const keyPair = await ensureUserKeyPair(ctx).catch(() => null);
-      const result = await loadItems(ctx, keyPair, new Map());
+      const keys: ItemKeys = new Map();
+      const result = await loadItems(ctx, keyPair, keys);
+      itemKeys = keys;
       // Only logins are filled; expired shares never come back from the server.
       items = result.items.filter((i) => i.data.type === 'login');
       return items;
@@ -237,6 +263,293 @@ async function fill(itemId: string, tabId: number, confirmMismatch = false): Pro
   return { ok: true, filled };
 }
 
+/* ------------------------------------------------------------------ in-page menu and save bar */
+
+const INLINE_KEY = 'inlineTokens';
+const PENDING_KEY = 'pendingSaves';
+const INLINE_TTL = 10 * 60_000;
+const PENDING_TTL = 5 * 60_000;
+/** A pending save bar is shown again after navigations (login redirects) for this long. */
+const RESHOW_MS = 2 * 60_000;
+
+type InlineToken = { tabId: number; frameId: number; documentId?: string; url: string; kind: 'login' | 'new'; at: number };
+type PendingSave = {
+  tabId: number;
+  url: string;
+  host: string;
+  username: string;
+  password: string;
+  mode: 'new' | 'update';
+  itemId: string | null;
+  generated: boolean;
+  at: number;
+  shown: number;
+};
+
+// chrome.storage.session: RAM only, readable by extension pages but not by content scripts, and it
+// survives service-worker restarts (the user may take a while to click "Salvar").
+async function readMap<T extends { at: number }>(key: string, ttl: number): Promise<Record<string, T>> {
+  const raw = ((await chrome.storage.session.get(key))[key] ?? {}) as Record<string, T>;
+  const now = Date.now();
+  return Object.fromEntries(Object.entries(raw).filter(([, v]) => now - v.at < ttl));
+}
+const writeMap = (key: string, value: Record<string, unknown>) => chrome.storage.session.set({ [key]: value });
+
+async function getSettings(): Promise<ExtSettings> {
+  const { settings } = await chrome.storage.local.get('settings');
+  return { ...DEFAULT_SETTINGS, ...((settings as Partial<ExtSettings> | undefined) ?? {}) };
+}
+
+async function neverList(): Promise<string[]> {
+  const { neverSave } = await chrome.storage.local.get('neverSave');
+  return Array.isArray(neverSave) ? (neverSave as string[]) : [];
+}
+
+const hostOf = (url: string) => new URL(url).hostname.replace(/^www\./, '');
+const sendToFrame = (tabId: number, frameId: number, msg: ContentCommand) =>
+  chrome.tabs.sendMessage(tabId, msg, { frameId }).catch(() => undefined);
+
+async function matchesFor(url: string) {
+  return (await vaultItems()).filter((i) => i.data.url && matchItem(i.data.url, url) !== 'none');
+}
+
+/** The frame must belong to the same site as the tab (no suggestions inside third-party frames). */
+async function sameSiteAsTab(tabId: number, frameUrl: string) {
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  return Boolean(tab?.url && sameSite(frameUrl, tab.url));
+}
+
+async function inlineToken(token: string, tabId: number): Promise<InlineToken> {
+  const t = (await readMap<InlineToken>(INLINE_KEY, INLINE_TTL))[token];
+  if (!t || t.tabId !== tabId) throw new Error('Menu expirado. Clique no campo de novo.');
+  return t;
+}
+
+async function pendingSave(token: string, tabId: number): Promise<PendingSave> {
+  const p = (await readMap<PendingSave>(PENDING_KEY, PENDING_TTL))[token];
+  if (!p || p.tabId !== tabId) throw new Error('Pedido expirado.');
+  return p;
+}
+
+async function dropPending(token: string) {
+  const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+  delete all[token];
+  await writeMap(PENDING_KEY, all);
+}
+
+async function showSave(token: string) {
+  const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+  const p = all[token];
+  if (!p) return;
+  all[token] = { ...p, shown: p.shown + 1 };
+  await writeMap(PENDING_KEY, all);
+  await sendToFrame(p.tabId, 0, { type: 'cs.showSave', token });
+}
+
+async function stagePending(p: Omit<PendingSave, 'at' | 'shown'>) {
+  const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+  // One bar per tab: a newer form replaces an older, unanswered one.
+  for (const [k, v] of Object.entries(all)) if (v.tabId === p.tabId) delete all[k];
+  const token = newToken();
+  all[token] = { ...p, at: Date.now(), shown: 0 };
+  await writeMap(PENDING_KEY, all);
+  await showSave(token);
+}
+
+/** Login form sent on a page: offer to save or update, if it is new information. */
+async function captured(tabId: number, url: string, username: unknown, password: unknown) {
+  if (typeof username !== 'string' || typeof password !== 'string') return;
+  if (!(await getSettings()).offerSave || !(await sameSiteAsTab(tabId, url))) return;
+  const info = pageInfo(url);
+  if (!info || (await neverList()).includes(await siteHash(info.site))) return;
+  const user = username.trim().slice(0, MAX_USERNAME);
+
+  // A password generated by the menu is already pending: the form now tells which user it was for.
+  const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+  const generated = Object.entries(all).find(([, p]) => p.tabId === tabId && p.generated && p.password === password);
+  if (generated) {
+    const [token, p] = generated;
+    if (user) {
+      all[token] = { ...p, username: user };
+      await writeMap(PENDING_KEY, all);
+    }
+    await showSave(token);
+    return;
+  }
+
+  const matches = await matchesFor(url);
+  const decision = decideSave(
+    matches.map((i) => ({ id: i.id, username: i.data.username, password: i.data.password, access: i.access })),
+    user,
+    password,
+  );
+  if (!decision) return;
+  await stagePending({
+    tabId,
+    url,
+    host: hostOf(url),
+    username: user,
+    password,
+    mode: decision.mode,
+    itemId: decision.mode === 'update' ? decision.itemId : null,
+    generated: false,
+  });
+}
+
+async function autofillOnLoad(tabId: number, url: string) {
+  if (!(await getSettings()).autofillOnLoad || !/^https:/i.test(url)) return;
+  const exact = (await matchesFor(url)).filter((i) => matchItem(i.data.url, url) === 'exact');
+  // Only when there is no choice to make; anything else waits for the user.
+  if (exact.length === 1) await fill(exact[0].id, tabId).catch(() => null);
+}
+
+async function handleContent(request: ContentRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
+  const tabId = sender.tab!.id!;
+  const frameId = sender.frameId ?? 0;
+  const url = sender.url!;
+  if (!dek) return null;
+  switch (request?.type) {
+    case 'cs.focus': {
+      if (request.kind !== 'login' && request.kind !== 'new') return null;
+      if (!(await getSettings()).inlineMenu || !(await sameSiteAsTab(tabId, url))) return null;
+      if (request.kind === 'login' && !(await matchesFor(url)).length) return null;
+      const all = await readMap<InlineToken>(INLINE_KEY, INLINE_TTL);
+      const token = newToken();
+      all[token] = { tabId, frameId, documentId: sender.documentId, url, kind: request.kind, at: Date.now() };
+      await writeMap(INLINE_KEY, all);
+      return { token };
+    }
+    case 'cs.captured':
+      await captured(tabId, url, request.username, request.password);
+      return null;
+    case 'cs.pageReady':
+      if (frameId === 0) await autofillOnLoad(tabId, url);
+      return null;
+    default:
+      throw new Error('Pedido desconhecido.');
+  }
+}
+
+const frameTarget = (t: InlineToken) => (t.documentId ? { tabId: t.tabId, documentIds: [t.documentId] } : { tabId: t.tabId, frameIds: [t.frameId] });
+
+async function handleFrame(request: FrameRequest, tabId: number): Promise<unknown> {
+  switch (request?.type) {
+    case 'fr.inlineData': {
+      const t = await inlineToken(request.token, tabId);
+      if (!dek) throw new Error('O cofre está bloqueado. Abra pelo ícone da extensão.');
+      const data: InlineData = {
+        host: hostOf(t.url),
+        kind: t.kind,
+        items: (await matchesFor(t.url))
+          .map((i) => ({ id: i.id, title: i.data.title, username: i.data.username, exact: matchItem(i.data.url, t.url) === 'exact' }))
+          .sort((a, b) => Number(b.exact) - Number(a.exact) || a.title.localeCompare(b.title, 'pt-BR')),
+      };
+      return data;
+    }
+    case 'fr.inlineFill': {
+      const t = await inlineToken(request.token, tabId);
+      await touch();
+      const item = await findItem(request.itemId);
+      if (!item.data.url || matchItem(item.data.url, t.url) === 'none') throw new Error('Este login não é deste site.');
+      if (!(await sameSiteAsTab(tabId, t.url))) throw new Error('A página mudou. Clique no campo de novo.');
+      const [result] = await chrome.scripting.executeScript({ target: frameTarget(t), func: fillLoginFields, args: [item.data.username, item.data.password] });
+      const filled = result?.result as { username: boolean; password: boolean } | undefined;
+      if (!filled?.username && !filled?.password) throw new Error('Não foi possível preencher os campos desta página.');
+      logClientEvent('item.filled', { type: 'item', id: item.id }, { client: 'extension', inline: true });
+      await sendToFrame(tabId, t.frameId, { type: 'cs.close', which: 'inline' });
+      return null;
+    }
+    case 'fr.inlineGenerate': {
+      const t = await inlineToken(request.token, tabId);
+      if (t.kind !== 'new') throw new Error('Este campo não é de senha nova.');
+      await touch();
+      const password = generatePassword({ length: 20, uppercase: true, numbers: true, symbols: true });
+      const [result] = await chrome.scripting.executeScript({ target: frameTarget(t), func: fillNewPasswordFields, args: [password] });
+      if (!result?.result) throw new Error('Não encontrei o campo de senha nova.');
+      await sendToFrame(tabId, t.frameId, { type: 'cs.close', which: 'inline' });
+      // Staged right away: if the form is never captured, the generated password is not lost.
+      await stagePending({ tabId, url: t.url, host: hostOf(t.url), username: '', password, mode: 'new', itemId: null, generated: true });
+      return null;
+    }
+    case 'fr.saveData': {
+      const p = await pendingSave(request.token, tabId);
+      const title = p.itemId ? ((items ?? []).find((i) => i.id === p.itemId)?.data.title ?? null) : null;
+      const data: SaveData = { host: p.host, username: p.username, mode: p.mode, title, generated: p.generated };
+      return data;
+    }
+    case 'fr.saveDecide': {
+      const p = await pendingSave(request.token, tabId);
+      if (request.decision === 'dismiss') {
+        await dropPending(request.token);
+        return null;
+      }
+      if (request.decision === 'never') {
+        const info = pageInfo(p.url);
+        if (info) await chrome.storage.local.set({ neverSave: [...new Set([...(await neverList()), await siteHash(info.site)])] });
+        await dropPending(request.token);
+        return null;
+      }
+      if (request.decision !== 'save') throw new Error('Pedido desconhecido.');
+      if (!dek || !userId) throw new Error('O cofre está bloqueado. Abra pelo ícone da extensão e tente de novo.');
+      await touch();
+      const ctx = { dek, userId };
+      const all = await vaultItems();
+      if (p.mode === 'update' && p.itemId) {
+        const item = await findItem(p.itemId);
+        if (item.access === 'view') throw new Error('Você só tem permissão de visualização neste login.');
+        const updated = await saveItem(ctx, itemKeys, item, { ...item.data, password: p.password });
+        items = all.map((i) => (i.id === updated.id ? updated : i));
+        await dropPending(request.token);
+        return { message: 'Senha atualizada no cofre.' };
+      }
+      const username = typeof request.username === 'string' ? request.username.trim().slice(0, MAX_USERNAME) : p.username;
+      const created = await createItem(ctx, itemKeys, { ...emptyItem('login'), title: p.host, username, password: p.password, url: new URL(p.url).origin });
+      items = [...all, created];
+      await dropPending(request.token);
+      return { message: 'Login salvo no cofre.' };
+    }
+    case 'fr.close': {
+      const inline = (await readMap<InlineToken>(INLINE_KEY, INLINE_TTL))[request.token];
+      if (inline?.tabId === tabId) return sendToFrame(tabId, inline.frameId, { type: 'cs.close', which: 'inline' });
+      const pending = (await readMap<PendingSave>(PENDING_KEY, PENDING_TTL))[request.token];
+      if (pending?.tabId === tabId) await dropPending(request.token);
+      // A save bar whose request expired still closes.
+      return sendToFrame(tabId, 0, { type: 'cs.close', which: 'save' });
+    }
+    case 'fr.resize': {
+      const height = Number(request.height);
+      if (!Number.isFinite(height)) return null;
+      const inline = (await readMap<InlineToken>(INLINE_KEY, INLINE_TTL))[request.token];
+      if (inline?.tabId === tabId) return sendToFrame(tabId, inline.frameId, { type: 'cs.resize', which: 'inline', height });
+      const pending = (await readMap<PendingSave>(PENDING_KEY, PENDING_TTL))[request.token];
+      if (pending?.tabId === tabId) return sendToFrame(tabId, 0, { type: 'cs.resize', which: 'save', height });
+      return null;
+    }
+    default:
+      throw new Error('Pedido desconhecido.');
+  }
+}
+
+// After a login the site usually navigates: show the pending bar again on the new page.
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status !== 'complete') return;
+  void (async () => {
+    await ready;
+    if (!dek) return;
+    const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+    for (const [token, p] of Object.entries(all)) {
+      if (p.tabId === tabId && Date.now() - p.at < RESHOW_MS && p.shown < 4) await showSave(token);
+    }
+  })();
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void (async () => {
+    const all = await readMap<PendingSave>(PENDING_KEY, PENDING_TTL);
+    const kept = Object.fromEntries(Object.entries(all).filter(([, p]) => p.tabId !== tabId));
+    if (Object.keys(kept).length !== Object.keys(all).length) await writeMap(PENDING_KEY, kept);
+  })();
+});
+
 /* ------------------------------------------------------------------ clipboard */
 
 async function scheduleClipboardClear() {
@@ -255,12 +568,15 @@ async function clearClipboard() {
 
 /* ------------------------------------------------------------------ wiring */
 
-async function handle(request: Request): Promise<unknown> {
+async function preamble() {
   await ready;
   if (dek) {
     const { lastActivity } = await chrome.storage.session.get('lastActivity');
     if (Date.now() - Number(lastActivity ?? 0) > IDLE_MINUTES * 60_000) await lock('idle');
   }
+}
+
+async function handle(request: Request): Promise<unknown> {
   switch (request.type) {
     case 'status':
       return status();
@@ -293,16 +609,42 @@ async function handle(request: Request): Promise<unknown> {
     }
     case 'clipboardCopied':
       return scheduleClipboardClear();
+    case 'getSettings': {
+      const res: SettingsResponse = { settings: await getSettings(), neverSaveSites: (await neverList()).length };
+      return res;
+    }
+    case 'setSettings': {
+      const next = { ...(await getSettings()) };
+      for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof ExtSettings)[]) {
+        const v = request.settings?.[k];
+        if (typeof v === 'boolean') next[k] = v;
+      }
+      await chrome.storage.local.set({ settings: next });
+      return next;
+    }
+    case 'clearNeverSave':
+      await chrome.storage.local.remove('neverSave');
+      return null;
     default:
       throw new Error('Pedido desconhecido.');
   }
 }
 
-chrome.runtime.onMessage.addListener((request: Request, sender, sendResponse) => {
-  // Only our own extension pages (the popup). Content scripts and web pages are refused.
-  const fromPopup = sender.id === chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL('popup.html'));
-  if (!fromPopup || (request as { target?: string }).target === 'offscreen') return false;
-  handle(request).then(
+chrome.runtime.onMessage.addListener((request: unknown, sender, sendResponse) => {
+  // Web pages cannot message the extension (no externally_connectable). Each sender kind gets only
+  // its own requests; anything else is refused.
+  if (sender.id !== chrome.runtime.id || (request as { target?: string } | null)?.target === 'offscreen') return false;
+  const url = sender.url ?? '';
+  const tabId = sender.tab?.id;
+  let work: (() => Promise<unknown>) | null = null;
+  if (url.startsWith(chrome.runtime.getURL('popup.html'))) work = () => handle(request as Request);
+  else if (tabId !== undefined && (url.startsWith(chrome.runtime.getURL('inline.html')) || url.startsWith(chrome.runtime.getURL('save.html'))))
+    work = () => handleFrame(request as FrameRequest, tabId);
+  else if (tabId !== undefined && !url.startsWith(chrome.runtime.getURL('')) && /^https?:/i.test(url))
+    work = () => handleContent(request as ContentRequest, sender);
+  if (!work) return false;
+  const run = work;
+  preamble().then(run).then(
     (data) => sendResponse({ ok: true, data } satisfies Response),
     (error) => sendResponse({ ok: false, error: friendlyError(error) } satisfies Response),
   );

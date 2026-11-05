@@ -3,10 +3,12 @@ import { friendlyError } from '../lib/messages';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
 import { PrivacyCard } from './PrivacyCard';
+import { RotationRemindersCard } from './RotationRemindersCard';
 import { SessionsCard } from './SessionsCard';
 import { ThemeToggle } from './ui/ThemeToggle';
 
 type SettingsProps = {
+  userId: string;
   email: string;
   idleMinutes: number;
   onChangePassword: (current: string, next: string) => Promise<void>;
@@ -17,6 +19,7 @@ type SettingsProps = {
 };
 
 export function Settings({
+  userId,
   email,
   idleMinutes,
   onChangePassword,
@@ -53,6 +56,7 @@ export function Settings({
       <MfaSettings />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
       <SessionsCard />
+      <RotationRemindersCard userId={userId} />
       <PrivacyCard />
 
       <section className="card">

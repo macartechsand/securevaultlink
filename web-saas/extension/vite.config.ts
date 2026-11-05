@@ -4,7 +4,9 @@
  *
  * - Shares web-saas/src (crypto, items, services) instead of duplicating it.
  * - Swaps web-saas/src/lib/supabase.ts for extension/src/supabase.ts (chrome.storage session).
- * - Writes manifest.json with the Supabase project as the only host permission.
+ * - Writes manifest.json. Network access (connect-src) is only the Supabase project. Phase 2 adds a
+ *   content script on http/https pages (login suggestions and "save password"), which needs host
+ *   access to pages to fill from the in-page menu; see docs/product/browser-extension.md.
  */
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
@@ -53,11 +55,24 @@ function swapSupabaseClient(): Plugin {
  */
 const manifestKey = JSON.parse(readFileSync(resolve(here, 'manifest-key.json'), 'utf8')) as { key: string; id: string }
 
+/** The content script is loaded as a classic script: an import statement would break it silently. */
+function contentScriptIsStandalone(): Plugin {
+  return {
+    name: 'securelink:content-standalone',
+    generateBundle(_options, bundle) {
+      const chunk = bundle['content.js']
+      if (chunk && chunk.type === 'chunk' && (chunk.imports.length || /^s*import[s{*]/m.test(chunk.code))) {
+        throw new Error(`content.js imports other chunks (${chunk.imports.join(', ')}); keep src/content.ts self-contained.`)
+      }
+    },
+  }
+}
+
 function manifest(env: Record<string, string>, testHosts: boolean, store: boolean): Plugin {
   const supabaseUrl = env.VITE_SUPABASE_URL
   if (!supabaseUrl) throw new Error('VITE_SUPABASE_URL is required to build the extension')
   const supabaseOrigin = new URL(supabaseUrl).origin
-  const pkg = { version: '0.1.0' }
+  const pkg = { version: '0.2.0' }
   return {
     name: 'securelink:manifest',
     generateBundle() {
@@ -73,8 +88,14 @@ function manifest(env: Record<string, string>, testHosts: boolean, store: boolea
         background: { service_worker: 'background.js', type: 'module' },
         icons: { '16': 'icons/icon-192.png', '48': 'icons/icon-192.png', '128': 'icons/icon-192.png' },
         permissions: ['storage', 'activeTab', 'scripting', 'alarms', 'idle', 'offscreen', 'clipboardWrite', 'identity'],
-        // Only the Supabase project. Pages are reached through activeTab (a user gesture), never in the background.
-        host_permissions: [`${supabaseOrigin}/*`, ...(testHosts ? ['http://localhost/*', 'http://127.0.0.1/*'] : [])],
+        // The Supabase project, plus web pages: filling from the in-page menu happens after a click
+        // inside the extension's own frame, which does not grant activeTab.
+        host_permissions: [`${supabaseOrigin}/*`, 'http://*/*', 'https://*/*', ...(testHosts ? ['http://localhost/*', 'http://127.0.0.1/*'] : [])],
+        content_scripts: [{ matches: ['http://*/*', 'https://*/*'], js: ['content.js'], all_frames: true, run_at: 'document_idle' }],
+        // The menu and the save bar are extension pages framed by the content script. Only these two
+        // pages (and their bundles) can be loaded by sites; the popup cannot. Static URLs on purpose:
+        // the background checks the exact sender page (accepted cost: a site can detect the extension).
+        web_accessible_resources: [{ resources: ['inline.html', 'save.html', 'assets/*'], matches: ['http://*/*', 'https://*/*'] }],
         commands: {
           'fill-login': {
             suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' },
@@ -82,7 +103,9 @@ function manifest(env: Record<string, string>, testHosts: boolean, store: boolea
           },
         },
         content_security_policy: {
-          extension_pages: `script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src ${supabaseOrigin}`,
+          // frame-ancestors: the in-page menu and save bar are framed by web pages; every other
+          // extension page is not web-accessible, so sites cannot frame it anyway.
+          extension_pages: `script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' http: https:; connect-src ${supabaseOrigin}`,
         },
       }
       this.emitFile({ type: 'asset', fileName: 'manifest.json', source: JSON.stringify(json, null, 2) })
@@ -103,7 +126,7 @@ export default defineConfig(({ mode }) => {
     root: here,
     envDir: appRoot,
     publicDir: false,
-    plugins: [guardOutDir(), swapSupabaseClient(), react(), manifest(env, testHosts, mode === 'store')],
+    plugins: [guardOutDir(), swapSupabaseClient(), react(), manifest(env, testHosts, mode === 'store'), contentScriptIsStandalone()],
     build: {
       outDir: resolve(appRoot, testHosts ? 'dist-extension-test' : 'dist-extension'),
       emptyOutDir: true,
@@ -115,9 +138,13 @@ export default defineConfig(({ mode }) => {
           popup: resolve(here, 'popup.html'),
           offscreen: resolve(here, 'offscreen.html'),
           background: resolve(here, 'src/background.ts'),
+          inline: resolve(here, 'inline.html'),
+          save: resolve(here, 'save.html'),
+          content: resolve(here, 'src/content.ts'),
         },
         output: {
-          entryFileNames: (chunk) => (chunk.name === 'background' ? 'background.js' : 'assets/[name]-[hash].js'),
+          // content.js runs as a classic script: it must not import shared chunks (checked after the build).
+          entryFileNames: (chunk) => (chunk.name === 'background' || chunk.name === 'content' ? `${chunk.name}.js` : 'assets/[name]-[hash].js'),
         },
       },
     },

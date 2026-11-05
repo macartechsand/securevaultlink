@@ -54,8 +54,12 @@ if (all.includes(DEV_APP)) fail('the package opens the DEVELOPMENT web app.');
 if (!all.includes(PROD_REF)) fail('the package does not reference the production project.');
 if (!all.includes(PROD_APP)) fail('the package does not open the production web app.');
 const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+// Phase 2: web pages (in-page menu and save bar) + the production Supabase project, nothing else.
 const hosts = manifest.host_permissions ?? [];
-if (hosts.length !== 1 || hosts[0] !== `https://${PROD_REF}.supabase.co/*`) fail(`unexpected host permissions: ${hosts.join(', ')}`);
+const expectedHosts = [`https://${PROD_REF}.supabase.co/*`, 'http://*/*', 'https://*/*'];
+if (hosts.length !== expectedHosts.length || !expectedHosts.every((h) => hosts.includes(h))) fail(`unexpected host permissions: ${hosts.join(', ')}`);
+const csp = manifest.content_security_policy?.extension_pages ?? '';
+if (!csp.endsWith(`connect-src https://${PROD_REF}.supabase.co`)) fail(`unexpected network policy: ${csp}`);
 for (const m of all.matchAll(/eyJ[\w-]+\.([\w-]+)\.[\w-]+/g)) {
   let p = null;
   try {
@@ -65,7 +69,7 @@ for (const m of all.matchAll(/eyJ[\w-]+\.([\w-]+)\.[\w-]+/g)) {
   }
   if (p.ref !== PROD_REF || p.role !== 'anon') fail(`unexpected key in the package: ${p.ref}/${p.role}`);
 }
-console.log(`   ok: only ${hosts[0]}, opens ${PROD_APP}, version ${manifest.version}`);
+console.log(`   ok: network only ${expectedHosts[0]}, opens ${PROD_APP}, version ${manifest.version}`);
 
 console.log('4/4 Zipping…');
 if (existsSync(zip)) rmSync(zip);
