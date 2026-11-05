@@ -46,12 +46,12 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
 |---|---|---|
 | **Sem backup automático** | Uma exclusão acidental não tem volta pelo painel | **Backup externo cifrado obrigatório**: o primeiro antes de convidar, depois 2 vezes por semana (`scripts/backup/backup.mjs`, exige o Docker Desktop aberto). Usuários fazem a exportação cifrada |
 | **Pausa após 7 dias sem uso** | O app para de responder até alguém retomar o projeto no painel | Uso diário do piloto evita; se pausar, **Restore project** no painel (os dados ficam) |
-| 1 GB de arquivos, 500 MB de banco | Cotas menores | Premium 150 MB × 5 + admin 80 MB = 830 MB |
+| 1 GB de arquivos, 500 MB de banco | Cotas menores | Free 20 MB × 20 + Premium 80 MB × 5 = 800 MB (pior caso) |
 | E-mail padrão do Supabase só envia para membros da organização | Convites e redefinições por e-mail não chegam | Os convites do app já são **links** enviados por mensagem direta; não depende de e-mail |
 | No máximo 2 projetos ativos por organização | Não há onde fazer o teste de restauração completo (dev + prod ocupam as vagas) | Teste parcial: `restore.mjs` sem `--apply` (decifra e confere os hashes). Teste completo ao migrar para o Pro |
 
 **Falta (você, no painel ou no app):**
-1. [ ] **SQL Editor da produção** → colar e rodar `~/.securelink-prod/prod-setup.sql`, que contém:
+1. [x] (2026-11-05, conferido no backup) **SQL Editor da produção** → colar e rodar `~/.securelink-prod/prod-setup.sql`, que contém:
    - a autorização do administrador master;
    - os limites do piloto;
    - o cron de limpeza.
@@ -65,7 +65,7 @@ Decisão do dono do produto: validar a usabilidade **antes** de pagar o Pro, num
    1. Authentication → Users → **Add user** (mesmo e-mail do passo 1, senha forte, "Auto Confirm User").
    2. Rodar a parte B de `supabase/admin/create-master-admin.sql`, trocando o e-mail.
    3. Entrar no app, criar o cofre e ativar o MFA.
-5. [ ] **Backup:** abrir o Docker Desktop e rodar o primeiro backup externo. Pode pedir ao Claude, que lê a senha do banco do arquivo privado.
+5. [x] (2026-11-05: `securevault-2026-11-05T15-07-45-936Z.svbk`, teste parcial OK) **Backup:** abrir o Docker Desktop e rodar o primeiro backup externo. Pode pedir ao Claude, que lê a senha do banco do arquivo privado.
 6. [ ] **Convites:** Administração → Beta e limites → e-mail → Premium → **outro prazo: 15 dias**. Enviar o link, o `.zip` da extensão e o APK por mensagem direta, com o onboarding (seção 7).
 7. [ ] **Limites do beta (2026-11-04):** o `prod-setup.sql` já traz até **25 contas**, cota de **20 MB** no Free e **80 MB** no Premium (pior caso: 20 × 20 + 5 × 80 = 800 MB de 1 GB). Free com **7 itens** e as verificações de sites por dia vêm da migration `20261105000000`. Tudo é ajustável em Administração → Beta e limites.
 8. [ ] **Monitoramento gratuito** (Better Stack ou UptimeRobot):

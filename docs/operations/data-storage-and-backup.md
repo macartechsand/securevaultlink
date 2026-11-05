@@ -116,7 +116,7 @@ Um backup só conta depois de restaurado uma vez.
 
 | Data | Backup usado | Cofre abriu | Arquivo abriu | Auditoria íntegra | Responsável |
 |---|---|---|---|---|---|
-| | | | | | |
+| 2026-11-05 | `securevault-2026-11-05T15-07-45-936Z.svbk` (produção, SHA-256 `a8ca2897…6c83`) | n/a: produção ainda sem contas | n/a: 0 arquivos | ✅ âncora #88 confere (`verify-anchors.mjs`) | Claude (só passo 2: decifrar e conferir hashes; carga completa pendente) |
 
 ---
 
