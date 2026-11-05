@@ -9,7 +9,13 @@ cd web-saas
 npm run build:ext          # gera dist-extension/ (usa VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY do .env.local)
 ```
 
-Para gerar contra o projeto de **produção**, crie `web-saas/.env.production.local` com `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `VITE_WEB_APP_URL` (endereço do app web) de produção; ele tem prioridade sobre o `.env.local` no `npm run build:ext`. A única permissão de rede do pacote é o Supabase configurado ali. **Atenção:** esse arquivo também vale para o `npm run build` do app web; apague-o depois de gerar o pacote de produção para não publicar o site de desenvolvimento apontando para a produção.
+O `npm run build:ext` gera a extensão de **desenvolvimento** (`dist-extension`, projeto e site de dev). Para a **produção**, use só, a partir da raiz:
+
+```powershell
+node scripts/build-prod-extension.mjs
+```
+
+Ele monta com o projeto e o site de produção em `web-saas/dist-extension-prod`, recusa o pacote se houver qualquer referência ao dev, confere que a única permissão de rede é o Supabase de produção e gera `~/.securelink-prod/securelink-extension-prod.zip`. As duas versões têm o mesmo ID: o navegador só pode ter uma delas carregada por vez.
 
 ## Login com Google e GitHub
 

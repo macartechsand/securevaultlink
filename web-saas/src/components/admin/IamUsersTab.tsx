@@ -6,6 +6,7 @@ import {
   ROLE_LABELS,
   type UserInsights,
   createRecoveryLink,
+  deleteUserAccount,
   listUsers,
   resetUserMfa,
   revokeUserSessions,
@@ -148,6 +149,7 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [oneTime, setOneTime] = useState<{ email: string; link: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
   const suspended = Boolean(user.banned_until && new Date(user.banned_until) > new Date());
 
   const refresh = useCallback(async () => {
@@ -177,6 +179,20 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
     } catch (e) {
       setError(friendlyError(e));
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    setError('');
+    setInfo('');
+    setBusy(true);
+    try {
+      await deleteUserAccount(user.user_id, deleteConfirm);
+      onChanged();
+      onClose();
+    } catch (e) {
+      setError(friendlyError(e));
       setBusy(false);
     }
   };
@@ -356,6 +372,41 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
                 >
                   {suspended ? 'Reativar conta' : 'Suspender conta'}
                 </button>
+              </div>
+            )}
+            {canAct && (
+              <div className="alert alert--error stack-sm">
+                <strong>Excluir conta</strong>
+                {user.role ? (
+                  <span>Esta conta tem um papel privilegiado. Revogue o papel na aba "Acesso privilegiado (PAM)" antes de excluir.</span>
+                ) : (
+                  <>
+                    <span>
+                      Apaga a conta, o cofre, os arquivos e os compartilhamentos, e retira o e-mail da lista do beta. Não pode ser
+                      desfeita. O histórico de auditoria fica, só com o identificador.
+                    </span>
+                    <label className="field">
+                      Digite <code>{user.email}</code> para confirmar
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={deleteConfirm}
+                        disabled={busy}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                      />
+                    </label>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger"
+                        disabled={busy || deleteConfirm.trim().toLowerCase() !== user.email.toLowerCase()}
+                        onClick={() => void deleteAccount()}
+                      >
+                        Excluir conta definitivamente
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div className="alert">

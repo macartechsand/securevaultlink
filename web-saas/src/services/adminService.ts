@@ -131,6 +131,9 @@ async function callAdmin<T>(body: Record<string, string>): Promise<T> {
 export const resetUserMfa = (userId: string) => callAdmin<{ ok: boolean; removed: number }>({ action: 'reset_mfa', userId });
 export const suspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ action: 'suspend', userId });
 export const unsuspendUser = (userId: string) => callAdmin<{ ok: boolean }>({ action: 'unsuspend', userId });
+/** Irreversible: deletes the account, vault, files and shares. `confirmEmail` must be the account's e-mail (checked by the server). */
+export const deleteUserAccount = (userId: string, confirmEmail: string) =>
+  callAdmin<{ ok: boolean }>({ action: 'delete_user', userId, confirm: confirmEmail });
 export const systemHealth = () => callAdmin<{ checks: Record<string, boolean | null> }>({ action: 'health' });
 
 /** One-time links generated without e-mail: the admin delivers them through another channel. */
