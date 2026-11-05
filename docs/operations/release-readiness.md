@@ -1,6 +1,6 @@
 # Prontidão: beta, abertura de assinaturas e lojas
 
-> Checklist de 2026-11-04. Cada portão só abre com todos os itens marcados.
+> Checklist de 2026-11-04, portão 1 revisto em 2026-11-05. Cada portão só abre com todos os itens marcados.
 >
 > Legenda: ✅ feito, com evidência · 🟡 parcial · ❌ falta.
 >
@@ -12,17 +12,21 @@
 |---|---|
 | Projeto de produção separado, segredos fora do repositório | ✅ |
 | 19 migrations e 7 funções publicadas; cabeçalhos HTTPS, HSTS e CSP conferidos | ✅ |
-| `prod-setup.sql` (admin master, limites, cron de limpeza) rodado pelo dono | ❌ |
-| URLs de autenticação, senha mínima de 10, confirmação de e-mail, TOTP | ❌ (dono, no painel) |
-| Admin master com MFA | ❌ |
-| **Primeiro backup externo cifrado** antes do primeiro convidado; 2 por semana depois | ❌ |
-| Cotas ajustadas à capacidade do Free (20 MB Free, 80 MB Premium com 5 licenças; até 25 contas) | 🟡 no `prod-setup.sql`, falta rodar |
-| Limite de itens (Free = 7) e de verificações de sites por dia **no banco** | 🟡 migration `20261105000000` testada localmente (PGlite); falta aplicar no desenvolvimento e na produção |
+| `prod-setup.sql` (admin master, limites, cron de limpeza) rodado pelo dono | ✅ 2026-11-05 (ajustes e cron conferidos) |
+| URLs de autenticação, senha mínima de 10, confirmação de e-mail, TOTP | 🟡 login Google/GitHub da produção funcionando com clientes OAuth próprios; falta o dono conferir os demais itens no painel |
+| Admin master com MFA | ❌ (a conta ainda não existe na produção) |
+| **Primeiro backup externo cifrado** antes do primeiro convidado; 2 por semana depois | ✅ primeiro backup em 2026-11-05 com teste parcial de restauração; falta guardar a senha dos backups no cofre e em papel |
+| Cotas ajustadas à capacidade do Free (20 MB Free, 80 MB Premium com 5 licenças; até 25 contas) | ✅ |
+| Limite de itens (Free = 7) e de verificações de sites por dia **no banco** | ✅ migration `20261105000000` no desenvolvimento e na produção |
 | Monitoramento: site, saúde da autenticação e heartbeat da limpeza | 🟡 heartbeat implementado (`HEARTBEAT_URL`); falta criar os monitores (`PRODUCTION.md`, seção 0, passo 8) |
 | Âncoras externas da cadeia de auditoria | ✅ `backup.mjs` grava `audit-anchors.jsonl`; `verify-anchors.mjs` confere |
 | Atraso progressivo após senhas mestras erradas | ✅ web (`VaultGate`) e extensão |
 | CI no GitHub: lint, build, testes, `npm audit`, segredos (Gitleaks), CodeQL, Dependabot | ✅ `.github/` |
+| Publicação da produção só por script que confere o bundle (`scripts/deploy-prod-site.mjs`, `scripts/build-prod-extension.mjs`) | ✅ após o incidente de 2026-11-05 |
+| Pentest do dono no desenvolvimento ([`../SECURITY_TESTING.md`](../SECURITY_TESTING.md)) sem achado crítico ou alto em aberto | ❌ em andamento |
 | Forma de coletar o retorno dos convidados (formulário ou conversa ao fim do prazo) | ❌ |
+
+**Para levar a versão do desenvolvimento (extensão 0.2.0, prazos de troca, exclusão de conta) à produção:** suíte de integração e testes de ponta a ponta da extensão verdes (exige o `.env.test.local`), teste manual do dono no desenvolvimento, PR `dev` → `master` com CI verde e publicação pelos scripts. Detalhes em [`../STATUS.md`](../STATUS.md), seção 4.2.
 
 ## Portão 2: abertura das assinaturas
 

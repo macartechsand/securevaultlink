@@ -1,12 +1,32 @@
 # Ações pendentes
 
-Última atualização: 2026-11-01 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-11-05 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
 Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo de segurança: [`security/mvp-security-model.md`](security/mvp-security-model.md).
 
 ---
+
+## Teste com usuários e pentest (2026-11-05)
+
+Resumo e motivo de cada item: [`STATUS.md`](STATUS.md), seção 4.
+
+**Antes de convidar (produção):**
+1. [ ] Administrador master: Add user, parte B de `supabase/admin/create-master-admin.sql`, cofre e MFA.
+2. [ ] Conferir no painel: Site URL, Redirect URLs, senha mínima 10, confirmação de e-mail, TOTP (`PRODUCTION.md`, seção 0, passos 2 e 3).
+3. [ ] Guardar a senha dos backups (`~/.securelink-prod/backup-passphrase.txt`) no cofre e em papel; copiar o backup de 2026-11-05 para um segundo lugar.
+4. [ ] Monitores do site e da autenticação; `HEARTBEAT_URL` (`PRODUCTION.md`, passo 8).
+5. [ ] Preparar a forma de coletar o retorno dos convidados.
+6. [ ] Convites com link, extensão e APK; backup 2 vezes por semana durante o teste.
+
+**Pentest (desenvolvimento):** seguir [`SECURITY_TESTING.md`](SECURITY_TESTING.md) e registrar os achados na seção 8 dele.
+
+**Para levar a extensão 0.2.0, os prazos de troca e a exclusão de conta à produção:**
+1. [ ] Recriar `web-saas/.env.test.local` (item 2a abaixo) e avisar o Claude para rodar a integração e os testes de ponta a ponta.
+2. [ ] Testar no desenvolvimento: excluir conta de teste, extensão 0.2.0 (`npm run build:ext`, carregar `web-saas/dist-extension`), fila de rotação com prazos e aviso do navegador.
+3. [ ] Mesclar o PR #11 e o PR `dev` → `master` com a CI verde.
+4. [ ] Publicar: `npx supabase functions deploy admin account --project-ref exglsdylytdjwrlmyptk`, `node scripts/deploy-prod-site.mjs`, `node scripts/build-prod-extension.mjs`.
 
 ## Beta pronto para usuários (2026-11-04)
 

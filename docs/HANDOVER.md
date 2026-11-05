@@ -274,7 +274,8 @@ O checklist de go-live para o **beta com 5 usuários Premium e credenciais reais
 - **Sem API de troca de senha:** Instagram, Facebook, Gmail e conta Microsoft pessoal; o 1 clique só abre a página de troca de cada um.
 - **Licenças:** não há cobrança automática (Stripe); o Premium é atribuído pelo admin.
 - **Supabase Free:** sem backup automático e pausa após 7 dias sem uso. A produção do piloto está no Free; o backup externo é obrigatório.
-- **Extensão:** só logins (notas, segredos e cartões ficam no app); não oferece salvar senha ao fazer login nem ícone dentro do campo (fase 2); a área de transferência é limpa após 30 s sem conferir o conteúdo.
+- **Extensão:** só logins (notas, segredos e cartões ficam no app); a fase 2 (menu no campo, salvar e atualizar senha, gerador no cadastro) está na versão 0.2.0, ainda só no desenvolvimento; a área de transferência é limpa após 30 s sem conferir o conteúdo.
+- **Avisos de prazo de troca:** só com o app aberto; no Android, só dentro do app.
 - **Login social na produção:** exige novos clientes OAuth do Google e do GitHub apontando para o projeto de produção.
 
 ## 9. Próximos passos (ordem combinada em 2026-11-03)
