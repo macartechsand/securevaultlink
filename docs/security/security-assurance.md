@@ -273,11 +273,11 @@ Secret Key (128 bits, só nos aparelhos) ┘                │
    - **revisão independente da criptografia** antes das lojas.
 5. **Depois da 1.0:** compartilhamento pós-quântico, SOC 2, programa de recompensa por falhas.
 
-**Decisões do dono que esta arquitetura precisa:**
-- Secret Key obrigatória para contas novas, como no 1Password (recomendado), ou opcional. Obrigatória dá a melhor proteção contra vazamento do banco, mas exige o Kit de Emergência ao entrar num aparelho novo.
-- Prazo máximo sem conexão (proposta: 30 dias).
-- Cópia local no web desligada por padrão (recomendado).
-- Desktop em Tauri (recomendado) ou Electron.
+**Decisões do dono (2026-11-06):**
+- **Secret Key obrigatória** para contas novas. Contas existentes ganham a Secret Key no primeiro desbloqueio após a versão 2 e recebem o Kit de Emergência.
+- **Cópia local no web desligada** por padrão.
+- **Desktop em Tauri 2.**
+- **Prazo máximo sem conexão:** em aberto (proposta de 30 dias, seção 8.3).
 
 ---
 
