@@ -277,7 +277,8 @@ Secret Key (128 bits, só nos aparelhos) ┘                │
 - **Secret Key obrigatória** para contas novas. Contas existentes ganham a Secret Key no primeiro desbloqueio após a versão 2 e recebem o Kit de Emergência.
 - **Cópia local no web desligada** por padrão.
 - **Desktop em Tauri 2.**
-- **Prazo máximo sem conexão:** em aberto (proposta de 30 dias, seção 8.3).
+- **Prazo máximo sem conexão: 30 dias.** Depois disso, a biometria deixa de abrir a cópia local e só a senha mestra abre, até sincronizar.
+- **Contingência para usuários** (senha mestra esquecida e outros cenários): [`../product/contingency-plan.md`](../product/contingency-plan.md).
 
 ---
 

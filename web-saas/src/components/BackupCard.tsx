@@ -1,12 +1,15 @@
 import { type ChangeEvent, useState } from 'react';
+import { setMark } from '../lib/contingency';
 import type { SecuredItemData } from '../lib/items';
 import { friendlyError } from '../lib/messages';
+import { offlineReaderHtml } from '../lib/offlineReader';
 import { type CsvImport, decryptExport, encryptExport, itemsFromCsv } from '../lib/vaultExport';
 import { saveToDisk } from '../services/fileService';
 import type { Folder, VaultItem } from '../state/itemOps';
 import { Icon } from './ui/Icon';
 
 type BackupCardProps = {
+  userId: string;
   items: VaultItem[];
   folders: Folder[];
   onAddItem: (data: SecuredItemData) => Promise<unknown>;
@@ -16,7 +19,7 @@ type BackupCardProps = {
 type Pending = { kind: 'backup' | 'csv'; items: SecuredItemData[]; folderNames: Map<string, string>; detail: string };
 
 /** Encrypted export (portability / own backup) and imports from a backup or another password manager. */
-export function BackupCard({ items, folders, onAddItem, onCreateFolder }: BackupCardProps) {
+export function BackupCard({ userId, items, folders, onAddItem, onCreateFolder }: BackupCardProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [importPassword, setImportPassword] = useState('');
@@ -55,6 +58,7 @@ export function BackupCard({ items, folders, onAddItem, onCreateFolder }: Backup
         password,
       );
       saveToDisk(new TextEncoder().encode(file), `securelink-vault-backup-${new Date().toISOString().slice(0, 10)}.json`);
+      setMark('lastExportAt', userId);
       setPassword('');
       setConfirm('');
       setInfo(`Backup cifrado gerado com ${own.length} item(ns). Guarde o arquivo e a senha em lugares diferentes.`);
@@ -149,6 +153,20 @@ export function BackupCard({ items, folders, onAddItem, onCreateFolder }: Backup
           <Icon name="download" />
           Exportar backup cifrado ({own.length})
         </button>
+      </div>
+      <div className="row">
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            saveToDisk(new TextEncoder().encode(offlineReaderHtml()), 'securelink-leitor-offline.html');
+            setMark('readerSavedAt', userId);
+          }}
+        >
+          <Icon name="download" />
+          Baixar leitor offline
+        </button>
+        <span className="subtle">Abre os backups sem internet e sem o SecureLink. Guarde junto dos arquivos de backup.</span>
       </div>
 
       <div className="row">

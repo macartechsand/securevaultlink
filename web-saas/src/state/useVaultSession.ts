@@ -333,6 +333,18 @@ export function useVaultSession() {
     return recoveryKey;
   }, []);
 
+  /** Checks a recovery key against this vault without changing anything (contingency drill). */
+  const testRecoveryKey = useCallback(async (recoveryKey: string) => {
+    const profile = profileRef.current;
+    if (!profile) throw new Error('No vault found.');
+    try {
+      await unlockWithRecoveryKey(profile, recoveryKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const disableRecovery = useCallback(async (masterPassword: string) => {
     const profile = profileRef.current;
     const current = userRef.current;
@@ -500,6 +512,7 @@ export function useVaultSession() {
     hasRecovery,
     enableRecovery,
     disableRecovery,
+    testRecoveryKey,
     verifyMfa,
     changePassword,
     lock,

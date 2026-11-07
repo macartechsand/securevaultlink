@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { friendlyError } from '../lib/messages';
+import { ContingencyCard } from './ContingencyCard';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
 import { PrivacyCard } from './PrivacyCard';
@@ -16,6 +17,8 @@ type SettingsProps = {
   recoveryEnabled: boolean;
   onEnableRecovery: (masterPassword: string) => Promise<string>;
   onDisableRecovery: (masterPassword: string) => Promise<void>;
+  onTestRecovery: (recoveryKey: string) => Promise<boolean>;
+  mfaEnabled: boolean;
 };
 
 export function Settings({
@@ -27,6 +30,8 @@ export function Settings({
   recoveryEnabled,
   onEnableRecovery,
   onDisableRecovery,
+  onTestRecovery,
+  mfaEnabled,
 }: SettingsProps) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -53,6 +58,7 @@ export function Settings({
 
   return (
     <div className="grid grid--2">
+      <ContingencyCard userId={userId} recoveryEnabled={recoveryEnabled} mfaEnabled={mfaEnabled} onTestRecovery={onTestRecovery} />
       <MfaSettings />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
       <SessionsCard />

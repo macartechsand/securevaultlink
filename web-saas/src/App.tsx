@@ -711,10 +711,12 @@ function VaultApp() {
               recoveryEnabled={session.hasRecovery}
               onEnableRecovery={session.enableRecovery}
               onDisableRecovery={session.disableRecovery}
+              onTestRecovery={session.testRecoveryKey}
+              mfaEnabled={mfaEnabled}
             />
           )}
           {activeView === 'settings' && (
-            <BackupCard items={items} folders={session.folders} onAddItem={session.addItem} onCreateFolder={session.createFolder} />
+            <BackupCard userId={userId} items={items} folders={session.folders} onAddItem={session.addItem} onCreateFolder={session.createFolder} />
           )}
           {activeView === 'settings' && (
             <DiagnosticsCard
