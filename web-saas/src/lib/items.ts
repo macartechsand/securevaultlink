@@ -102,6 +102,8 @@ export type SecuredItemData = {
   customFields: CustomField[]
   attachments: Attachment[]
   autoRotation: AutoRotation | null
+  /** TOTP secret (base32) or otpauth:// URI of the external system (Premium). */
+  otp: string
 }
 
 export const LIMITS = {
@@ -154,6 +156,7 @@ export function emptyItem(type: ItemType = 'login'): SecuredItemData {
     customFields: [],
     attachments: [],
     autoRotation: null,
+    otp: '',
   }
 }
 
@@ -198,6 +201,7 @@ export function normalizeItem(raw: unknown): SecuredItemData {
         ? Math.trunc(r.rotationIntervalDays)
         : 0,
     url: str(r.url, 2048),
+    otp: type === 'login' ? str(r.otp, 1024) : '',
     notes: str(r.notes, LIMITS.notes),
     category: str(r.category, 40) || base.category,
     folderId: typeof r.folderId === 'string' ? r.folderId : null,

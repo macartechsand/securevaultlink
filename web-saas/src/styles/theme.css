@@ -1643,3 +1643,12 @@ input[type='range'] {
   display: grid;
   gap: 6px;
 }
+
+.card--danger {
+  border-color: var(--danger);
+}
+.otp-code__value {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+}

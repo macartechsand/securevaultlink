@@ -1,6 +1,8 @@
 import { type FormEvent, useState } from 'react';
 import { friendlyError } from '../lib/messages';
 import { ContingencyCard } from './ContingencyCard';
+import { EmergencyCard } from './EmergencyCard';
+import { PinSettings } from './PinSettings';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
 import { PrivacyCard } from './PrivacyCard';
@@ -19,6 +21,12 @@ type SettingsProps = {
   onDisableRecovery: (masterPassword: string) => Promise<void>;
   onTestRecovery: (recoveryKey: string) => Promise<boolean>;
   mfaEnabled: boolean;
+  premium: boolean;
+  pinAvailable: boolean;
+  onEnablePin: (masterPassword: string, pin: string) => Promise<{ expiresAt: string }>;
+  onDisablePin: (all: boolean) => Promise<void>;
+  onEmergency: () => Promise<void>;
+  onChangeAccountPassword: (password: string) => Promise<void>;
 };
 
 export function Settings({
@@ -32,6 +40,12 @@ export function Settings({
   onDisableRecovery,
   onTestRecovery,
   mfaEnabled,
+  premium,
+  pinAvailable,
+  onEnablePin,
+  onDisablePin,
+  onEmergency,
+  onChangeAccountPassword,
 }: SettingsProps) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -59,7 +73,9 @@ export function Settings({
   return (
     <div className="grid grid--2">
       <ContingencyCard userId={userId} recoveryEnabled={recoveryEnabled} mfaEnabled={mfaEnabled} onTestRecovery={onTestRecovery} />
+      <EmergencyCard premium={premium} onEmergency={onEmergency} onChangeAccountPassword={onChangeAccountPassword} />
       <MfaSettings />
+      <PinSettings userId={userId} available={pinAvailable} onEnable={onEnablePin} onDisable={onDisablePin} />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />
       <SessionsCard />
       <RotationRemindersCard userId={userId} />

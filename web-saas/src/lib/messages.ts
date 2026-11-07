@@ -41,6 +41,7 @@ const PATTERNS: [RegExp, string][] = [
   [/Could not find the function public\.admin_(license_summary|set_plan)/i, 'Aplique a migration 20261101000000_licenses.sql no SQL Editor para usar a gestão de licenças.'],
   [/Could not find the function public\.admin_audit_verify/i, 'Aplique a migration 20261102000000_beta_scope_audit_integrity.sql no SQL Editor para verificar o log de auditoria.'],
   [/Unknown setting/, 'Configuração ainda indisponível: aplique as migrations pendentes (até 20261105000000_entitlements_usage.sql) no SQL Editor.'],
+  [/PREMIUM_REQUIRED/, 'Este recurso faz parte do plano Premium.'],
   [/ITEM_LIMIT_REACHED: (\d+)/, 'Seu plano permite até $1 itens no cofre. Os itens que você já tem continuam disponíveis; para adicionar outro, exclua um item ou passe para o Premium.'],
   [/Could not find the function public\.admin_invite/i, 'Convite Premium ainda indisponível: aplique a migration 20261023000000_premium_invites.sql no SQL Editor.'],
   [/cannot be used as it is not authorized|email_address_not_authorized/i, 'A conta não foi criada: o envio de e-mail do servidor ainda não está liberado para este endereço. Peça ao administrador um link de convite.'],

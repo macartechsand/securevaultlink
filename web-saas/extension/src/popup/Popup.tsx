@@ -229,7 +229,7 @@ function ItemRow({
 }: {
   item: ItemSummary;
   onFill: (item: ItemSummary) => void;
-  onCopy: (item: ItemSummary, field: 'username' | 'password') => void;
+  onCopy: (item: ItemSummary, field: 'username' | 'password' | 'otp') => void;
 }) {
   const href = item.url ? safeHref(item.url) : undefined;
   return (
@@ -259,6 +259,11 @@ function ItemRow({
           <button type="button" className="btn btn--ghost icon-btn" title="Copiar senha (limpa em 30 s)" aria-label="Copiar senha" onClick={() => onCopy(item, 'password')}>
             <Icon name="copy" size={16} />
           </button>
+          {item.hasOtp && (
+            <button type="button" className="btn btn--ghost icon-btn" title="Copiar código de verificação (OTP)" aria-label="Copiar código OTP" onClick={() => onCopy(item, 'otp')}>
+              <Icon name="shieldCheck" size={16} />
+            </button>
+          )}
           {href && (
             <button type="button" className="btn btn--ghost icon-btn" title="Abrir o site" aria-label="Abrir o site" onClick={() => void chrome.tabs.create({ url: href })}>
               <Icon name="link" size={16} />
@@ -417,14 +422,14 @@ function Vault({ onLock, onSignOut }: { onLock: () => void; onSignOut: () => voi
       else throw new Error(res.error);
     });
 
-  const copy = (item: ItemSummary, field: 'username' | 'password') =>
+  const copy = (item: ItemSummary, field: 'username' | 'password' | 'otp') =>
     run(async () => {
       const value = await send<string>({ type: 'reveal', itemId: item.id, field });
-      if (!value) throw new Error(field === 'password' ? 'Este item não tem senha.' : 'Este item não tem usuário.');
+      if (!value) throw new Error(field === 'password' ? 'Este item não tem senha.' : field === 'otp' ? 'Este item não tem código OTP.' : 'Este item não tem usuário.');
       await navigator.clipboard.writeText(value);
-      if (field === 'password') {
+      if (field === 'password' || field === 'otp') {
         await send({ type: 'clipboardCopied' });
-        notify('Senha copiada. Limpa em 30 s.');
+        notify(field === 'otp' ? 'Código copiado. Limpa em 30 s.' : 'Senha copiada. Limpa em 30 s.');
       } else notify('Usuário copiado.');
     });
 

@@ -42,6 +42,8 @@ import { reportPosture } from './services/supportService';
 import { fetchSessions, fetchSharingExposure } from './services/postureService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
+import { PREMIUM_FEATURES, type PremiumFeature, TRASH_DAYS } from './lib/plan';
+import { TrashView } from './components/TrashView';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -66,6 +68,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   rotation: { title: 'Rotação', subtitle: 'Fila de correção, trocas programadas e conectores de rotação.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
+  trash: { title: 'Lixeira', subtitle: `Itens excluídos ficam ${TRASH_DAYS} dias antes de serem apagados para sempre.` },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
   admin: { title: 'Administração', subtitle: 'Operação da plataforma: usuários, sinais e saúde do sistema.' },
 };
@@ -84,10 +87,12 @@ function VaultApp() {
   // Runs inside the click (clipboard and new tab need the user gesture).
   // From the item list: rotate in one click, or open the editor to set up a connector for secrets.
   const rotateFromList = (item: VaultItem) => {
+    if (!requirePremium('rotation')) return;
     if (quickRotateMode(item)) startQuickRotate(item);
     else setEditing({ item });
   };
   const startQuickRotate = (item: VaultItem) => {
+    if (!requirePremium('rotation')) return;
     if (quickRotateMode(item) === 'assisted') {
       setQuickRotating({ item, password: startAssistedRotation(item) });
     } else {
@@ -99,6 +104,13 @@ function VaultApp() {
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
   const [checking, setChecking] = useState(false);
   const [limits, setLimits] = useState<PlanLimits>(FREE_LIMITS);
+  const premium = limits.plan === 'premium';
+  /** Premium-only actions explain themselves instead of failing. */
+  const requirePremium = (feature: PremiumFeature) => {
+    if (premium) return true;
+    setActionError(`${PREMIUM_FEATURES[feature]}: recurso do plano Premium.`);
+    return false;
+  };
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [sessionCount, setSessionCount] = useState(1);
   const [exposure, setExposure] = useState<PostureInput['exposure']>(null);
@@ -274,6 +286,11 @@ function VaultApp() {
         await session.leaveSharedItem(item);
         return;
       }
+      if (premium) {
+        if (!window.confirm(`Mover "${item.data.title}" para a lixeira? Ele fica lá por ${TRASH_DAYS} dias.`)) return;
+        await session.trashItem(item);
+        return;
+      }
       if (!window.confirm(`Excluir "${item.data.title}"? Esta ação não pode ser desfeita.`)) return;
       const alsoFiles =
         item.data.attachments.length > 0 &&
@@ -363,6 +380,8 @@ function VaultApp() {
             onRecover={session.recover}
             onResetVault={session.resetVault}
             onSignOut={signOut}
+            pinAvailable={session.pinAvailable}
+            onUnlockPin={session.unlockWithPin}
           />
         )}
       </CenterLayout>
@@ -474,6 +493,11 @@ function VaultApp() {
                 const kind = i.access === 'owner' ? adminKeyKind(i.data) : null;
                 return kind ? [{ id: i.id, title: i.data.title, kind }] : [];
               })}
+              plan={limits.plan}
+              usage={editing.item ? session.usage.get(editing.item.id) : undefined}
+              onUsed={(action) => {
+                if (premium && editing.item) void session.recordUse(editing.item, action);
+              }}
               onCancel={() => setEditing(null)}
               onRotate={(item) => {
                 setEditing(null);
@@ -684,6 +708,9 @@ function VaultApp() {
               onOpen={(item) => setEditing({ item })}
               onShare={setSharingItem}
               onRotate={rotateFromList}
+              onCopied={(item) => {
+                if (premium) void session.recordUse(item, 'copied');
+              }}
               onDelete={handleDelete}
               onCreateFolder={session.createFolder}
               onRenameFolder={session.renameFolder}
@@ -692,10 +719,25 @@ function VaultApp() {
           )}
 
           {activeView === 'rotation' && (
-            <RotationView items={items} health={health} deadlines={deadlines} onRotate={setRotatingItem} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
+            <RotationView items={items} health={health} deadlines={deadlines} onRotate={(item) => requirePremium('rotation') && setRotatingItem(item)} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
+
+          {activeView === 'trash' && (
+            <TrashView
+              items={session.trash}
+              premium={premium}
+              onRestore={session.restoreItem}
+              onPurge={async (item) => {
+                const alsoFiles =
+                  item.data.attachments.length > 0 &&
+                  window.confirm(`Excluir também os ${item.data.attachments.length} anexo(s) de "${item.data.title}"? (Cancelar mantém os arquivos em Arquivos.)`);
+                await session.purgeItem(item);
+                if (alsoFiles) for (const a of item.data.attachments) await deleteFileById(a.fileId).catch(() => undefined);
+              }}
+            />
+          )}
 
           {activeView === 'generator' && <Generator />}
 
@@ -713,6 +755,12 @@ function VaultApp() {
               onDisableRecovery={session.disableRecovery}
               onTestRecovery={session.testRecoveryKey}
               mfaEnabled={mfaEnabled}
+              premium={premium}
+              pinAvailable={session.pinAvailable}
+              onEnablePin={session.enablePin}
+              onDisablePin={session.disablePin}
+              onEmergency={session.emergencyMode}
+              onChangeAccountPassword={session.setAccountPassword}
             />
           )}
           {activeView === 'settings' && (

@@ -25,10 +25,10 @@ Nenhuma saída pode dar ao SecureLink, ao administrador ou ao suporte um jeito d
 | Perdi o autenticador (MFA) | Administrador redefine | Guia na central; aviso para fazer backup do autenticador | **Passkey** como segundo fator; **roteiro de verificação de identidade** do suporte | Igual |
 | Perdi a Secret Key (versão 2) | Não se aplica | Não se aplica | Não se aplica | Kit de Emergência; QR code de um aparelho conectado; chave de recuperação |
 | Aparelho perdido ou roubado | Encerrar a sessão remotamente | Guia na central | Aviso por e-mail de novo login | Limpeza remota da cópia local; regra dos 30 dias; **girar a chave do cofre** |
-| Conta invadida | Encerrar sessões, trocar senhas, ver Atividade | Guia na central | "Modo emergência": um botão que encerra tudo e força a troca | Girar a chave do cofre |
+| Conta invadida | Encerrar sessões, trocar senhas, ver Atividade | Guia na central; **modo emergência (Premium), feito em 2026-11-06** | Aviso por e-mail | Girar a chave do cofre |
 | Falecimento ou incapacidade | Nada | Nada | **Contato de emergência** com período de espera | Igual |
 | SecureLink fora do ar ou encerrado | Exportação cifrada | **Leitor offline** do backup | Compromisso nos Termos: 90 dias de aviso para exportar | Cópia local nos apps (30 dias com biometria, depois só senha mestra) |
-| Item apagado por engano | Histórico de senhas do item | Igual | Lixeira de 30 dias para itens | Igual |
+| Item apagado por engano | Histórico de senhas do item | **Lixeira de 14 dias (Premium), feita em 2026-11-06** | Igual | Igual |
 
 ## 3. Fase 1: o que foi implementado (2026-11-06)
 
@@ -102,7 +102,8 @@ O administrador **nunca** abre o cofre. Ele só restaura o **acesso à conta**, 
 - Pedidos ao suporte por cenário, para ver o que mais acontece.
 - Tempo entre o pedido e a solução nos casos de MFA.
 
-## 8. Decisões pendentes do dono
-1. Contato de emergência: período de espera padrão (proposta: **7 dias**) e quantos contatos por plano. Pela estratégia de planos, o recurso existe em todos; a diferença é só de quantidade (proposta: 1 no Free, 5 no Premium).
-2. Lixeira de 30 dias para itens apagados: entra na 1.0?
-3. "Modo emergência" (botão único que encerra todas as sessões e força a troca das senhas): entra na fase 2?
+## 8. Decisões do dono (2026-11-06)
+1. **Contato de emergência:** espera de **7 dias**, até **5 contatos**, **só no Premium**. Continua na fase 2 (depende do e-mail próprio).
+2. **Lixeira de 14 dias**, só no Premium: **implementada**. No Free, excluir continua definitivo.
+3. **Modo emergência**, só no Premium: **implementado**. Encerra as outras sessões, remove o PIN de todos os aparelhos e guia a troca da senha da conta e da senha mestra. No Free, as sessões continuam podendo ser encerradas uma a uma.
+4. Também entraram: **PIN** para desbloquear (todos os planos), **onde e quando a senha foi usada** e **OTP de sistemas externos** (Premium).

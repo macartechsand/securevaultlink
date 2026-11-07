@@ -14,6 +14,7 @@ export const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
       { key: 'dashboard', label: 'Visão geral', icon: 'dashboard' },
       { key: 'vault', label: 'Cofre', icon: 'key' },
       { key: 'files', label: 'Arquivos', icon: 'file' },
+      { key: 'trash', label: 'Lixeira', icon: 'trash' },
     ],
   },
   {

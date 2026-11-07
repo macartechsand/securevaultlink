@@ -4,7 +4,7 @@ Retrato de **2026-11-05** · Produção: app **0.9.1**, extensão **0.1** · Des
 
 Esta página serve para **retomar o trabalho**: onde o projeto está, o que está no ar, o que falta e qual é o próximo passo. O detalhe técnico está em [`HANDOVER.md`](HANDOVER.md), e o plano até a versão paga em [`product/roadmap-v1.md`](product/roadmap-v1.md).
 
-**Fase atual:** teste com um grupo pequeno de usuários e **pentest feito pelo dono** ([`SECURITY_TESTING.md`](SECURITY_TESTING.md)).
+**Fase atual:** **validação do desenvolvimento** ([`operations/dev-validation.md`](operations/dev-validation.md)), teste com um grupo pequeno de usuários e **pentest feito pelo dono** ([`SECURITY_TESTING.md`](SECURITY_TESTING.md)). Depois: versão 1 beta nas lojas e abertura para assinantes (seção 5 do roteiro de validação).
 
 **Garantia de segurança para assinantes (NIST, CSA, arquitetura multiplataforma):** [`security/security-assurance.md`](security/security-assurance.md).
 
@@ -31,6 +31,7 @@ Cofre de senhas e arquivos **zero-knowledge** com governança de nível corporat
 | Extensão Chrome/Edge 0.1 (fase 1) | ✅ na produção. Entrar (inclusive Google e GitHub), desbloquear, preencher só no site certo, copiar, gerador, bloqueio após 10 min | `web-saas/extension/` |
 | **Extensão 0.2.0 (fase 2)** (2026-11-05) | ✅ no desenvolvimento. Menu de sugestões no campo, barra "Salvar/Atualizar login", gerador no cadastro, "Nunca neste site", preenchimento ao abrir a página (opcional, desligado) | [`product/browser-extension.md`](product/browser-extension.md), seção 13 |
 | **Central de contingência** (2026-11-06) | ✅ no desenvolvimento. Lista de preparo, teste da chave de recuperação sem alterar nada, guia "o que fazer se…" e leitor offline do backup (abre sem internet e sem o SecureLink) | [`product/contingency-plan.md`](product/contingency-plan.md) |
+| **Premium e conveniência** (2026-11-06) | ✅ no desenvolvimento, falta aplicar a migration `20261106000000` no desenvolvimento. Lixeira de 14 dias, onde e quando a senha foi usada (cifrado), OTP de sistemas externos (app e extensão), modo emergência, rotação só no Premium (inclusive no servidor) e PIN para desbloquear (todos os planos) | [`operations/dev-validation.md`](operations/dev-validation.md) |
 | App Android 0.9.1 | ✅ APK assinado: bloqueio em segundo plano, bloqueio de captura, sem backup e sem depuração | `web-saas/android/` · [`product/mobile-app.md`](product/mobile-app.md) |
 | iPhone | 🟡 Pelo app web instalado na tela de início do Safari | [`product/mobile-app.md`](product/mobile-app.md) |
 | Operação da produção | ✅ `prod-setup.sql` aplicado, cron de limpeza ativo, primeiro backup externo com teste parcial de restauração, login Google/GitHub com clientes OAuth próprios da produção, publicação só por script verificado | [`PRODUCTION.md`](PRODUCTION.md) |

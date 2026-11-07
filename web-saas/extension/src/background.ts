@@ -16,6 +16,9 @@ import { unlockWithPassword } from '../../src/lib/crypto';
 import { fromBase64, toBase64 } from '../../src/lib/crypto/encoding';
 import { emptyItem } from '../../src/lib/items';
 import { friendlyError } from '../../src/lib/messages';
+import { describeUserAgent } from '../../src/lib/posture';
+import { parseOtp, totpCode } from '../../src/lib/totp';
+import { type UsageAction, encryptUsage } from '../../src/lib/usage';
 import { generatePassword } from '../../src/lib/passwordGenerator';
 import { type OAuthProvider, OAUTH_PROVIDERS, fetchEnabledProviders, oauthOptions } from '../../src/lib/oauthProviders';
 import { logClientEvent } from '../../src/services/auditService';
@@ -204,9 +207,33 @@ async function list(tabUrl: string | null): Promise<ItemSummary[]> {
       url: i.data.url,
       favorite: i.data.favorite,
       shared: i.access !== 'owner',
+      hasOtp: Boolean(i.data.otp),
       match: tabUrl && i.data.url ? matchItem(i.data.url, tabUrl) : ('none' as const),
     }))
     .sort((a, b) => rank[a.match] - rank[b.match] || Number(b.favorite) - Number(a.favorite) || a.title.localeCompare(b.title, 'pt-BR'));
+}
+
+/* ------------------------------------------------------------------ last used (Premium) */
+
+let premiumCache: { value: boolean; at: number } | null = null;
+async function isPremium(): Promise<boolean> {
+  if (premiumCache && Date.now() - premiumCache.at < 10 * 60_000) return premiumCache.value;
+  const { data } = await supabase.rpc('my_plan_limits');
+  const row = Array.isArray(data) ? data[0] : data;
+  premiumCache = { value: (row as { plan?: string } | null)?.plan === 'premium', at: Date.now() };
+  return premiumCache.value;
+}
+
+/** Records where and when the item was used, encrypted with the item key. Never blocks the fill. */
+async function recordUse(item: VaultItem, action: UsageAction, host: string) {
+  try {
+    const key = itemKeys.get(item.id);
+    if (!key || !userId || !(await isPremium())) return;
+    const blob = await encryptUsage(key, item.id, userId, { at: new Date().toISOString(), action, host, client: 'extension', device: describeUserAgent(navigator.userAgent) });
+    await supabase.from('item_usage').upsert({ item_id: item.id, ...blob }, { onConflict: 'item_id,user_id' });
+  } catch {
+    /* best effort */
+  }
 }
 
 async function findItem(itemId: string) {
@@ -260,6 +287,7 @@ async function fill(itemId: string, tabId: number, confirmMismatch = false): Pro
   if (!filled.username && !filled.password) return { ok: false, error: 'Não foi possível preencher os campos desta página.' };
   // Item id only: the site address is encrypted in the item and never goes to the server.
   logClientEvent('item.filled', { type: 'item', id: item.id }, { client: 'extension', mismatch: match === 'none' });
+  void recordUse(item, 'filled', new URL(pageUrl).hostname);
   return { ok: true, filled };
 }
 
@@ -456,6 +484,7 @@ async function handleFrame(request: FrameRequest, tabId: number): Promise<unknow
       const filled = result?.result as { username: boolean; password: boolean } | undefined;
       if (!filled?.username && !filled?.password) throw new Error('Não foi possível preencher os campos desta página.');
       logClientEvent('item.filled', { type: 'item', id: item.id }, { client: 'extension', inline: true });
+      void recordUse(item, 'filled', hostOf(t.url));
       await sendToFrame(tabId, t.frameId, { type: 'cs.close', which: 'inline' });
       return null;
     }
@@ -605,6 +634,12 @@ async function handle(request: Request): Promise<unknown> {
     case 'reveal': {
       await touch();
       const item = await findItem(request.itemId);
+      if (request.field === 'otp') {
+        if (!item.data.otp) return '';
+        void recordUse(item, 'otp', '');
+        return (await totpCode(parseOtp(item.data.otp))).code;
+      }
+      if (request.field === 'password') void recordUse(item, 'copied', '');
       return request.field === 'password' ? item.data.password : item.data.username;
     }
     case 'clipboardCopied':

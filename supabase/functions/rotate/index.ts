@@ -250,6 +250,10 @@ Deno.serve(async (req) => {
   if (switchRow?.value === 'off') {
     return json({ error: 'A rotação automática está desligada nesta instalação. Use a troca assistida.' }, 403)
   }
+  // Rotation is a Premium feature (owner decision 2026-11-06). Plan from the caller's own view.
+  const { data: planRows } = await caller.rpc('my_plan_limits')
+  const plan = Array.isArray(planRows) ? planRows[0]?.plan : (planRows as { plan?: string } | null)?.plan
+  if (plan !== 'premium') return json({ error: 'A rotação de senhas faz parte do plano Premium.' }, 403)
   const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId: user.id })
   if ((factors?.factors ?? []).some((f) => f.status === 'verified') && jwtClaims(authHeader).aal !== 'aal2') {
     return json({ error: 'Entre com a verificação em duas etapas para rotacionar.' }, 403)

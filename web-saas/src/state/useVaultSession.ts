@@ -21,6 +21,11 @@ import { type KeyContext, type UserKeyPair, ensureUserKeyPair } from '../service
 import * as mfa from '../services/mfaService';
 import { fetchMfaRequired, fetchVaultStatus } from '../services/supportService';
 import { reportError } from '../lib/errorReporter';
+import { TRASH_DAYS } from '../lib/plan';
+import type { UsageAction, UsageRecord } from '../lib/usage';
+import * as pins from '../services/pinService';
+import { signOutOtherSessions } from '../services/postureService';
+import * as usageService from '../services/usageService';
 import * as vault from '../services/vaultService';
 import * as ops from './itemOps';
 
@@ -60,6 +65,12 @@ export function useVaultSession() {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<ops.VaultItem[]>([]);
+  /** Own items in the trash (Premium), newest first. */
+  const [trash, setTrash] = useState<ops.VaultItem[]>([]);
+  /** Last use of each item, decrypted (Premium). */
+  const [usage, setUsage] = useState<Map<string, UsageRecord>>(new Map());
+  /** This device has a valid PIN for the signed-in user. */
+  const [pinAvailable, setPinAvailable] = useState(false);
   const [folders, setFolders] = useState<ops.Folder[]>([]);
   const [undecryptable, setUndecryptable] = useState(0);
   const [loadError, setLoadError] = useState('');
@@ -78,6 +89,8 @@ export function useVaultSession() {
     keyPairRef.current = null;
     itemKeysRef.current = new Map();
     setItems([]);
+    setTrash([]);
+    setUsage(new Map());
     setFolders([]);
     setUndecryptable(0);
   }, []);
@@ -130,6 +143,7 @@ export function useVaultSession() {
         }
         profileRef.current = profile;
         setHasRecovery(profile ? hasRecoveryKey(profile) : false);
+        setPinAvailable(Boolean(profile && pins.readPinRecord(nextUser.id)));
         setStatus(profile ? 'locked' : 'needs-setup');
       } catch (error) {
         // Never fall back to "locked"/"needs-setup" on failure: show the real problem instead.
@@ -196,7 +210,17 @@ export function useVaultSession() {
       ops.loadFolders(ctx).catch(() => [] as ops.Folder[]),
     ]);
     itemKeysRef.current = keys;
-    setItems(loaded);
+    // Items past the 14 days in the trash are removed here too, in case the scheduled purge is off.
+    const expired = Date.now() - TRASH_DAYS * 86_400_000;
+    const trashed = loaded.filter((i) => i.deletedAt);
+    for (const i of trashed.filter((t) => Date.parse(t.deletedAt!) < expired)) void vault.deleteEntry(i.id).catch(() => undefined);
+    setTrash(trashed.filter((t) => Date.parse(t.deletedAt!) >= expired).sort((a, b) => b.deletedAt!.localeCompare(a.deletedAt!)));
+    setItems(loaded.filter((i) => !i.deletedAt));
+    void usageService
+      .fetchUsageRows()
+      .then((rows) => usageService.decryptUsageRows(rows, keys, ctx.userId))
+      .then(setUsage)
+      .catch(() => undefined);
     setFolders(loadedFolders);
     setUndecryptable(failed);
   }, []);
@@ -290,6 +314,70 @@ export function useVaultSession() {
     },
     [finishUnlock],
   );
+
+  /** Quick unlock with this device's PIN (server-limited to 5 wrong tries). */
+  const unlockWithPin = useCallback(
+    async (pin: string) => {
+      const current = userRef.current;
+      if (!current) throw new Error('Not signed in.');
+      const result = await pins.unlockWithPin(current.id, pin);
+      if ('error' in result) {
+        if (result.gone) setPinAvailable(false);
+        logClientEvent('vault.unlock_failed', undefined, { method: 'pin' });
+        throw new Error(result.error);
+      }
+      try {
+        await finishUnlock(result.dek);
+      } catch (error) {
+        dekRef.current = null;
+        reportError(error, 'unlock.load');
+        throw new Error(`PIN correto, mas não foi possível carregar o cofre: ${friendlyError(error)}`);
+      }
+      logClientEvent('vault.unlocked', undefined, { method: 'pin' });
+    },
+    [finishUnlock],
+  );
+
+  /** Turns on the PIN for this device (asks the master password to get the vault key once). */
+  const enablePin = useCallback(async (masterPassword: string, pin: string) => {
+    const profile = profileRef.current;
+    const current = userRef.current;
+    if (!profile || !current) throw new Error('No vault found.');
+    let dek: CryptoKey;
+    try {
+      dek = await unlockWithPassword(profile, masterPassword, true);
+    } catch {
+      throw new Error('Senha mestra incorreta.');
+    }
+    const raw = new Uint8Array(await crypto.subtle.exportKey('raw', dek));
+    try {
+      const result = await pins.enablePin(current.id, pin, raw);
+      setPinAvailable(true);
+      return result;
+    } finally {
+      raw.fill(0);
+    }
+  }, []);
+
+  const disablePin = useCallback(async (all = false) => {
+    const current = userRef.current;
+    if (!current) return;
+    await pins.disablePin(current.id, all);
+    setPinAvailable(false);
+  }, []);
+
+  /**
+   * Premium emergency mode: signs out every other session, removes the PIN of every device and
+   * records the event. The user then changes the account and master passwords (guided in the UI).
+   */
+  const emergencyMode = useCallback(async () => {
+    const current = userRef.current;
+    if (!current) throw new Error('Not signed in.');
+    await signOutOtherSessions();
+    await pins.disablePin(current.id, true).catch(() => undefined);
+    setPinAvailable(false);
+    logClientEvent('security.emergency_mode');
+  }, []);
 
   /** Resets the master password with the recovery key, then unlocks. */
   const recover = useCallback(
@@ -425,6 +513,39 @@ export function useVaultSession() {
     setItems((list) => list.filter((i) => i.id !== item.id));
   }, []);
 
+  /** Premium: moves an own item to the trash (kept 14 days). The server checks the plan. */
+  const trashItem = useCallback(async (item: ops.VaultItem) => {
+    requireKey();
+    if (item.access !== 'owner') throw new Error('Só o dono pode excluir este item.');
+    const moved = await vault.trashEntry(item.id);
+    setItems((list) => list.filter((i) => i.id !== item.id));
+    setTrash((list) => [{ ...item, deletedAt: moved.deleted_at, updatedAt: moved.updated_at }, ...list]);
+  }, []);
+
+  const restoreItem = useCallback(async (item: ops.VaultItem) => {
+    requireKey();
+    const updatedAt = await vault.restoreEntry(item.id);
+    setTrash((list) => list.filter((i) => i.id !== item.id));
+    setItems((list) => [{ ...item, deletedAt: null, updatedAt }, ...list]);
+  }, []);
+
+  /** Deletes an item from the trash for good. */
+  const purgeItem = useCallback(async (item: ops.VaultItem) => {
+    requireKey();
+    await vault.deleteEntry(item.id);
+    itemKeysRef.current.delete(item.id);
+    setTrash((list) => list.filter((i) => i.id !== item.id));
+  }, []);
+
+  /** Premium: records where and when a password or code was used (encrypted with the item key). */
+  const recordUse = useCallback(async (item: ops.VaultItem, action: UsageAction, host = '') => {
+    const key = itemKeysRef.current.get(item.id);
+    const current = userRef.current;
+    if (!key || !current) return;
+    const rec = await usageService.recordUsage(item.id, key, current.id, action, host);
+    if (rec) setUsage((map) => new Map(map).set(item.id, rec));
+  }, []);
+
   /** Recipient removes an item shared with them from their own list. */
   const leaveSharedItem = useCallback(async (item: ops.VaultItem) => {
     if (!item.shareId) return;
@@ -521,6 +642,17 @@ export function useVaultSession() {
     addItem,
     saveItem,
     removeItem,
+    trash,
+    trashItem,
+    restoreItem,
+    purgeItem,
+    usage,
+    recordUse,
+    pinAvailable,
+    unlockWithPin,
+    enablePin,
+    disablePin,
+    emergencyMode,
     leaveSharedItem,
     getHistory,
     shareItem,

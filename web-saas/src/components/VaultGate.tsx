@@ -11,6 +11,9 @@ type VaultGateProps = {
   onRecover: (recoveryKey: string, newMasterPassword: string) => Promise<void>;
   onResetVault: () => Promise<void>;
   onSignOut: () => void;
+  /** This device has a PIN: offer it first. */
+  pinAvailable?: boolean;
+  onUnlockPin?: (pin: string) => Promise<void>;
 };
 
 const RESET_PHRASE = 'APAGAR COFRE';
@@ -41,7 +44,9 @@ export function unlockDelaySeconds(n: number) {
   return n < FREE_ATTEMPTS ? 0 : Math.min(300, 5 * 2 ** (n - FREE_ATTEMPTS));
 }
 
-export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecover, onResetVault, onSignOut }: VaultGateProps) {
+export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecover, onResetVault, onSignOut, pinAvailable = false, onUnlockPin }: VaultGateProps) {
+  const [usePin, setUsePin] = useState(pinAvailable && mode === 'locked');
+  const [pin, setPin] = useState('');
   const [resetting, setResetting] = useState(false);
   const [resetTyped, setResetTyped] = useState('');
   const [password, setPassword] = useState('');
@@ -143,6 +148,64 @@ export function VaultGate({ mode, email, onSetup, onUnlock, hasRecovery, onRecov
           </button>
           <button type="button" className="btn btn--ghost btn--block" onClick={closeReset}>
             Voltar
+          </button>
+        </form>
+      </>
+    );
+  }
+
+  if (usePin && pinAvailable && onUnlockPin && !setup) {
+    const submitPin = async (event: FormEvent) => {
+      event.preventDefault();
+      setError('');
+      setBusy(true);
+      try {
+        await onUnlockPin(pin);
+        setPin('');
+      } catch (err) {
+        setPin('');
+        setError(friendlyError(err));
+      } finally {
+        setBusy(false);
+      }
+    };
+    return (
+      <>
+        <div>
+          <p className="eyebrow">Cofre bloqueado</p>
+          <h2>Digite seu PIN</h2>
+          <p className="subtle">Conectado como {email}</p>
+        </div>
+        <form className="form" onSubmit={submitPin}>
+          <label className="field">
+            PIN deste aparelho
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              maxLength={12}
+              autoFocus
+              required
+            />
+          </label>
+          {error && <div className="alert alert--error">{error}</div>}
+          <button type="submit" className="btn btn--primary btn--block" disabled={busy || pin.length < 6}>
+            {busy ? 'Conferindo…' : 'Desbloquear'}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--block"
+            onClick={() => {
+              setError('');
+              setUsePin(false);
+            }}
+          >
+            Usar a senha mestra
+          </button>
+          <button type="button" className="btn btn--ghost btn--block" onClick={onSignOut}>
+            Sair
           </button>
         </form>
       </>

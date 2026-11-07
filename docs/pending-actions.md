@@ -8,6 +8,14 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Validação do desenvolvimento (2026-11-06)
+
+Roteiro completo: [`operations/dev-validation.md`](operations/dev-validation.md).
+
+1. [ ] **SQL Editor (desenvolvimento):** rodar `supabase/migrations/20261106000000_trash_usage_pin.sql`.
+2. [ ] Recriar `web-saas/.env.test.local` e avisar o Claude (integração e testes de ponta a ponta).
+3. [ ] Contas de teste Free e Premium; seguir as seções 2 e 3 do roteiro e registrar os achados.
+
 ## Teste com usuários e pentest (2026-11-05)
 
 Resumo e motivo de cada item: [`STATUS.md`](STATUS.md), seção 4.

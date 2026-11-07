@@ -108,6 +108,7 @@ export function mountOfflineReader(open: typeof openBackupStandalone) {
         row(card, 'Usuário', str(item.username), false)
         row(card, item.type === 'secret' ? 'Segredo' : 'Senha', str(item.password), true)
         row(card, 'Site', str(item.url), false)
+        row(card, 'OTP (segredo)', str(item.otp), true)
         const c = (item.card ?? {}) as Record<string, unknown>
         row(card, 'Titular', str(c.holder), false)
         row(card, 'Número', str(c.number), true)

@@ -10,6 +10,8 @@ export type ItemSummary = {
   url: string;
   favorite: boolean;
   shared: boolean;
+  /** The login has a one-time code (OTP) secret. */
+  hasOtp: boolean;
   /** Relation between the item URL and the active tab. */
   match: 'exact' | 'domain' | 'none';
 };
@@ -25,7 +27,7 @@ export type Request =
   | { type: 'signOut' }
   | { type: 'list'; tabUrl: string | null }
   | { type: 'fill'; itemId: string; tabId: number; confirmMismatch?: boolean }
-  | { type: 'reveal'; itemId: string; field: 'username' | 'password' }
+  | { type: 'reveal'; itemId: string; field: 'username' | 'password' | 'otp' }
   | { type: 'clipboardCopied' }
   | { type: 'getSettings' }
   | { type: 'setSettings'; settings: Partial<ExtSettings> }

@@ -48,6 +48,8 @@ type ItemListProps = {
   onOpen: (item: VaultItem) => void;
   onShare: (item: VaultItem) => void;
   onDelete: (item: VaultItem) => void;
+  /** After a password is copied (records the use on Premium). */
+  onCopied?: (item: VaultItem) => void;
   /** One-click rotation (or, for secrets without a connector, opens its setup). */
   onRotate?: (item: VaultItem) => void;
 };
@@ -62,7 +64,7 @@ function rotateLabel(item: VaultItem) {
   return 'Configurar rotação automática';
 }
 
-export function ItemList({ title, items, health, emptyText, onNew, onOpen, onShare, onDelete, onRotate }: ItemListProps) {
+export function ItemList({ title, items, health, emptyText, onNew, onOpen, onShare, onDelete, onRotate, onCopied }: ItemListProps) {
   const [copied, setCopied] = useState<string | null>(null);
 
   return (
@@ -169,6 +171,7 @@ export function ItemList({ title, items, health, emptyText, onNew, onOpen, onSha
                             onClick={async () => {
                               if (await copyWithClear(secret)) {
                                 setCopied(item.id);
+                                onCopied?.(item);
                                 window.setTimeout(() => setCopied((c) => (c === item.id ? null : c)), 2000);
                               }
                             }}

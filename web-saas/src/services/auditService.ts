@@ -11,7 +11,8 @@ export type ClientAuditEvent =
   | 'mfa.disabled'
   | 'session.others_signed_out'
   | 'client.error'
-  | 'item.filled';
+  | 'item.filled'
+  | 'security.emergency_mode';
 
 /**
  * Records a client-side event in the audit log. Best effort: never throws and never blocks the
