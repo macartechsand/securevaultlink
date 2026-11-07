@@ -22,8 +22,9 @@ export function RotationRemindersCard({ userId }: { userId: string }) {
         <p className="eyebrow">Rotação</p>
         <h2>Prazos e avisos de troca</h2>
         <p className="subtle">
-          Cada risco encontrado vira um prazo: senha vazada ou site perigoso, {DEADLINE_DAYS.exposed} dias; senha fraca,
-          reutilizada ou com mais de 1 ano, {DEADLINE_DAYS.weak} dias; troca programada, a data definida no item. A
+          Cada risco encontrado vira um prazo: senha vazada ou site perigoso, {DEADLINE_DAYS.exposed} dias; senha fraca
+          ou reutilizada, {DEADLINE_DAYS.weak} dias; troca programada, a data definida no item. Senhas antigas não ganham
+          prazo: sem sinal de risco, trocar por calendário não aumenta a segurança (NIST SP 800-63B-4). A
           verificação de vazamentos roda sozinha uma vez por dia, ao abrir o cofre.
         </p>
       </div>

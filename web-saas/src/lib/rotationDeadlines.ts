@@ -4,7 +4,10 @@
  * are at risk never leaves the vault.
  *
  *  - exposed (in a known breach) and unsafe (site flagged by Google): 7 days from when it was found;
- *  - weak, reused and stale (> 1 year): 30 days from when it was found;
+ *  - weak and reused: 30 days from when it was found;
+ *  - stale (> 1 year) gets NO deadline: NIST SP 800-63B-4 advises against forced periodic changes
+ *    without evidence of compromise. It stays a low-priority hint; users who want periodic changes
+ *    set a scheduled rotation on the item.
  *  - scheduled rotation: the date set on the item (interval since the last password change).
  */
 import type { RiskFlag } from './itemHealth'
@@ -14,12 +17,11 @@ import type { VaultItem } from '../state/itemOps'
 export const DAY_MS = 86_400_000
 
 /** Days to fix each risk, counted from when it was first found on this device. */
-export const DEADLINE_DAYS: Record<Exclude<RiskFlag, 'due'>, number> = {
+export const DEADLINE_DAYS: Partial<Record<Exclude<RiskFlag, 'due'>, number>> = {
   exposed: 7,
   unsafe: 7,
   weak: 30,
   reused: 30,
-  stale: 30,
 }
 
 /** Scheduled rotations show up this many days before they are due. */

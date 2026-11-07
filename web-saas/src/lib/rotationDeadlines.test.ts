@@ -61,6 +61,13 @@ describe('computeDeadlines', () => {
     expect(second.reasons).toEqual(['exposed'])
   })
 
+  it('an old password alone gets no deadline (NIST SP 800-63B-4: no forced periodic changes)', () => {
+    const since = { a: { stale: iso(NOW - 400 * DAY_MS) } }
+    expect(computeDeadlines([item('a')], since, NOW)).toEqual([])
+    const mixed = computeDeadlines([item('a')], { a: { stale: iso(NOW - 400 * DAY_MS), weak: iso(NOW) } }, NOW)
+    expect(mixed[0].reasons).toEqual(['weak'])
+  })
+
   it('includes scheduled rotations due within 7 days and skips view-only items', () => {
     const scheduled = item('s', { rotationIntervalDays: 15 })
     const far = item('f', { rotationIntervalDays: 90 })

@@ -55,7 +55,7 @@ export function computePosture(p: PostureInput): Posture {
   if (p.reused > 0)
     recommendations.push({ id: 'reused', severity: 'medium', title: `Elimine ${p.reused} senha(s) reutilizada(s)`, detail: 'Se um site vazar, todas as contas com a mesma senha ficam expostas.', action: { label: 'Ver reutilizadas', view: 'vault', filter: 'reused' } })
   if (p.stale > 0)
-    recommendations.push({ id: 'stale', severity: 'low', title: `${p.stale} senha(s) sem troca há mais de 1 ano`, detail: 'Troque primeiro as de contas importantes (e-mail, banco, trabalho).', action: { label: 'Ver senhas antigas', view: 'vault', filter: 'stale' } })
+    recommendations.push({ id: 'stale', severity: 'low', title: `${p.stale} senha(s) sem troca há mais de 1 ano`, detail: 'Sem prazo: troque só se a conta for importante e a senha for fraca ou antiga demais para o padrão atual.', action: { label: 'Ver senhas antigas', view: 'vault', filter: 'stale' } })
   if (p.deadlinesOverdue)
     recommendations.push({ id: 'deadline-overdue', severity: 'high', title: `${p.deadlinesOverdue} troca(s) de senha com prazo vencido`, detail: 'Senhas vazadas têm 7 dias; fracas e reutilizadas, 30 dias. Troque pela fila de rotação.', action: { label: 'Abrir fila', view: 'rotation' } })
   else if (p.deadlinesSoon)

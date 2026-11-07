@@ -6,6 +6,8 @@ Esta página serve para **retomar o trabalho**: onde o projeto está, o que est�
 
 **Fase atual:** teste com um grupo pequeno de usuários e **pentest feito pelo dono** ([`SECURITY_TESTING.md`](SECURITY_TESTING.md)).
 
+**Garantia de segurança para assinantes (NIST, CSA, arquitetura multiplataforma):** [`security/security-assurance.md`](security/security-assurance.md).
+
 **Outros documentos de planejamento:**
 - [`product/plan-strategy.md`](product/plan-strategy.md): planos e matriz Free/Pro/Enterprise;
 - [`product/feature-review.md`](product/feature-review.md): inventário com evidências e lacunas P0–P4;

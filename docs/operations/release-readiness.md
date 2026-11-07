@@ -30,6 +30,8 @@
 
 ## Portão 2: abertura das assinaturas
 
+> Os bloqueios de segurança deste portão estão detalhados, com referência ao NIST e à CSA, em [`../security/security-assurance.md`](../security/security-assurance.md), seção 7 (B1 a B10).
+
 **Infraestrutura e operação**
 - [ ] **Supabase Pro** na produção. É decisão do dono, e o momento é este portão.
 - [ ] Teste de **restauração completa** do backup num projeto temporário, com registro.

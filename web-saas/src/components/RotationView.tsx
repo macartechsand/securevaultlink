@@ -115,7 +115,7 @@ export function RotationView({ items, health, deadlines, onRotate, onQuickRotate
             O que trocar primeiro <span className="muted">({queue.length})</span>
           </h2>
           <p className="subtle">
-            Ordenado pelo prazo de troca: senha vazada ou site perigoso, 7 dias; fraca, reutilizada ou antiga, 30 dias,
+            Ordenado pelo prazo de troca: senha vazada ou site perigoso, 7 dias; fraca ou reutilizada, 30 dias,
             contados de quando o risco foi encontrado. A verificação de vazamentos roda sozinha uma vez por dia; os avisos
             por notificação ficam em Configurações.
           </p>
