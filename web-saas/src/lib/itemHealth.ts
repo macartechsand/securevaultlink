@@ -1,10 +1,10 @@
 import type { PwnedResult } from './health/pwned'
 import { analyzeHealth, passwordStrength, type Strength } from './health/passwordHealth'
-import { STALE_PASSWORD_DAYS, hasCheckablePassword, passwordAgeDays, rotationDueInDays } from './items'
+import { EXPIRY_NOTICE_DAYS, STALE_PASSWORD_DAYS, daysUntilExpiry, hasCheckablePassword, passwordAgeDays, rotationDueInDays } from './items'
 import type { VaultItem } from '../state/itemOps'
 import type { UrlReputation } from '../services/urlReputation'
 
-export type RiskFlag = 'weak' | 'reused' | 'exposed' | 'stale' | 'due' | 'unsafe'
+export type RiskFlag = 'weak' | 'reused' | 'exposed' | 'stale' | 'due' | 'unsafe' | 'expiring'
 
 export const RISK_LABELS: Record<RiskFlag, string> = {
   weak: 'Senha fraca',
@@ -13,6 +13,7 @@ export const RISK_LABELS: Record<RiskFlag, string> = {
   stale: 'Senha antiga (mais de 1 ano)',
   due: 'Troca programada vencida',
   unsafe: 'Site perigoso',
+  expiring: 'Validade vencendo ou vencida',
 }
 
 export type ItemHealth = {
@@ -37,7 +38,7 @@ export function computeItemHealth(
   const reused = new Set(report.reused)
   const strengthById = new Map<string, Strength>()
   const risksById = new Map<string, RiskFlag[]>()
-  const counts: Record<RiskFlag, number> = { weak: 0, reused: 0, exposed: 0, stale: 0, due: 0, unsafe: 0 }
+  const counts: Record<RiskFlag, number> = { weak: 0, reused: 0, exposed: 0, stale: 0, due: 0, unsafe: 0, expiring: 0 }
 
   for (const item of items) {
     const flags: RiskFlag[] = []
@@ -53,6 +54,8 @@ export function computeItemHealth(
     const due = rotationDueInDays(item.data, item.createdAt, now)
     if (due !== null && due < 0 && (item.data.type === 'login' || item.data.type === 'secret')) flags.push('due')
     if (siteById.get(item.id)?.status === 'unsafe') flags.push('unsafe')
+    const expiry = daysUntilExpiry(item.data, now)
+    if (expiry !== null && expiry <= EXPIRY_NOTICE_DAYS) flags.push('expiring')
     flags.forEach((f) => (counts[f] += 1))
     risksById.set(item.id, flags)
   }

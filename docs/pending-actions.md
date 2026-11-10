@@ -1,6 +1,6 @@
 # Ações pendentes
 
-Última atualização: 2026-11-01 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
+Última atualização: 2026-11-05 · Projeto: Supabase **de desenvolvimento** · Branch: `dev`
 
 Tarefas que dependem do responsável pelo projeto (acesso ao painel do Supabase e às contas de teste). Siga a ordem: cada etapa depende da anterior. Marque `[x]` ao concluir.
 
@@ -8,11 +8,47 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 ---
 
+## Validação do desenvolvimento (2026-11-06)
+
+Roteiro completo: [`operations/dev-validation.md`](operations/dev-validation.md).
+
+1. [ ] **SQL Editor (desenvolvimento):** rodar `supabase/migrations/20261106000000_trash_usage_pin.sql` e depois `20261110000000_jit_access.sql` (acesso temporário).
+2. [ ] Recriar `web-saas/.env.test.local` e avisar o Claude (integração e testes de ponta a ponta).
+3. [ ] Contas de teste Free e Premium; seguir as seções 2 e 3 do roteiro e registrar os achados.
+
+## Teste com usuários e pentest (2026-11-05)
+
+Resumo e motivo de cada item: [`STATUS.md`](STATUS.md), seção 4.
+
+**Antes de convidar (produção):**
+1. [ ] Administrador master: Add user, parte B de `supabase/admin/create-master-admin.sql`, cofre e MFA.
+2. [ ] Conferir no painel: Site URL, Redirect URLs, senha mínima 10, confirmação de e-mail, TOTP (`PRODUCTION.md`, seção 0, passos 2 e 3).
+3. [ ] Guardar a senha dos backups (`~/.securelink-prod/backup-passphrase.txt`) no cofre e em papel; copiar o backup de 2026-11-05 para um segundo lugar.
+4. [ ] Monitores do site e da autenticação; `HEARTBEAT_URL` (`PRODUCTION.md`, passo 8).
+5. [ ] Preparar a forma de coletar o retorno dos convidados.
+6. [ ] Convites com link, extensão e APK; backup 2 vezes por semana durante o teste.
+
+**Pentest (desenvolvimento):** seguir [`SECURITY_TESTING.md`](SECURITY_TESTING.md) e registrar os achados na seção 8 dele.
+
+**Para levar a extensão 0.2.0, os prazos de troca e a exclusão de conta à produção:**
+1. [ ] Recriar `web-saas/.env.test.local` (item 2a abaixo) e avisar o Claude para rodar a integração e os testes de ponta a ponta.
+2. [ ] Testar no desenvolvimento: excluir conta de teste, extensão 0.2.0 (`npm run build:ext`, carregar `web-saas/dist-extension`), fila de rotação com prazos e aviso do navegador.
+3. [ ] Mesclar o PR #11 e o PR `dev` → `master` com a CI verde.
+4. [ ] Publicar: `npx supabase functions deploy admin account --project-ref exglsdylytdjwrlmyptk`, `node scripts/deploy-prod-site.mjs`, `node scripts/build-prod-extension.mjs`.
+
 ## Beta pronto para usuários (2026-11-04)
 
 1. [x] **Desenvolvimento → SQL Editor:** rodar `supabase/migrations/20261105000000_entitlements_usage.sql` (limite de itens por plano, contador diário de verificações de sites, novos campos em Beta e limites).
 2. [x] **Desenvolvimento → Administração → Beta e limites:** desligar **"MFA obrigatório para todos"**. Ele está exigindo MFA das contas de teste A e B, que não têm autenticador, e 15 testes de integração falham com `vault_files_require_mfa`. Na produção ele continua **ligado** (`prod-setup.sql`).
-3. [ ] Avisar o Claude para rodar a suíte completa de novo. Com ela verde, segue o PR `dev` → `master` (a CI do GitHub precisa passar) e a publicação na produção: migration, funções `check-url`, `admin` e `cleanup-files`, e o site.
+2a. [ ] **Recriar `web-saas/.env.test.local`** (apagado por acidente em 2026-11-04 durante um build; o `.env.local` já foi recriado). Formato:
+   ```
+   TEST_USER_A_EMAIL=...
+   TEST_USER_A_PASSWORD=...
+   TEST_USER_B_EMAIL=...
+   TEST_USER_B_PASSWORD=...
+   ```
+   Contas descartáveis do projeto de **desenvolvimento**. Sem esse arquivo, os testes de integração são pulados.
+3. [x] Avisar o Claude para rodar a suíte completa de novo. Com ela verde, segue o PR `dev` → `master` (a CI do GitHub precisa passar) e a publicação na produção: migration, funções `check-url`, `admin` e `cleanup-files`, e o site.
 4. [ ] **Abrir o Docker Desktop** para o primeiro backup externo e o teste de restauração.
 5. [ ] Monitoramento gratuito e heartbeat: `PRODUCTION.md`, seção 0, passo 8.
 
@@ -78,7 +114,7 @@ Função `rotate` e site publicados; não há migration. Para validar cada conec
    - [ ] **Google Cloud:** service account de teste com o papel "Service Account Key Admin" nela mesma, e uma chave JSON colada em "Valor do segredo". Depois da rotação, só a chave nova deve aparecer em IAM → Service accounts → Keys.
    - [ ] **Microsoft 365 / Entra ID (senha de usuário):** usuário de teste não administrador, salvo como **Login** com o e-mail em "Usuário". Um app de teste com a permissão de aplicativo `User-PasswordProfile.ReadWrite.All` (com consentimento do admin), salvo como **Segredo**: client ID em "Identificador" e secret no valor. No login: Rotação automática → Microsoft 365 / Entra ID → tenant ID e o segredo do app. Depois de rotacionar, entre em office.com com a senha nova.
    - [ ] **Google Workspace (senha de usuário):** service account de teste com delegação em todo o domínio no Admin Console (Segurança → Controles de API → escopo `https://www.googleapis.com/auth/admin.directory.user`), com o JSON salvo como **Segredo**. No login do usuário de teste: Rotação automática → Google Workspace → e-mail de um administrador e o segredo da service account. Depois de rotacionar, entre com a senha nova.
-   - [ ] **Entra ID:** app registration de teste com a permissão de aplicativo `Application.ReadWrite.OwnedBy` (com consentimento do admin) e a service principal como dona do app. Client ID em "Identificador", secret no valor, tenant ID na configuração. Depois da rotação, em Certificates & secrets, deve sobrar só a secret "SecureVault <data>".
+   - [ ] **Entra ID:** app registration de teste com a permissão de aplicativo `Application.ReadWrite.OwnedBy` (com consentimento do admin) e a service principal como dona do app. Client ID em "Identificador", secret no valor, tenant ID na configuração. Depois da rotação, em Certificates & secrets, deve sobrar só a secret "SecureVault `<data>`".
 4. [ ] Peça ao Claude para marcar como "Disponível" os conectores aprovados.
 
 ## Desbloqueio, reset do cofre e convites Premium (2026-10-19)
@@ -343,7 +379,7 @@ Antes do roteiro de arquivos, confira rapidamente no cofre de senhas que **edita
 - [ ] Entre com a conta **B** → abra **Files** uma vez, o que cria o par de chaves dela. Em **Shared with me**, anote a **impressão digital** (*Your sharing key fingerprint*).
 - [ ] Saia e entre com a conta **A** → **Files → Share** no arquivo → informe o e-mail da B → **Find**.
 - [ ] A impressão digital exibida deve ser **idêntica** à anotada na conta B. Só então clique em **Confirm and share**.
-- [ ] Entre com a conta **B** → **Shared with me**. O arquivo aparece com "from <e-mail da A>" e o **Download** funciona.
+- [ ] Entre com a conta **B** → **Shared with me**. O arquivo aparece com "from `<e-mail da A>`" e o **Download** funciona.
 - [ ] Volte à conta **A** → **Share** → **Revoke**. Na conta **B**, o arquivo deve sumir (recarregue a página).
 
 ### 5.3 Link de transferência temporária

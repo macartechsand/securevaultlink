@@ -224,6 +224,7 @@ Deno.serve(async (req) => {
     config?: Record<string, string>
     oldId?: string
     newKeyId?: string
+    itemId?: string
   }
   try {
     body = await req.json()
@@ -231,6 +232,8 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid request' }, 400)
   }
   const connector = body.connector as ConnectorId
+  // Opaque vault item id, only for the audit trail (evidence report). Anything else is dropped.
+  const itemId = /^[0-9a-f-]{36}$/i.test(String(body.itemId ?? '')) ? String(body.itemId) : null
   const action = body.action ?? 'rotate'
   const secret = String(body.credential?.secret ?? '')
   const id = String(body.credential?.id ?? '').trim()
@@ -250,6 +253,10 @@ Deno.serve(async (req) => {
   if (switchRow?.value === 'off') {
     return json({ error: 'A rotação automática está desligada nesta instalação. Use a troca assistida.' }, 403)
   }
+  // Rotation is a Premium feature (owner decision 2026-11-06). Plan from the caller's own view.
+  const { data: planRows } = await caller.rpc('my_plan_limits')
+  const plan = Array.isArray(planRows) ? planRows[0]?.plan : (planRows as { plan?: string } | null)?.plan
+  if (plan !== 'premium') return json({ error: 'A rotação de senhas faz parte do plano Premium.' }, 403)
   const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId: user.id })
   if ((factors?.factors ?? []).some((f) => f.status === 'verified') && jwtClaims(authHeader).aal !== 'aal2') {
     return json({ error: 'Entre com a verificação em duas etapas para rotacionar.' }, 403)
@@ -261,7 +268,7 @@ Deno.serve(async (req) => {
 
   // Audit: ids and outcome only, never values.
   const audit = (event: string, details: Record<string, unknown>) =>
-    admin.from('audit_events').insert({ user_id: user.id, actor_id: user.id, event, source: 'server', target_type: 'connector', target_id: connector, details })
+    admin.from('audit_events').insert({ user_id: user.id, actor_id: user.id, event, source: 'server', target_type: 'connector', target_id: connector, details: itemId ? { ...details, item: itemId } : details })
 
   try {
     const config = body.config ?? {}

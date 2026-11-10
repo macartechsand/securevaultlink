@@ -10,7 +10,7 @@
 //
 // Deploy (JWT verification ON):  supabase functions deploy account
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { r2Configured, r2Fetch } from '../_shared/r2.ts'
+import { deleteUserFiles } from '../_shared/userFiles.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -65,18 +65,8 @@ Deno.serve(async (req) => {
   if (!resetVault && role?.role === 'owner') return json({ error: 'O administrador master não pode se excluir por aqui. Transfira o papel antes.' }, 409)
 
   // 1) Stored objects (rows go away with the cascade, objects would not).
-  const { data: files } = await admin.from('vault_files').select('storage_path, storage_backend').eq('owner_id', user.id)
-  const supabasePaths = (files ?? []).filter((f) => f.storage_backend !== 'r2').map((f) => f.storage_path)
-  for (let i = 0; i < supabasePaths.length; i += 100) {
-    const { error } = await admin.storage.from('vault-files').remove(supabasePaths.slice(i, i + 100))
-    if (error) return json({ error: 'Não foi possível apagar os arquivos. Tente novamente.' }, 502)
-  }
-  if (r2Configured) {
-    for (const f of (files ?? []).filter((x) => x.storage_backend === 'r2')) {
-      const res = await r2Fetch(f.storage_path, 'DELETE').catch(() => null)
-      if (!res || (!res.ok && res.status !== 404)) return json({ error: 'Não foi possível apagar os arquivos. Tente novamente.' }, 502)
-    }
-  }
+  const removed = await deleteUserFiles(admin, user.id)
+  if (!removed.ok) return json({ error: 'Não foi possível apagar os arquivos. Tente novamente.' }, 502)
 
   if (resetVault) {
     // 2) Everything encrypted with the old keys. Shares received were sealed to the old key pair,
@@ -91,7 +81,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.from(table).delete().eq(column, user.id)
       if (error) return json({ error: 'Não foi possível apagar o cofre. Tente novamente.' }, 502)
     }
-    await admin.from('audit_events').insert({ user_id: user.id, event: 'vault.reset', source: 'server', details: { files: files?.length ?? 0 } })
+    await admin.from('audit_events').insert({ user_id: user.id, event: 'vault.reset', source: 'server', details: { files: removed.count } })
     return json({ ok: true })
   }
 
@@ -99,6 +89,6 @@ Deno.serve(async (req) => {
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id)
   if (deleteError) return json({ error: 'Não foi possível excluir a conta. Tente novamente.' }, 502)
   await admin.from('beta_allowlist').delete().eq('email', (user.email ?? '').toLowerCase())
-  await admin.from('audit_events').insert({ user_id: null, event: 'account.deleted', source: 'server', details: { files: files?.length ?? 0 } })
+  await admin.from('audit_events').insert({ user_id: null, event: 'account.deleted', source: 'server', details: { files: removed.count } })
   return json({ ok: true })
 })

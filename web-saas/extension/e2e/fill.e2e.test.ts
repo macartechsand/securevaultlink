@@ -158,6 +158,71 @@ describe.skipIf(!configured)('browser extension end to end (Edge, dev project, a
     await page.close()
   }, 30_000)
 
+  const extFrame = async (page: Page, file: 'inline.html' | 'save.html') => {
+    const handle = await page.waitForSelector(`iframe[src*="${file}"]`, { timeout: 10_000 })
+    const frame = await handle!.contentFrame()
+    // The click guard needs the frame visible for a moment before it accepts clicks.
+    await new Promise((r) => setTimeout(r, 900))
+    return frame
+  }
+  const clickText = (frame: Awaited<ReturnType<typeof extFrame>>, text: string) =>
+    frame.$$eval('button', (buttons, t) => {
+      const b = buttons.find((x) => x.textContent?.includes(t))
+      if (!b) throw new Error(`button "${t}" not found`)
+      ;(b as HTMLButtonElement).click()
+    }, text)
+
+  it('phase 2: suggestions menu under the field fills the matching login', async () => {
+    const page = await browser.newPage()
+    await page.goto(`http://localhost:${PORT}/login`)
+    await page.focus('#user')
+    const menu = await extFrame(page, 'inline.html')
+    expect(await menu.$eval('body', (b) => b.textContent)).toContain('E2E local')
+    // The other site's login is never offered here.
+    expect(await menu.$eval('body', (b) => b.textContent)).not.toContain('E2E banco')
+    await clickText(menu, 'E2E local')
+    await page.waitForFunction(() => (document.querySelector('#pass') as HTMLInputElement).value !== '', { timeout: 10_000 })
+    expect(await page.$eval('#user', (e) => (e as HTMLInputElement).value)).toBe('e2e@exemplo.com')
+    expect(await page.$eval('#pass', (e) => (e as HTMLInputElement).value)).toBe(SITE_PASSWORD)
+    await page.close()
+  }, 60_000)
+
+  it('phase 2: offers to save a new login after the form is sent, and saves it only on click', async () => {
+    const page = await browser.newPage()
+    await page.goto(`http://localhost:${PORT}/login`)
+    const newPassword = `novo-${crypto.randomUUID()}`
+    await page.type('#user', 'novo@exemplo.com')
+    await page.type('#pass', newPassword)
+    await Promise.all([page.waitForNavigation().catch(() => undefined), page.click('button')])
+    const bar = await extFrame(page, 'save.html')
+    expect(await bar.$eval('body', (b) => b.textContent)).toMatch(/Salvar este login de localhost/)
+    // The password itself is never shown to the bar.
+    expect(await bar.$eval('body', (b) => b.innerHTML)).not.toContain(newPassword)
+    await clickText(bar, 'Salvar')
+    await bar.waitForFunction(() => document.body.textContent?.includes('salvo'), { timeout: 15_000 })
+    const list = (await send<{ id: string; title: string; username: string }[]>({ type: 'list', tabUrl: `http://localhost:${PORT}/login` })).data!
+    const saved = list.find((i) => i.username === 'novo@exemplo.com')
+    expect(saved?.title).toBe('localhost')
+    created.push(saved!.id)
+    expect((await send({ type: 'reveal', itemId: saved!.id, field: 'password' })).data).toBe(newPassword)
+    await page.close()
+  }, 60_000)
+
+  it('phase 2: offers to update the password of an existing login', async () => {
+    const page = await browser.newPage()
+    await page.goto(`http://localhost:${PORT}/login`)
+    const changed = `trocada-${crypto.randomUUID()}`
+    await page.type('#user', 'e2e@exemplo.com')
+    await page.type('#pass', changed)
+    await Promise.all([page.waitForNavigation().catch(() => undefined), page.click('button')])
+    const bar = await extFrame(page, 'save.html')
+    expect(await bar.$eval('body', (b) => b.textContent)).toMatch(/Atualizar a senha de "E2E local"/)
+    await clickText(bar, 'Atualizar')
+    await bar.waitForFunction(() => document.body.textContent?.includes('atualizada'), { timeout: 15_000 })
+    expect((await send({ type: 'reveal', itemId: created[0], field: 'password' })).data).toBe(changed)
+    await page.close()
+  }, 60_000)
+
   it('rejects requests from web pages and clears keys on lock', async () => {
     const page = await browser.newPage()
     await page.goto(`http://localhost:${PORT}/login`)

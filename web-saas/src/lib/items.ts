@@ -2,7 +2,17 @@
 import { categoryLabel } from './labels'
 
 export type ItemType = 'login' | 'note' | 'secret' | 'card'
-export type SecretKind = 'api_key' | 'token' | 'ssh_key' | 'certificate' | 'other'
+export type SecretKind =
+  | 'api_key'
+  | 'token'
+  | 'ssh_key'
+  | 'certificate'
+  | 'cert_a1'
+  | 'pix'
+  | 'govbr'
+  | 'fiscal'
+  | 'procuracao'
+  | 'other'
 
 export type CustomField = { id: string; label: string; value: string; hidden: boolean }
 export type Attachment = { fileId: string; name: string; size: number }
@@ -102,6 +112,10 @@ export type SecuredItemData = {
   customFields: CustomField[]
   attachments: Attachment[]
   autoRotation: AutoRotation | null
+  /** TOTP secret (base32) or otpauth:// URI of the external system (Premium). */
+  otp: string
+  /** Validity date (YYYY-MM-DD) of certificates, powers of attorney, tokens; '' when none. */
+  expiresOn: string
 }
 
 export const LIMITS = {
@@ -128,8 +142,48 @@ export const SECRET_KINDS: { value: SecretKind; label: string }[] = [
   { value: 'token', label: 'Token de acesso' },
   { value: 'ssh_key', label: 'Chave SSH' },
   { value: 'certificate', label: 'Certificado / chave privada' },
+  { value: 'cert_a1', label: 'Certificado digital A1 (e-CPF / e-CNPJ)' },
+  { value: 'pix', label: 'Chave Pix' },
+  { value: 'govbr', label: 'Conta gov.br' },
+  { value: 'fiscal', label: 'Credencial fiscal (NF-e, prefeitura)' },
+  { value: 'procuracao', label: 'Procuração' },
   { value: 'other', label: 'Outro segredo' },
 ]
+
+/** Field names and hints per secret kind (Brazilian Secured Items, docs/product/innovation.md 9.5). */
+export const SECRET_KIND_FIELDS: Partial<Record<SecretKind, { identifier: string; value: string; hint: string }>> = {
+  cert_a1: {
+    identifier: 'Titular (nome e CPF ou CNPJ)',
+    value: 'Senha do certificado',
+    hint: 'Anexe o arquivo .pfx ou .p12 (fica cifrado) e informe a validade: o cofre avisa 30 dias antes de vencer.',
+  },
+  pix: {
+    identifier: 'Tipo da chave (CPF, CNPJ, e-mail, telefone ou aleatória)',
+    value: 'Chave Pix',
+    hint: 'Use o campo de notas para banco e conta.',
+  },
+  govbr: { identifier: 'CPF', value: 'Senha do gov.br', hint: 'Guarde o código da verificação em duas etapas do gov.br no campo OTP de um login, se usar.' },
+  fiscal: {
+    identifier: 'Usuário, CNPJ ou inscrição',
+    value: 'Senha',
+    hint: 'NF-e, prefeitura, Simples Nacional, eSocial. Informe a validade se a senha ou o acesso expirar.',
+  },
+  procuracao: {
+    identifier: 'Outorgante → outorgado',
+    value: 'Código ou número da procuração',
+    hint: 'Anexe o documento e informe a validade: o cofre avisa 30 dias antes de vencer.',
+  },
+}
+
+/** Days before the validity date when an item starts to show as expiring. */
+export const EXPIRY_NOTICE_DAYS = 30
+
+/** Whole days until the validity date (negative = expired), or null when there is none. */
+export function daysUntilExpiry(data: Pick<SecuredItemData, 'expiresOn'>, now = Date.now()): number | null {
+  if (!data.expiresOn) return null
+  const end = Date.parse(`${data.expiresOn}T23:59:59`)
+  return Number.isFinite(end) ? Math.floor((end - now) / 86_400_000) : null
+}
 
 export const typeLabel = (t: ItemType) => ITEM_TYPES.find((x) => x.value === t)?.label ?? t
 
@@ -154,6 +208,8 @@ export function emptyItem(type: ItemType = 'login'): SecuredItemData {
     customFields: [],
     attachments: [],
     autoRotation: null,
+    otp: '',
+    expiresOn: '',
   }
 }
 
@@ -198,6 +254,8 @@ export function normalizeItem(raw: unknown): SecuredItemData {
         ? Math.trunc(r.rotationIntervalDays)
         : 0,
     url: str(r.url, 2048),
+    otp: type === 'login' ? str(r.otp, 1024) : '',
+    expiresOn: type === 'secret' && typeof r.expiresOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.expiresOn) ? r.expiresOn : '',
     notes: str(r.notes, LIMITS.notes),
     category: str(r.category, 40) || base.category,
     folderId: typeof r.folderId === 'string' ? r.folderId : null,

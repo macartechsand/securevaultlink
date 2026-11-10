@@ -33,7 +33,7 @@ Documento principal para quem vai **operar, recriar ou evoluir** o sistema. Reú
 |---|---|
 | **Produção (piloto)** | App `https://securelinkvault.netlify.app` (site `securelinkvault`) · Supabase `securelink-prod`, ref `exglsdylytdjwrlmyptk`, São Paulo, plano **Free** por 15 dias. Situação e passos restantes: `PRODUCTION.md`, seção 0. Segredos locais em `~/.securelink-prod/` (fora do repositório) |
 | Desenvolvimento | App `https://securelinkvaultdev.netlify.app` (site `securelinkvaultdev`) · Supabase ref `sueemdqyhwnmbqokpefz`, plano Free. É onde rodam os testes de integração; **nunca** rode testes contra a produção |
-| Publicação | Por CLI. Desenvolvimento: `netlify deploy --prod --dir web-saas/dist`. Produção: build com as variáveis da produção e `--site 074110e2-19ba-4fdc-82f8-ad7a5d7cab4f` (ver `PRODUCTION.md`). A CLI do Supabase fica vinculada ao **desenvolvimento**; comandos de produção usam `--project-ref exglsdylytdjwrlmyptk` |
+| Publicação | Por CLI. Desenvolvimento: `netlify deploy --prod --dir web-saas/dist`. Produção: **só** `node scripts/deploy-prod-site.mjs` (monta com a produção, recusa pacote com referência ao dev, publica com `--no-build` e confere o site no ar). Nunca `netlify deploy` direto para a produção: ele roda o build do `netlify.toml`, que lê o `.env.local` (dev), e troca o pacote (incidente de 2026-11-04/05). A CLI do Supabase fica vinculada ao **desenvolvimento**; comandos de produção usam `--project-ref exglsdylytdjwrlmyptk` |
 | Extensão | `web-saas/extension/` (Chrome e Edge, MV3). Pacote de desenvolvimento em `web-saas/dist-extension`; de produção, fora do repositório |
 | App Android | `web-saas/android/` (Capacitor 7). APK de produção assinado em `~/.securelink-prod/`; como gerar em `product/mobile-app.md`, seção 8 |
 | Código | `web-saas/` (app), `supabase/migrations/` (banco), `supabase/functions/` (Edge Functions), `supabase/admin/` (scripts de operação) |
@@ -274,7 +274,8 @@ O checklist de go-live para o **beta com 5 usuários Premium e credenciais reais
 - **Sem API de troca de senha:** Instagram, Facebook, Gmail e conta Microsoft pessoal; o 1 clique só abre a página de troca de cada um.
 - **Licenças:** não há cobrança automática (Stripe); o Premium é atribuído pelo admin.
 - **Supabase Free:** sem backup automático e pausa após 7 dias sem uso. A produção do piloto está no Free; o backup externo é obrigatório.
-- **Extensão:** só logins (notas, segredos e cartões ficam no app); não oferece salvar senha ao fazer login nem ícone dentro do campo (fase 2); a área de transferência é limpa após 30 s sem conferir o conteúdo.
+- **Extensão:** só logins (notas, segredos e cartões ficam no app); a fase 2 (menu no campo, salvar e atualizar senha, gerador no cadastro) está na versão 0.2.0, ainda só no desenvolvimento; a área de transferência é limpa após 30 s sem conferir o conteúdo.
+- **Avisos de prazo de troca:** só com o app aberto; no Android, só dentro do app.
 - **Login social na produção:** exige novos clientes OAuth do Google e do GitHub apontando para o projeto de produção.
 
 ## 9. Próximos passos (ordem combinada em 2026-11-03)

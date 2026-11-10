@@ -1,0 +1,28 @@
+[package]
+name = "securelink-desktop"
+version = "0.1.0"
+description = "SecureLink Vault desktop app (Tauri 2): the web app plus on-device rotation without CORS limits"
+edition = "2021"
+publish = false
+
+[lib]
+name = "securelink_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+# rustls only (no OpenSSL), no redirects followed, explicit timeouts: see src/lib.rs.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

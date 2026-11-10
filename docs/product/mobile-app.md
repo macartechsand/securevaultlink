@@ -72,7 +72,7 @@ Biometria, autopreenchimento em outros apps, iOS, publicação nas lojas e notif
 | 4 | Captura bloqueada, sem backup, sem depuração | ✅ Na release instalada num Android 16 de usuário (`ro.debuggable=0`): janela com `SECURE`, nenhum socket de depuração, `run-as` recusado, `bmgr backupnow` responde "Backup is not allowed" |
 | 5 | Login Google/GitHub pelo navegador do sistema | 🟡 Implementado (deep link `app.securelink.vault://auth-callback`, leitura do retorno com testes). Falta testar com conta real depois de incluir o endereço nas Redirect URLs do Supabase |
 | 6 | Download de arquivos | ✅ Arquivo decifrado, menu "Compartilhar" do Android; a cópia temporária existe enquanto o menu está aberto e é apagada ao fechar; cancelar não mostra erro |
-| 7 | APK release assinado | ✅ `~/.securelink-prod/securelink-vault-0.9.0.apk` (produção, versão 0.9.0, Android 8+). Chave de assinatura em `~/.securelink-prod/` |
+| 7 | APK release assinado | ✅ `~/.securelink-prod/securelink-vault-0.9.1.apk` (produção, versão 0.9.1 de 2026-11-04, Android 8+; SHA-256 `2465f9b9…c58f4733`). Mesma assinatura da 0.9.0, então atualiza por cima. Chave de assinatura em `~/.securelink-prod/` |
 
 **Correções feitas durante o teste:**
 - **Depuração do WebView:** passou a ficar desligada por padrão, inclusive com chamada explícita no código nativo da release. Só um build local com `SECURELINK_WEBVIEW_DEBUG=1` liga.

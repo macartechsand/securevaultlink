@@ -8,6 +8,7 @@
 //   SUPABASE_URL               https://<ref>.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY  service role key (Storage export, audit head, backup event)
 //   BACKUP_PASSPHRASE          >= 16 characters; keep it in the owner's vault AND on paper
+//   BACKUP_NO_PUBLIC_TIMESTAMP optional: 1 skips the OpenTimestamps stamp of the audit anchor
 //
 //   node scripts/backup/backup.mjs [outDir]      default outDir: ~/SecureVaultBackups
 //
@@ -21,6 +22,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promise
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { encryptFile } from './crypt.mjs';
+import { stampFile } from './timestamp.mjs';
 
 const BUCKET = 'vault-files';
 const env = (k) => {
@@ -134,16 +136,26 @@ try {
   // External anchor of the audit chain: a plain, non-sensitive line (sequence + hash) kept OUTSIDE
   // the database. verify-anchors.mjs later proves the chain was not rewritten since this point.
   if (head) {
-    await appendFile(
-      join(outDir, 'audit-anchors.jsonl'),
-      JSON.stringify({ at: manifest.created_at, project: manifest.project, seq: head.chain_seq, hash: head.row_hash, backup: `${name}.svbk` }) + '\n',
-    );
+    const anchor =
+      JSON.stringify({ at: manifest.created_at, project: manifest.project, seq: head.chain_seq, hash: head.row_hash, backup: `${name}.svbk` }) + '\n';
+    await appendFile(join(outDir, 'audit-anchors.jsonl'), anchor);
+    // Public, independent timestamp (OpenTimestamps): only the SHA-256 of this file leaves the machine.
+    if (process.env.BACKUP_NO_PUBLIC_TIMESTAMP !== '1') {
+      const anchorFile = join(outDir, `audit-anchor-${head.chain_seq}.json`);
+      await writeFile(anchorFile, anchor);
+      const stamp = await stampFile(anchorFile);
+      console.log(
+        stamp.ok
+          ? `Anchor timestamped by ${stamp.ok} public calendar(s): ${anchorFile}.ots ("ots upgrade" in a few hours adds the Bitcoin proof).`
+          : `Public timestamp unavailable (${stamp.failed.length} calendar(s) failed); the local anchor is still valid.`,
+      );
+    }
   }
 
   console.log(`\nDone: ${encFile}`);
   console.log(`SHA-256: ${encHash}`);
   console.log(`Audit head: #${head?.chain_seq ?? '-'} ${head?.row_hash ?? '(chain not enabled yet)'}`);
-  console.log('Copy the .svbk file and audit-anchors.jsonl to a second location (external disk or another cloud). Test a restore monthly.');
+  console.log('Copy the .svbk file, audit-anchors.jsonl and the audit-anchor-*.json(.ots) files to a second location (external disk or another cloud). Test a restore monthly.');
 } finally {
   await rm(work, { recursive: true, force: true });
 }

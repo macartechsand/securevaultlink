@@ -1,4 +1,4 @@
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User, UserIdentity } from '@supabase/supabase-js';
 import { appRedirectUrl } from '../lib/authRedirect';
 import { NATIVE_AUTH_REDIRECT, isNativeShell } from '../lib/nativeShell';
 import { type OAuthProvider, oauthOptions } from '../lib/oauthProviders';
@@ -27,7 +27,51 @@ export async function resendConfirmation(email: string) {
 
 /** Sets the account (login) password of the signed-in user. Never the vault master password. */
 export async function setAccountPassword(password: string) {
-  return supabase.auth.updateUser({ password });
+  return supabase.auth.updateUser({ password, data: { [PASSWORD_PENDING_FLAG]: null } });
+}
+
+/**
+ * Marker in the user's metadata while an invite/reset link was redeemed but no account password was
+ * saved yet. Only steers the UI (the user can edit their own metadata, which only affects themselves).
+ */
+const PASSWORD_PENDING_FLAG = 'sv_set_password';
+
+export function mustSetAccountPassword(user: Pick<User, 'user_metadata'>): boolean {
+  return user.user_metadata?.[PASSWORD_PENDING_FLAG] === true;
+}
+
+export async function markAccountPasswordPending() {
+  return supabase.auth.updateUser({ data: { [PASSWORD_PENDING_FLAG]: true } });
+}
+
+/** Sign-in methods linked to the account (e-mail and password, Google, GitHub). */
+export async function listIdentities(): Promise<UserIdentity[]> {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error) throw new Error(error.message);
+  return data?.identities ?? [];
+}
+
+/**
+ * Links an OAuth provider to the signed-in account (Supabase manual linking, Authorization Code +
+ * PKCE). The provider must return a verified e-mail; the app returns through the same callback as
+ * sign-in. Requires "Allow manual linking" in the Supabase Auth settings.
+ */
+export async function linkProvider(provider: OAuthProvider) {
+  if (isNativeShell()) {
+    const result = await supabase.auth.linkIdentity({
+      provider,
+      options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true, ...oauthOptions(provider) },
+    });
+    if (!result.error && result.data.url) await (await import('../lib/platform')).openInSystemBrowser(result.data.url);
+    return result;
+  }
+  return supabase.auth.linkIdentity({ provider, options: { redirectTo: appRedirectUrl(), ...oauthOptions(provider) } });
+}
+
+/** Removes a linked sign-in method. Supabase refuses to remove the last one. */
+export async function unlinkProvider(identity: UserIdentity) {
+  const { error } = await supabase.auth.unlinkIdentity(identity);
+  if (error) throw new Error(error.message);
 }
 
 /**

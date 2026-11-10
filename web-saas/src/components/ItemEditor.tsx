@@ -6,8 +6,11 @@ import {
   ITEM_TYPES,
   type ItemType,
   LIMITS,
+  EXPIRY_NOTICE_DAYS,
   SECRET_KINDS,
+  SECRET_KIND_FIELDS,
   type SecuredItemData,
+  daysUntilExpiry,
   emptyItem,
   normalizeTags,
   validateItem,
@@ -24,6 +27,9 @@ import { type KeyContext, MAX_FILE_BYTES, type UserKeyPair, downloadAttachment, 
 import { checkUrlReputation, type UrlReputation } from '../services/urlReputation';
 import type { Folder, VaultItem } from '../state/itemOps';
 import { Icon } from './ui/Icon';
+import { OtpCode } from './OtpCode';
+import type { Plan } from '../lib/plan';
+import { type UsageAction, type UsageRecord, describeUsage } from '../lib/usage';
 
 type ItemEditorProps = {
   item?: VaultItem;
@@ -38,6 +44,11 @@ type ItemEditorProps = {
   onCancel: () => void;
   /** Starts the one-click rotation of the SAVED item (the editor closes). */
   onRotate?: (item: VaultItem) => void;
+  plan?: Plan;
+  /** Last use of this item (Premium). */
+  usage?: UsageRecord;
+  /** Called after the password or code is copied (records the use on Premium). */
+  onUsed?: (action: UsageAction) => void;
 };
 
 function SecretInput({
@@ -46,12 +57,14 @@ function SecretInput({
   onChange,
   readOnly,
   multiline = false,
+  onCopied,
 }: {
   id: string;
   value: string;
   onChange: (v: string) => void;
   readOnly: boolean;
   multiline?: boolean;
+  onCopied?: () => void;
 }) {
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -82,6 +95,7 @@ function SecretInput({
           try {
             await navigator.clipboard.writeText(value);
             setCopied(true);
+            onCopied?.();
             window.setTimeout(async () => {
               try {
                 if ((await navigator.clipboard.readText()) === value) await navigator.clipboard.writeText('');
@@ -101,7 +115,22 @@ function SecretInput({
   );
 }
 
-export function ItemEditor({ item, initialType = 'login', folders, getKeyContext, getKeyPair, getHistory, adminKeyItems = [], onSave, onCancel, onRotate }: ItemEditorProps) {
+export function ItemEditor({
+  item,
+  initialType = 'login',
+  folders,
+  getKeyContext,
+  getKeyPair,
+  getHistory,
+  adminKeyItems = [],
+  onSave,
+  onCancel,
+  onRotate,
+  plan = 'free',
+  usage,
+  onUsed,
+}: ItemEditorProps) {
+  const premium = plan === 'premium';
   const [data, setData] = useState<SecuredItemData>(() => (item ? structuredClone(item.data) : emptyItem(initialType)));
   const [tagInput, setTagInput] = useState('');
   const [tab, setTab] = useState<'details' | 'history'>('details');
@@ -112,6 +141,7 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
   const [confirmUnsafe, setConfirmUnsafe] = useState(false);
 
   const readOnly = item?.access === 'view';
+  const expiryDays = daysUntilExpiry(data);
   const isOwner = !item || item.access === 'owner';
   const set = <K extends keyof SecuredItemData>(key: K, value: SecuredItemData[K]) => setData((d) => ({ ...d, [key]: value }));
   const urlReport = data.url.trim() ? analyzeUrl(data.url) : null;
@@ -312,7 +342,7 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                 </label>
                 <div className="field">
                   <label htmlFor="item-password">Senha</label>
-                  <SecretInput id="item-password" value={data.password} onChange={(v) => set('password', v)} readOnly={readOnly} />
+                  <SecretInput id="item-password" value={data.password} onChange={(v) => set('password', v)} readOnly={readOnly} onCopied={() => onUsed?.('copied')} />
                   <div className="row">
                     {strength && <span className={`badge ${strengthBadge(strength)}`}>Força: {STRENGTH_LABELS[strength]}</span>}
                     {!readOnly && (
@@ -327,6 +357,32 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                     )}
                     {data.passwordUpdatedAt && <span className="subtle">Alterada em {formatDateTime(data.passwordUpdatedAt)}</span>}
                   </div>
+                  {item && (
+                    <span className="field__hint">
+                      {premium
+                        ? usage
+                          ? `Último uso: ${describeUsage(usage)}`
+                          : 'Último uso: ainda não registrado (preencher pela extensão ou copiar registra).'
+                        : 'Onde e quando a senha foi usada: recurso Premium.'}
+                    </span>
+                  )}
+                </div>
+                <div className="field">
+                  <label htmlFor="item-otp">
+                    Código de verificação (OTP) {!premium && <span className="badge badge--info">Premium</span>}
+                  </label>
+                  {premium || data.otp ? (
+                    <>
+                      <SecretInput id="item-otp" value={data.otp} onChange={(v) => set('otp', v.trim())} readOnly={readOnly || (!premium && !data.otp)} />
+                      {data.otp ? (
+                        <OtpCode secret={data.otp} onCopied={() => onUsed?.('otp')} />
+                      ) : (
+                        <span className="field__hint">Cole a chave de configuração (base32) ou o link otpauth:// que o site mostra ao ativar a verificação em duas etapas.</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="field__hint">Guarde aqui os códigos de verificação dos seus sites e gere o código na hora. Disponível no Premium.</span>
+                  )}
                 </div>
               </>
             )}
@@ -343,14 +399,25 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
                     ))}
                   </select>
                 </label>
+                {SECRET_KIND_FIELDS[data.secretKind] && <span className="field__hint">{SECRET_KIND_FIELDS[data.secretKind]!.hint}</span>}
                 <label className="field">
-                  Identificador (opcional)
+                  {SECRET_KIND_FIELDS[data.secretKind]?.identifier ?? 'Identificador (opcional)'}
                   <input value={data.username} onChange={(e) => set('username', e.target.value)} placeholder="ID da chave, conta, usuário…" readOnly={readOnly} />
                 </label>
                 <div className="field">
-                  <label htmlFor="item-secret">Valor do segredo</label>
+                  <label htmlFor="item-secret">{SECRET_KIND_FIELDS[data.secretKind]?.value ?? 'Valor do segredo'}</label>
                   <SecretInput id="item-secret" value={data.password} onChange={(v) => set('password', v)} readOnly={readOnly} multiline />
                 </div>
+                <label className="field">
+                  Validade (opcional)
+                  <input type="date" value={data.expiresOn} onChange={(e) => set('expiresOn', e.target.value)} readOnly={readOnly} />
+                  {expiryDays !== null && (
+                    <span className={`field__hint ${expiryDays <= EXPIRY_NOTICE_DAYS ? 'text-warn' : ''}`}>
+                      {expiryDays < 0 ? `Venceu há ${-expiryDays} dia(s).` : expiryDays === 0 ? 'Vence hoje.' : `Vence em ${expiryDays} dia(s).`}
+                      {' '}O cofre avisa {EXPIRY_NOTICE_DAYS} dias antes, na fila de Rotação e na Visão geral.
+                    </span>
+                  )}
+                </label>
               </>
             )}
 
@@ -378,18 +445,26 @@ export function ItemEditor({ item, initialType = 'login', folders, getKeyContext
             {(data.type === 'login' || data.type === 'secret') && (
               <label className="field">
                 Troca programada
-                <select value={data.rotationIntervalDays} onChange={(e) => set('rotationIntervalDays', Number(e.target.value))} disabled={readOnly}>
+                <select
+                  value={data.rotationIntervalDays}
+                  onChange={(e) => set('rotationIntervalDays', Number(e.target.value))}
+                  disabled={readOnly || (!premium && data.rotationIntervalDays === 0)}
+                >
                   {ROTATION_INTERVALS.map((r) => (
                     <option key={r.days} value={r.days}>
                       {r.label}
                     </option>
                   ))}
                 </select>
-                <span className="field__hint">Você recebe o lembrete na Visão geral e o item entra na fila de Rotação quando vencer.</span>
+                <span className="field__hint">
+                  {premium
+                    ? 'Você recebe o lembrete na Visão geral e o item entra na fila de Rotação quando vencer.'
+                    : 'Troca programada e rotação assistida fazem parte do Premium.'}
+                </span>
               </label>
             )}
 
-            {(data.type === 'secret' || data.type === 'login') && isOwner && (
+            {(data.type === 'secret' || data.type === 'login') && isOwner && (premium || data.autoRotation) && (
               <AutoRotationFields
                 itemType={data.type}
                 value={data.autoRotation}

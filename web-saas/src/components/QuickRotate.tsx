@@ -160,7 +160,7 @@ function AutoQuick({ item, onSave, findItem, onClose }: Omit<QuickRotateProps, '
     if (r.revokeOldId) {
       setPhase('revoking');
       try {
-        await revokeOldCredential(auto, { id: r.identifier ?? item.data.username.trim(), secret: r.secret }, r.revokeOldId, r.keyId);
+        await revokeOldCredential(auto, { id: r.identifier ?? item.data.username.trim(), secret: r.secret }, r.revokeOldId, r.keyId, item.id);
       } catch (err) {
         setWarning((w) => [w, friendlyError(err)].filter(Boolean).join(' '));
       }
@@ -179,9 +179,9 @@ function AutoQuick({ item, onSave, findItem, onClose }: Omit<QuickRotateProps, '
           // Only the account name and the linked admin credential are sent; never the current password.
           const adminItem = auto.config.adminItemId ? findItem(auto.config.adminItemId) : undefined;
           if (!adminItem) throw new Error('Vincule, em Editar → Rotação automática, o segredo com a credencial administrativa.');
-          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: '' }, { id: adminItem.data.username.trim(), secret: adminItem.data.password });
+          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: '' }, { id: adminItem.data.username.trim(), secret: adminItem.data.password }, item.id);
         } else {
-          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: item.data.password });
+          r = await rotateCredential(auto, { id: item.data.username.trim(), secret: item.data.password }, undefined, item.id);
         }
         if (r.warning) setWarning(r.warning);
         setResult(r);

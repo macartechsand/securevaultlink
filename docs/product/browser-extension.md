@@ -156,3 +156,31 @@ Edição completa de itens (fica no app web; a extensão só cria pelo "salvar" 
 - **Login com Google e GitHub** (adicionado em 2026-11-01): mesmo fluxo do app (Supabase, Authorization Code + PKCE) via `chrome.identity.launchWebAuthFlow`. O provedor devolve o código só para o endereço da própria extensão (`https://<id>.chromiumapp.org/`), e o `code_verifier` fica no armazenamento dela, então um código vazado não serve para outra pessoa. A resposta é validada (origem exata, formato do código) e testada (`oauthCallback.test.ts`).
 - **ID fixo da extensão** em instalações sem loja: `mcljapeloopnadipmhmojkmbjjgbpdij` (chave pública em `extension/manifest-key.json`). Nas lojas o ID é outro e precisa ser incluído nas Redirect URLs do projeto de produção.
 - **Preenchimento:** a extensão injeta o script sob demanda (`activeTab`); sem script permanente nas páginas.
+
+## 13. Fase 2: preencher no campo e salvar senhas (2026-11-05)
+
+Implementados os itens 12, 13 e 14 da fase 2, mais o preenchimento automático opcional. Ficam para depois: selo no ícone (10), vários endereços por login (15) e regras por item (16).
+
+| Funcionalidade | Como funciona | Controle de segurança |
+|---|---|---|
+| **Sugestões no campo** | Ao focar o campo de usuário ou senha, aparece um menu com os logins **deste site** | O menu é uma página da extensão em iframe: a página não lê títulos nem usuários. Só aparece em frames do **mesmo site** da aba. O preenchimento reconfere o site e vai só para o documento que pediu |
+| **Salvar e atualizar senha** | Depois do envio de um formulário de login ou cadastro, uma barra pergunta se quer salvar (login novo) ou atualizar (mesmo usuário, senha diferente) | Nada é salvo sem clique. A barra não recebe a senha. A senha digitada fica só na memória da extensão (`chrome.storage.session`) por até 5 min e é apagada no bloqueio. Login compartilhado só para visualização nunca é alterado |
+| **Gerar senha no cadastro** | No campo de senha nova, o menu oferece "Gerar senha forte": preenche o campo e a confirmação e já prepara o "Salvar" | Gerador com CSPRNG, igual ao do app. A senha gerada fica pendente mesmo que o envio do formulário não seja detectado, para não se perder |
+| **"Nunca neste site"** | Deixa de oferecer salvar no site | A lista guarda só o hash (SHA-256) do domínio, não o endereço |
+| **Preencher sozinho** (Opções, **desligado por padrão**) | Ao abrir a página, preenche quando há exatamente um login para o endereço exato, em https | Preencher sem clique facilita que uma página maliciosa do mesmo site capture a senha; por isso é opcional |
+
+**Proteções novas:**
+- **Clickjacking:** os botões do menu e da barra só aceitam o clique se o navegador confirmar que o iframe está visível, sem nada por cima e sem opacidade ou transformação aplicadas pela página (IntersectionObserver v2), há pelo menos 0,5 s.
+- **Remetentes separados:** o service worker aceita três tipos de remetente, cada um com a sua lista curta de pedidos: popup, frames da extensão e script de página. O script de página é tratado como não confiável: nunca recebe senha salva, e o site, a aba e o frame vêm do navegador, não da mensagem.
+- **Tokens de uso único** ligam cada menu ou barra à sua aba. Teste no Edge: um iframe forjado com token inventado recebe só "Menu expirado", e o popup não pode ser emoldurado por páginas.
+
+**Permissões:** a fase 2 adiciona o script de página em `http://*/*` e `https://*/*`, e acesso de preenchimento às páginas, como previsto na seção 4. A rede da extensão (`connect-src`) continua **só o Supabase** do projeto.
+
+**Riscos aceitos:**
+- As duas páginas acessíveis pelos sites (`inline.html` e `save.html`) usam URL fixa, então um site consegue descobrir que a extensão está instalada. A URL dinâmica impediria a conferência exata do remetente no service worker.
+- O script de página roda no processo da página. Um renderizador comprometido poderia pedir uma barra de "salvar" com dados falsos, mas não consegue ler senhas nem salvar sem o clique do usuário.
+
+**Testes:**
+- unitários de detecção de formulário (`formLogic.test.ts`, jsdom) e da decisão salvar/atualizar (`saveLogic.test.ts`);
+- e2e em `extension/e2e/fill.e2e.test.ts`: menu preenche, salvar login novo e atualizar senha. Rodam com as contas de teste no `.env.test.local`;
+- teste de fumaça no Edge real sem conta, em 2026-11-05: manifesto aceito, script injetado, nada exibido com a conta desconectada, iframe forjado recusado.

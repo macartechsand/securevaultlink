@@ -6,6 +6,7 @@ import {
   ROLE_LABELS,
   type UserInsights,
   createRecoveryLink,
+  deleteUserAccount,
   listUsers,
   resetUserMfa,
   revokeUserSessions,
@@ -100,6 +101,14 @@ export function IamUsersTab({ canAct }: { canAct: boolean }) {
                       <div className="badges">
                         {suspended && <span className="badge badge--danger">Suspenso</span>}
                         {!u.confirmed && <span className="badge badge--warn">E-mail não confirmado</span>}
+                        {u.has_password === false && (
+                          <span
+                            className="badge badge--warn"
+                            title="Não entra com e-mail e senha (por exemplo, no app Android). Gere um link de redefinição ou peça para entrar com Google/GitHub do mesmo e-mail."
+                          >
+                            {u.providers.some((p) => p !== 'email') ? 'Só entra por Google/GitHub' : 'Sem senha da conta'}
+                          </span>
+                        )}
                         <span className={`badge ${u.mfa_factors ? 'badge--ok' : u.mfa_required ? 'badge--danger' : 'badge--warn'}`}>
                           {u.mfa_factors ? 'MFA' : u.mfa_required ? 'MFA exigido, pendente' : 'Sem MFA'}
                         </span>
@@ -148,6 +157,7 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [oneTime, setOneTime] = useState<{ email: string; link: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
   const suspended = Boolean(user.banned_until && new Date(user.banned_until) > new Date());
 
   const refresh = useCallback(async () => {
@@ -177,6 +187,20 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
     } catch (e) {
       setError(friendlyError(e));
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    setError('');
+    setInfo('');
+    setBusy(true);
+    try {
+      await deleteUserAccount(user.user_id, deleteConfirm);
+      onChanged();
+      onClose();
+    } catch (e) {
+      setError(friendlyError(e));
       setBusy(false);
     }
   };
@@ -356,6 +380,41 @@ function UserDetail({ user, canAct, onClose, onChanged }: { user: AdminUser; can
                 >
                   {suspended ? 'Reativar conta' : 'Suspender conta'}
                 </button>
+              </div>
+            )}
+            {canAct && (
+              <div className="alert alert--error stack-sm">
+                <strong>Excluir conta</strong>
+                {user.role ? (
+                  <span>Esta conta tem um papel privilegiado. Revogue o papel na aba "Acesso privilegiado (PAM)" antes de excluir.</span>
+                ) : (
+                  <>
+                    <span>
+                      Apaga a conta, o cofre, os arquivos e os compartilhamentos, e retira o e-mail da lista do beta. Não pode ser
+                      desfeita. O histórico de auditoria fica, só com o identificador.
+                    </span>
+                    <label className="field">
+                      Digite <code>{user.email}</code> para confirmar
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={deleteConfirm}
+                        disabled={busy}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                      />
+                    </label>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger"
+                        disabled={busy || deleteConfirm.trim().toLowerCase() !== user.email.toLowerCase()}
+                        onClick={() => void deleteAccount()}
+                      >
+                        Excluir conta definitivamente
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div className="alert">

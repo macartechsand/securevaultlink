@@ -21,6 +21,35 @@ export function scanLoginFields(): FrameScan {
   return { href: location.href, passwords, users, top: window === window.top };
 }
 
+/**
+ * Sign-up / change-password forms: writes a generated password into the new-password fields of this
+ * frame (the field and its confirmation). Fields marked current-password are left alone.
+ */
+export function fillNewPasswordFields(password: string): number {
+  const visible = (el: HTMLInputElement) => {
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    return r.width > 4 && r.height > 4 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.1 && !el.disabled && !el.readOnly;
+  };
+  const setValue = (el: HTMLInputElement, value: string) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    el.focus();
+    if (setter) setter.call(el, value);
+    else el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const active = document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'password' ? document.activeElement : null;
+  const scope = (active?.form ?? document) as ParentNode;
+  const fields = ([...scope.querySelectorAll('input[type="password"]')] as HTMLInputElement[]).filter(
+    (i) => visible(i) && i.autocomplete !== 'current-password',
+  );
+  const marked = fields.filter((i) => i.autocomplete === 'new-password');
+  const targets = marked.length ? marked : fields.slice(-2);
+  targets.forEach((t) => setValue(t, password));
+  return targets.length;
+}
+
 /** Step 2: writes the chosen credential into the visible login fields of this frame only. */
 export function fillLoginFields(username: string, password: string): { username: boolean; password: boolean } {
   const visible = (el: HTMLInputElement) => {

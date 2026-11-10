@@ -1,0 +1,19 @@
+{
+  "name": "securelink-docs",
+  "private": true,
+  "type": "module",
+  "description": "Documentation portal for SecureLink Vault (VitePress over the docs/ folder).",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "mermaid": "11.17.2",
+    "vitepress": "1.6.4",
+    "vitepress-plugin-mermaid": "2.0.17"
+  },
+  "overrides": {
+    "katex": "0.18.11"
+  }
+}

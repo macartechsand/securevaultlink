@@ -5,6 +5,7 @@
 //
 // Deploy (JWT verification ON, the default):  supabase functions deploy admin
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { deleteUserFiles } from '../_shared/userFiles.ts'
 
 const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
 const corsHeaders = {
@@ -16,7 +17,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const ACTIONS = ['health', 'reset_mfa', 'suspend', 'unsuspend', 'invite_link', 'recovery_link'] as const
+const ACTIONS = ['health', 'reset_mfa', 'suspend', 'unsuspend', 'invite_link', 'recovery_link', 'delete_user'] as const
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 // Where sign-in links may send people back to (comma-separated origins). Falls back to the Site URL.
@@ -60,12 +61,14 @@ Deno.serve(async (req) => {
   let target = ''
   let email = ''
   let redirectTo: string | undefined
+  let confirm = ''
   try {
     const body = await req.json()
     action = body.action
     target = String(body.userId ?? '')
     email = String(body.email ?? '').trim().toLowerCase()
     redirectTo = redirectFor(body.redirectTo)
+    confirm = String(body.confirm ?? '').trim().toLowerCase()
     if (!ACTIONS.includes(action)) throw new Error('bad action')
     if (action === 'invite_link') {
       if (!EMAIL.test(email)) throw new Error('bad email')
@@ -75,6 +78,7 @@ Deno.serve(async (req) => {
   }
   if (action !== 'health' && !['admin', 'owner'].includes(me.role)) return json({ error: 'This action requires the admin role' }, 403)
   if (target === userData.user.id && action === 'suspend') return json({ error: 'You cannot suspend yourself' }, 400)
+  if (target === userData.user.id && action === 'delete_user') return json({ error: 'Para excluir a própria conta, use Configurações.' }, 400)
 
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
   const audit = (event: string, details: Record<string, unknown> = {}) =>
@@ -109,6 +113,28 @@ Deno.serve(async (req) => {
     if (!link) return json({ error: 'APP_ORIGINS não configurado.' }, 503)
     await audit('admin.recovery_link_created')
     return json({ link, email: u.user.email })
+  }
+
+  // Irreversible: deletes the account, its encrypted vault, files and shares (LGPD erasure on behalf of
+  // the user, or removal from the beta). Privileged accounts must lose their role first (PAM tab), and
+  // the admin types the target's e-mail, checked here against the account, not against the request.
+  if (action === 'delete_user') {
+    const { data: u, error: userError } = await admin.auth.admin.getUserById(target)
+    if (userError || !u.user) return json({ error: 'Usuário não encontrado.' }, 404)
+    const targetEmail = (u.user.email ?? '').toLowerCase()
+    if (!targetEmail || confirm !== targetEmail) return json({ error: 'Confirmação inválida: digite o e-mail da conta.' }, 400)
+    const { data: role } = await admin.from('app_admins').select('role').eq('user_id', target).maybeSingle()
+    if (role) return json({ error: 'Esta conta tem um papel privilegiado. Revogue o papel na aba "Acesso privilegiado (PAM)" antes de excluir.' }, 409)
+
+    const removed = await deleteUserFiles(admin, target)
+    if (!removed.ok) return json({ error: 'Não foi possível apagar os arquivos da conta. Nada foi excluído; tente novamente.' }, 502)
+    const { error: deleteError } = await admin.auth.admin.deleteUser(target)
+    if (deleteError) return json({ error: 'Não foi possível excluir a conta. Tente novamente.' }, 502)
+    // Without this the address could sign up again in the closed beta.
+    await admin.from('beta_allowlist').delete().eq('email', targetEmail)
+    // The audit trail keeps only the pseudonymous id (no e-mail) and survives the deletion.
+    await audit('admin.user_deleted', { files: removed.count })
+    return json({ ok: true })
   }
 
   if (action === 'health') {

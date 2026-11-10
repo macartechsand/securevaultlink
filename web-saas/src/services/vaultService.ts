@@ -11,6 +11,8 @@ export type EntryRow = {
   wrapped_key: string | null;
   created_at: string;
   updated_at: string;
+  /** Set while the item is in the owner's trash (Premium). Absent before migration 20261106. */
+  deleted_at?: string | null;
 };
 
 export type EntryBlob = { ciphertext: string; iv: string; version: number };
@@ -66,11 +68,11 @@ export async function updateProfile(userId: string, profile: VaultProfile): Prom
 
 /** Own entries plus entries shared with the caller (RLS decides which rows are visible). */
 export async function fetchEntries(): Promise<EntryRow[]> {
-  const { data, error } = await supabase
-    .from('vault_entries')
-    .select('id, user_id, ciphertext, iv, version, wrapped_key, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .returns<EntryRow[]>();
+  const query = (columns: string) =>
+    supabase.from('vault_entries').select(columns).order('created_at', { ascending: false }).returns<EntryRow[]>();
+  let { data, error } = await query('id, user_id, ciphertext, iv, version, wrapped_key, created_at, updated_at, deleted_at');
+  // Database without the trash column yet (migration 20261106 not applied): load without it.
+  if (error?.code === '42703') ({ data, error } = await query('id, user_id, ciphertext, iv, version, wrapped_key, created_at, updated_at'));
   if (error) fail('Falha ao carregar as credenciais', error);
   return data ?? [];
 }
@@ -116,6 +118,30 @@ export async function fetchEntryHistory(id: string): Promise<string | null> {
     .single<{ history_ciphertext: string | null }>();
   if (error) fail('Falha ao carregar o histórico', error);
   return data?.history_ciphertext ?? null;
+}
+
+/** Moves an own item to the trash (Premium; the server checks the plan and sets the date). */
+/** Returns the server's dates: the edit check (`updated_at`) changes with every move. */
+export async function trashEntry(id: string): Promise<{ deleted_at: string; updated_at: string }> {
+  const { data, error } = await supabase
+    .from('vault_entries')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('deleted_at, updated_at')
+    .single<{ deleted_at: string; updated_at: string }>();
+  if (error || !data) fail('Falha ao mover para a lixeira', error);
+  return data!;
+}
+
+export async function restoreEntry(id: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('vault_entries')
+    .update({ deleted_at: null })
+    .eq('id', id)
+    .select('updated_at')
+    .single<{ updated_at: string }>();
+  if (error || !data) fail('Falha ao restaurar o item', error);
+  return data!.updated_at;
 }
 
 export async function deleteEntry(id: string): Promise<void> {

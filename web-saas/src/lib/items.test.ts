@@ -106,3 +106,15 @@ describe('autoRotation (per-item consent)', () => {
     expect(normalizeItem({ type: 'secret', autoRotation: { ...consented, connectorId: 'gcp-service-account-key' } }).autoRotation).not.toBeNull()
   })
 })
+
+describe('validity date', () => {
+  it('keeps a valid YYYY-MM-DD date only on secrets and computes days left', async () => {
+    const { normalizeItem, daysUntilExpiry } = await import('./items')
+    expect(normalizeItem({ type: 'secret', secretKind: 'cert_a1', expiresOn: '2026-12-01' }).expiresOn).toBe('2026-12-01')
+    expect(normalizeItem({ type: 'secret', secretKind: 'pix', expiresOn: '01/12/2026' }).expiresOn).toBe('')
+    expect(normalizeItem({ type: 'login', expiresOn: '2026-12-01' }).expiresOn).toBe('')
+    expect(normalizeItem({ type: 'secret', secretKind: 'procuracao' }).secretKind).toBe('procuracao')
+    expect(daysUntilExpiry({ expiresOn: '2026-11-20' }, Date.parse('2026-11-10T12:00:00'))).toBe(10)
+    expect(daysUntilExpiry({ expiresOn: '' })).toBeNull()
+  })
+})

@@ -30,9 +30,11 @@ import { computeItemHealth } from './lib/itemHealth';
 import { type ItemType, adminKeyKind, hasCheckablePassword } from './lib/items';
 import { friendlyError } from './lib/messages';
 import { type PostureInput, computePosture } from './lib/posture';
+import { type RiskSince, computeDeadlines, summarizeDeadlines, updateRiskSince } from './lib/rotationDeadlines';
+import { claimDailyCheck, loadRiskSince, maybeNotify, saveRiskSince } from './lib/rotationReminders';
 import { isNativeShell } from './lib/nativeShell';
 import { isSupabaseConfigured } from './lib/supabase';
-import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
+import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits, saveToDisk } from './services/fileService';
 import { type AdminStatus, fetchAdminStatus } from './services/adminService';
 import { exchangeOAuthCode } from './services/authService';
 import { listVerifiedTotpFactors } from './services/mfaService';
@@ -40,6 +42,12 @@ import { reportPosture } from './services/supportService';
 import { fetchSessions, fetchSharingExposure } from './services/postureService';
 import { checkUrlsReputation, type UrlReputation } from './services/urlReputation';
 import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
+import { PREMIUM_FEATURES, type PremiumFeature, TRASH_DAYS } from './lib/plan';
+import { TrashView } from './components/TrashView';
+import { buildEvidenceCsv } from './lib/evidenceReport';
+import { fetchMyAuditEvents } from './services/auditService';
+import { JitView } from './components/JitView';
+import { OrgView } from './components/OrgView';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -64,6 +72,9 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   rotation: { title: 'Rotação', subtitle: 'Fila de correção, trocas programadas e conectores de rotação.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
+  org: { title: 'Empresa', subtitle: 'Painel de risco da equipe ou dos clientes, só com números de segurança, nunca com conteúdo.' },
+  access: { title: 'Acesso temporário', subtitle: 'Acesso por prazo, com aprovação do dono, sem que o servidor veja a senha.' },
+  trash: { title: 'Lixeira', subtitle: `Itens excluídos ficam ${TRASH_DAYS} dias antes de serem apagados para sempre.` },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
   admin: { title: 'Administração', subtitle: 'Operação da plataforma: usuários, sinais e saúde do sistema.' },
 };
@@ -82,10 +93,12 @@ function VaultApp() {
   // Runs inside the click (clipboard and new tab need the user gesture).
   // From the item list: rotate in one click, or open the editor to set up a connector for secrets.
   const rotateFromList = (item: VaultItem) => {
+    if (!requirePremium('rotation')) return;
     if (quickRotateMode(item)) startQuickRotate(item);
     else setEditing({ item });
   };
   const startQuickRotate = (item: VaultItem) => {
+    if (!requirePremium('rotation')) return;
     if (quickRotateMode(item) === 'assisted') {
       setQuickRotating({ item, password: startAssistedRotation(item) });
     } else {
@@ -97,6 +110,13 @@ function VaultApp() {
   const [siteById, setSiteById] = useState<Map<string, UrlReputation>>(new Map());
   const [checking, setChecking] = useState(false);
   const [limits, setLimits] = useState<PlanLimits>(FREE_LIMITS);
+  const premium = limits.plan === 'premium';
+  /** Premium-only actions explain themselves instead of failing. */
+  const requirePremium = (feature: PremiumFeature) => {
+    if (premium) return true;
+    setActionError(`${PREMIUM_FEATURES[feature]}: recurso do plano Premium.`);
+    return false;
+  };
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [sessionCount, setSessionCount] = useState(1);
   const [exposure, setExposure] = useState<PostureInput['exposure']>(null);
@@ -171,6 +191,21 @@ function VaultApp() {
 
   const health = useMemo(() => computeItemHealth(items, pwnedById, siteById), [items, pwnedById, siteById]);
 
+  // Rotation deadlines: when each risk was first seen lives on this device (item ids and dates only).
+  const userId = user?.id ?? '';
+  const [riskSince, setRiskSince] = useState<RiskSince>({});
+  useEffect(() => {
+    if (status !== 'unlocked' || !userId || items.length === 0) return;
+    const next = updateRiskSince(loadRiskSince(userId), items, health.risksById, securityCheckRan);
+    saveRiskSince(userId, next);
+    setRiskSince(next);
+  }, [status, userId, items, health, securityCheckRan]);
+  const deadlines = useMemo(() => computeDeadlines(items, riskSince), [items, riskSince]);
+  const deadlineSummary = useMemo(() => summarizeDeadlines(deadlines), [deadlines]);
+  useEffect(() => {
+    if (status === 'unlocked' && userId) maybeNotify(userId, deadlineSummary, () => setActiveView('rotation'));
+  }, [status, userId, deadlineSummary]);
+
   // Numeric posture summary for support (counts only; the user can turn it off in Settings).
   useEffect(() => {
     if (status !== 'unlocked') return;
@@ -183,7 +218,10 @@ function VaultApp() {
         exposed: health.counts.exposed,
         stale: health.counts.stale,
         rotationDue: health.counts.due,
+        deadlinesOverdue: deadlineSummary.overdue,
+        deadlinesSoon: deadlineSummary.soon,
         unsafeSites: health.counts.unsafe,
+        expiring: health.counts.expiring,
         securityCheckRan,
         mfaEnabled,
         recoveryEnabled: session.hasRecovery,
@@ -215,7 +253,7 @@ function VaultApp() {
       });
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [status, items, health, securityCheckRan, mfaEnabled, sessionCount, exposure, session.hasRecovery, session.folders.length, session.undecryptable]);
+  }, [status, items, health, deadlineSummary, securityCheckRan, mfaEnabled, sessionCount, exposure, session.hasRecovery, session.folders.length, session.undecryptable]);
 
   const runSecurityCheck = useCallback(async () => {
     setChecking(true);
@@ -241,12 +279,23 @@ function VaultApp() {
     }
   }, [items]);
 
+  // Exposure deadlines need the breach check: it runs by itself once a day per device after unlocking.
+  useEffect(() => {
+    if (status !== 'unlocked' || !userId || items.length === 0 || securityCheckRan || checking) return;
+    if (claimDailyCheck(userId)) void runSecurityCheck().catch(() => undefined);
+  }, [status, userId, items.length, securityCheckRan, checking, runSecurityCheck]);
+
   const handleDelete = async (item: VaultItem) => {
     setActionError('');
     try {
       if (item.access !== 'owner') {
         if (!window.confirm(`Remover "${item.data.title}" da sua lista? Você perde o acesso a este item compartilhado.`)) return;
         await session.leaveSharedItem(item);
+        return;
+      }
+      if (premium) {
+        if (!window.confirm(`Mover "${item.data.title}" para a lixeira? Ele fica lá por ${TRASH_DAYS} dias.`)) return;
+        await session.trashItem(item);
         return;
       }
       if (!window.confirm(`Excluir "${item.data.title}"? Esta ação não pode ser desfeita.`)) return;
@@ -338,6 +387,8 @@ function VaultApp() {
             onRecover={session.recover}
             onResetVault={session.resetVault}
             onSignOut={signOut}
+            pinAvailable={session.pinAvailable}
+            onUnlockPin={session.unlockWithPin}
           />
         )}
       </CenterLayout>
@@ -360,7 +411,10 @@ function VaultApp() {
     exposed: health.counts.exposed,
     stale: health.counts.stale,
     rotationDue: health.counts.due,
+    deadlinesOverdue: deadlineSummary.overdue,
+    deadlinesSoon: deadlineSummary.soon,
     unsafeSites: health.counts.unsafe,
+    expiring: health.counts.expiring,
     securityCheckRan,
     mfaEnabled,
     recoveryEnabled: session.hasRecovery,
@@ -370,7 +424,7 @@ function VaultApp() {
   const navCounts: NavCounts = {
     dashboard: { value: posture.recommendations.filter((r) => r.severity === 'high').length },
     vault: { value: health.counts.exposed + health.counts.unsafe },
-    rotation: { value: health.counts.due, tone: 'warn' },
+    rotation: { value: deadlineSummary.overdue + deadlineSummary.soon, tone: deadlineSummary.overdue ? 'danger' : 'warn' },
   };
   const navProps = {
     activeView,
@@ -447,6 +501,11 @@ function VaultApp() {
                 const kind = i.access === 'owner' ? adminKeyKind(i.data) : null;
                 return kind ? [{ id: i.id, title: i.data.title, kind }] : [];
               })}
+              plan={limits.plan}
+              usage={editing.item ? session.usage.get(editing.item.id) : undefined}
+              onUsed={(action) => {
+                if (premium && editing.item) void session.recordUse(editing.item, action);
+              }}
               onCancel={() => setEditing(null)}
               onRotate={(item) => {
                 setEditing(null);
@@ -657,6 +716,9 @@ function VaultApp() {
               onOpen={(item) => setEditing({ item })}
               onShare={setSharingItem}
               onRotate={rotateFromList}
+              onCopied={(item) => {
+                if (premium) void session.recordUse(item, 'copied');
+              }}
               onDelete={handleDelete}
               onCreateFolder={session.createFolder}
               onRenameFolder={session.renameFolder}
@@ -665,10 +727,49 @@ function VaultApp() {
           )}
 
           {activeView === 'rotation' && (
-            <RotationView items={items} health={health} onRotate={setRotatingItem} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
+            <RotationView items={items} health={health} deadlines={deadlines} onRotate={(item) => requirePremium('rotation') && setRotatingItem(item)}
+              onQuickRotate={startQuickRotate}
+              onEvidenceReport={async (pseudonymize) => {
+                if (!requirePremium('rotation')) return;
+                const events = await fetchMyAuditEvents(1000).catch(() => []);
+                const csv = buildEvidenceCsv({ items, health, deadlines, events, account: user?.email ?? '', pseudonymize });
+                // UTF-8 BOM so Excel shows accents correctly.
+                saveToDisk(new TextEncoder().encode(`\uFEFF${csv}`), `securelink-evidencias-${new Date().toISOString().slice(0, 10)}.csv`);
+              }} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
+
+          {activeView === 'trash' && (
+            <TrashView
+              items={session.trash}
+              premium={premium}
+              onRestore={session.restoreItem}
+              onPurge={async (item) => {
+                const alsoFiles =
+                  item.data.attachments.length > 0 &&
+                  window.confirm(`Excluir também os ${item.data.attachments.length} anexo(s) de "${item.data.title}"? (Cancelar mantém os arquivos em Arquivos.)`);
+                await session.purgeItem(item);
+                if (alsoFiles) for (const a of item.data.attachments) await deleteFileById(a.fileId).catch(() => undefined);
+              }}
+            />
+          )}
+
+          {activeView === 'org' && userId && <OrgView userId={userId} premium={premium} />}
+
+          {activeView === 'access' && userId && (
+            <JitView
+              userId={userId}
+              items={items}
+              premium={premium}
+              getKeyPair={session.getKeyPair}
+              sealItemKeyFor={session.sealItemKeyFor}
+              onOpenVault={async () => {
+                await session.reload();
+                setActiveView('vault');
+              }}
+            />
+          )}
 
           {activeView === 'generator' && <Generator />}
 
@@ -676,6 +777,7 @@ function VaultApp() {
 
           {activeView === 'settings' && (
             <Settings
+              userId={userId}
               email={user?.email ?? ''}
               idleMinutes={IDLE_LOCK_MS / 60000}
               onChangePassword={session.changePassword}
@@ -683,10 +785,18 @@ function VaultApp() {
               recoveryEnabled={session.hasRecovery}
               onEnableRecovery={session.enableRecovery}
               onDisableRecovery={session.disableRecovery}
+              onTestRecovery={session.testRecoveryKey}
+              mfaEnabled={mfaEnabled}
+              premium={premium}
+              pinAvailable={session.pinAvailable}
+              onEnablePin={session.enablePin}
+              onDisablePin={session.disablePin}
+              onEmergency={session.emergencyMode}
+              onChangeAccountPassword={session.setAccountPassword}
             />
           )}
           {activeView === 'settings' && (
-            <BackupCard items={items} folders={session.folders} onAddItem={session.addItem} onCreateFolder={session.createFolder} />
+            <BackupCard userId={userId} items={items} folders={session.folders} onAddItem={session.addItem} onCreateFolder={session.createFolder} />
           )}
           {activeView === 'settings' && (
             <DiagnosticsCard

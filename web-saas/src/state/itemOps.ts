@@ -40,6 +40,8 @@ export type VaultItem = {
   data: SecuredItemData;
   createdAt: string;
   updatedAt: string;
+  /** When the owner moved it to the trash (null = not in the trash). */
+  deletedAt?: string | null;
   access: ItemAccess;
   /** For items shared with me. */
   ownerEmail?: string;
@@ -93,6 +95,7 @@ export async function loadItems(
         data,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        deletedAt: row.deleted_at ?? null,
         access,
         ownerEmail: received?.owner_email ?? undefined,
         shareId: received?.id,

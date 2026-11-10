@@ -3,8 +3,11 @@ import { friendlyError } from '../lib/messages';
 import { OAUTH_PROVIDERS, type OAuthProvider, fetchEnabledProviders, signInWithOAuth } from '../services/authService';
 import { ProviderIcon } from './ui/ProviderIcon';
 
-/** Social sign-in buttons, shown only for providers enabled in Supabase (as in Secora). */
-export function OAuthButtons() {
+/**
+ * Social sign-in buttons, shown only for providers enabled in Supabase. A provider account with the
+ * same verified e-mail as an existing account signs into that account (Supabase automatic linking).
+ */
+export function OAuthButtons({ dividerLabel = 'ou com e-mail', placement = 'before' }: { dividerLabel?: string; placement?: 'before' | 'after' }) {
   const [enabled, setEnabled] = useState<OAuthProvider[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<OAuthProvider | null>(null);
@@ -14,8 +17,14 @@ export function OAuthButtons() {
   }, []);
 
   if (enabled.length === 0) return null;
+  const divider = (
+    <div className="divider">
+      <span>{dividerLabel}</span>
+    </div>
+  );
   return (
     <div className="stack-sm">
+      {placement === 'after' && divider}
       {OAUTH_PROVIDERS.filter((p) => enabled.includes(p.key)).map((p) => (
         <button
           key={p.key}
@@ -37,9 +46,7 @@ export function OAuthButtons() {
         </button>
       ))}
       {error && <div className="alert alert--error">{error}</div>}
-      <div className="divider">
-        <span>ou com e-mail</span>
-      </div>
+      {placement === 'before' && divider}
     </div>
   );
 }
