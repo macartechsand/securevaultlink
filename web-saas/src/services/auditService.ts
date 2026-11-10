@@ -12,7 +12,8 @@ export type ClientAuditEvent =
   | 'session.others_signed_out'
   | 'client.error'
   | 'item.filled'
-  | 'security.emergency_mode';
+  | 'security.emergency_mode'
+  | 'item.rotated_on_device';
 
 /**
  * Records a client-side event in the audit log. Best effort: never throws and never blocks the

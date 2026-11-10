@@ -1,3 +1,4 @@
+import { isDesktopApp, onDeviceTransport } from '../lib/clientRotation';
 import { useState } from 'react';
 import { connectorById } from '../lib/connectors';
 import {
@@ -83,12 +84,23 @@ export function AutoRotationFields({ itemType, value, onChange, adminKeyItems, r
 
       {!value && pending && (
         <div className="alert alert--warn stack-sm">
-          <span>
-            Para rotacionar, o app envia a credencial atual{pending === 'aws-iam-console' ? ' (aqui, a access key administrativa vinculada)' : ''}, por
-            conexão cifrada, a uma função do servidor do SecureVault. Ela chama a API da plataforma, verifica a nova credencial e a
-            devolve só para o seu navegador, que a cifra no cofre. <strong>Nada é armazenado nem registrado no servidor</strong>, mas,
-            durante a troca, ele vê a credencial. Os outros itens continuam com criptografia de ponta a ponta total.
-          </span>
+          {onDeviceTransport(pending) ? (
+            <span>
+              Neste {isDesktopApp() ? 'app desktop' : 'navegador'}, a rotação acontece <strong>no próprio aparelho</strong>: ele chama a API da
+              plataforma diretamente, verifica a nova credencial e a cifra no cofre. <strong>A credencial não passa pelos servidores do
+              SecureVault</strong> (criptografia de ponta a ponta mantida). Em outro aparelho sem esse suporte, a troca usa a função do
+              servidor, que vê a credencial durante a troca e não a armazena.
+              {pending === 'gitlab-pat' && !isDesktopApp() && ' No navegador isso vale para gitlab.com; um GitLab próprio usa a função do servidor.'}
+            </span>
+          ) : (
+            <span>
+              Para rotacionar, o app envia a credencial atual{pending === 'aws-iam-console' ? ' (aqui, a access key administrativa vinculada)' : ''}, por
+              conexão cifrada, a uma função do servidor do SecureVault. Ela chama a API da plataforma, verifica a nova credencial e a
+              devolve só para o seu navegador, que a cifra no cofre. <strong>Nada é armazenado nem registrado no servidor</strong>, mas,
+              durante a troca, ele vê a credencial. Os outros itens continuam com criptografia de ponta a ponta total.
+              {pending === 'cloudflare-api-token' && ' No app desktop, esta troca acontece no próprio aparelho.'}
+            </span>
+          )}
           <span className="subtle">Requer: {connectorById(pending)?.requires.join('; ')}</span>
           <label className="check">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />

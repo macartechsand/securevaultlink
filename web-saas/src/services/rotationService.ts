@@ -1,5 +1,7 @@
+import { rotateOnDevice } from '../lib/clientRotation';
 import type { AutoRotation } from '../lib/items';
 import { supabase } from '../lib/supabase';
+import { logClientEvent } from './auditService';
 
 export type RotationResult = {
   /** New secret value (never logged; the caller encrypts it into the vault right away). */
@@ -32,8 +34,17 @@ async function invokeRotate<T>(body: Record<string, unknown>): Promise<T> {
   throw new Error(message);
 }
 
-/** Rotates on the platform through the `rotate` Edge Function (per-item consent required). */
-export function rotateCredential(auto: AutoRotation, credential: Credential, admin?: Credential, itemId?: string) {
+/**
+ * Rotates on the platform. On this device when the connector supports it here (GitLab in the browser,
+ * Cloudflare in the desktop app): the credential never reaches SecureVault's servers. Otherwise through
+ * the `rotate` Edge Function (per-item consent required).
+ */
+export async function rotateCredential(auto: AutoRotation, credential: Credential, admin?: Credential, itemId?: string): Promise<RotationResult & { onDevice?: boolean }> {
+  const local = await rotateOnDevice(auto.connectorId, credential.secret, (auto.config ?? {}) as Record<string, string>);
+  if (local) {
+    logClientEvent('item.rotated_on_device', itemId ? { type: 'vault_entry', id: itemId } : undefined, { connector: auto.connectorId, verified: local.verified });
+    return { ...local, onDevice: true };
+  }
   // itemId is an opaque id recorded in the audit trail (evidence report); never a secret.
   return invokeRotate<RotationResult>({ action: 'rotate', connector: auto.connectorId, credential, admin, config: auto.config, itemId });
 }
