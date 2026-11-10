@@ -101,6 +101,14 @@ export function IamUsersTab({ canAct }: { canAct: boolean }) {
                       <div className="badges">
                         {suspended && <span className="badge badge--danger">Suspenso</span>}
                         {!u.confirmed && <span className="badge badge--warn">E-mail não confirmado</span>}
+                        {u.has_password === false && (
+                          <span
+                            className="badge badge--warn"
+                            title="Não entra com e-mail e senha (por exemplo, no app Android). Gere um link de redefinição ou peça para entrar com Google/GitHub do mesmo e-mail."
+                          >
+                            {u.providers.some((p) => p !== 'email') ? 'Só entra por Google/GitHub' : 'Sem senha da conta'}
+                          </span>
+                        )}
                         <span className={`badge ${u.mfa_factors ? 'badge--ok' : u.mfa_required ? 'badge--danger' : 'badge--warn'}`}>
                           {u.mfa_factors ? 'MFA' : u.mfa_required ? 'MFA exigido, pendente' : 'Sem MFA'}
                         </span>

@@ -1681,3 +1681,62 @@ input[type='range'] {
 .jit-form textarea {
   width: 100%;
 }
+
+/* Sign-in (Bitwarden-style: e-mail first, then the ways to sign in) */
+.account-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.account-chip__email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--primary, #3b82f6);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.input-with-action {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.input-with-action input {
+  flex: 1;
+  min-width: 0;
+}
+.tight-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.tight-list li + li {
+  margin-top: 4px;
+}
+.auth-footer {
+  text-align: center;
+}
+.identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.identity-row:first-of-type {
+  border-top: 0;
+}

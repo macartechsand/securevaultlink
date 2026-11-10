@@ -3,6 +3,7 @@ import { friendlyError } from '../lib/messages';
 import { ContingencyCard } from './ContingencyCard';
 import { EmergencyCard } from './EmergencyCard';
 import { PinSettings } from './PinSettings';
+import { LoginMethodsCard } from './LoginMethodsCard';
 import { MfaSettings } from './MfaSettings';
 import { RecoverySettings } from './RecoverySettings';
 import { PrivacyCard } from './PrivacyCard';
@@ -74,6 +75,7 @@ export function Settings({
     <div className="grid grid--2">
       <ContingencyCard userId={userId} recoveryEnabled={recoveryEnabled} mfaEnabled={mfaEnabled} onTestRecovery={onTestRecovery} />
       <EmergencyCard premium={premium} onEmergency={onEmergency} onChangeAccountPassword={onChangeAccountPassword} />
+      <LoginMethodsCard onSetAccountPassword={onChangeAccountPassword} />
       <MfaSettings />
       <PinSettings userId={userId} available={pinAvailable} onEnable={onEnablePin} onDisable={onDisablePin} />
       <RecoverySettings enabled={recoveryEnabled} onEnable={onEnableRecovery} onDisable={onDisableRecovery} />

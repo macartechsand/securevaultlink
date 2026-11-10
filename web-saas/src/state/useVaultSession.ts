@@ -115,6 +115,10 @@ export function useVaultSession() {
       if (userRef.current?.id === nextUser.id && dekRef.current) return;
       userRef.current = nextUser;
       setUser(nextUser);
+      // Set when an invite/reset link was redeemed and cleared when the account password is saved,
+      // so a reload or a closed tab never leaves an account without a password (it could not sign in
+      // with e-mail and password on another device, e.g. the Android app).
+      if (auth.mustSetAccountPassword(nextUser)) setNeedsAccountPassword(true);
       clearSecrets();
       setLoadError('');
       setStatus('loading');
@@ -163,7 +167,10 @@ export function useVaultSession() {
       if (PENDING_OTP) {
         const { error } = await auth.redeemOtp(PENDING_OTP.tokenHash, PENDING_OTP.type);
         if (error) setLinkError('Este link de acesso é inválido ou expirou. Peça um novo ao administrador.');
-        else setNeedsAccountPassword(true);
+        else {
+          setNeedsAccountPassword(true);
+          await auth.markAccountPasswordPending().catch(() => undefined);
+        }
       }
       return auth.getSession();
     };
@@ -173,7 +180,10 @@ export function useVaultSession() {
       else setStatus('signed-out');
     });
     const { data: listener } = auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') setNeedsAccountPassword(true);
+      if (event === 'PASSWORD_RECOVERY') {
+        setNeedsAccountPassword(true);
+        window.setTimeout(() => void auth.markAccountPasswordPending().catch(() => undefined), 0);
+      }
       // supabase-js warns against awaiting other Supabase calls inside this callback (it can
       // deadlock the auth lock), so defer the work to the next tick.
       window.setTimeout(() => {
@@ -248,6 +258,10 @@ export function useVaultSession() {
   const signUp = useCallback(async (email: string, password: string) => {
     const { data, error } = await auth.signUp(email, password);
     if (error) throw new Error(error.message);
+    // Supabase answers a sign-up for an address that already has an account (e.g. created by an
+    // invite link) with a user that has no identities, and stores nothing: say so instead of
+    // asking for an e-mail confirmation that never comes.
+    if (data.user && !data.session && (data.user.identities ?? []).length === 0) throw new Error('ACCOUNT_EXISTS');
     return { needsConfirmation: !data.session };
   }, []);
 

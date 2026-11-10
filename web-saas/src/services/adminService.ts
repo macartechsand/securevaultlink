@@ -49,6 +49,8 @@ export type AdminUser = {
   providers: string[];
   mfa_required: boolean;
   posture_score: number | null;
+  /** False when the account has no account password (invite opened, password never saved). Absent before migration 20261111. */
+  has_password?: boolean;
   /** Set only for a time-limited Premium. */
   plan_expires_at?: string | null;
 };

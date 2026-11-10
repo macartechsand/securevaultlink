@@ -7,6 +7,11 @@ const EXACT: Record<string, string> = {
   'New password should be different from the old password.': 'A nova senha precisa ser diferente da anterior.',
   'Email rate limit exceeded': 'Limite de envio de e-mails atingido. Tente mais tarde ou peça um link ao administrador.',
   'email rate limit exceeded': 'Limite de envio de e-mails atingido. Tente mais tarde ou peça um link ao administrador.',
+  ACCOUNT_EXISTS:
+    'Este e-mail já tem conta (por exemplo, criada por um convite). Abra o link de convite, use "Esqueci a senha" ou entre com Google/GitHub usando o mesmo e-mail.',
+  'Identity is already linked to another user': 'Esta conta do provedor já está ligada a outro usuário do SecureVault.',
+  'Manual linking is disabled': 'O vínculo de contas ainda não foi habilitado pelo administrador (Supabase: Allow manual linking).',
+  'User must have at least 2 identities to unlink': 'Mantenha pelo menos uma forma de entrar na conta.',
   'Email not confirmed': 'Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).',
   'User already registered': 'Já existe uma conta com este e-mail.',
   'Error sending confirmation email':
