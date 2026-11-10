@@ -7,10 +7,10 @@ As ideias da [revisão comparada](/architecture/security-architecture-review) (s
 | 9.5 | Secured Items brasileiros com alerta de vencimento | Todos os planos (vencimento é segurança) | Solução A | ✅ Fase 1 no desenvolvimento (2026-11-10) |
 | 9.4 | Relatório de evidências de troca | Premium | Solução A | ✅ Fase 1 no desenvolvimento (2026-11-10) |
 | 9.3 | Auditoria verificável publicamente (OpenTimestamps) | Plataforma | Solução A + Segurança | ✅ No script de backup (2026-11-10) |
-| 9.1 | Acesso just-in-time com aprovação, sem o servidor ver o segredo | Premium (para liberar); pedir funciona em qualquer plano | Solução A (servidor) + B (telas) + Segurança | ✅ Fase 1 no desenvolvimento (2026-11-10); falta a migration no dev |
-| 9.2 | Rotação no cliente (sem passar pelo servidor) | Premium | Solução B | Planejado (depende do app de desktop em Tauri ou do service worker da extensão) |
-| 9.6 | Credenciais para agentes de IA (conector MCP com aprovação) | Business | Solução B + Segurança | Planejado (depende de 9.1) |
-| 9.7 | Analytics de risco sem ver conteúdo (empresas e MSPs) | Business | Solução A | Planejado (depende de organizações) |
+| 9.1 | Acesso just-in-time com aprovação, sem o servidor ver o segredo | Premium (para liberar); pedir funciona em qualquer plano | Solução A (servidor) + B (telas) + Segurança | ✅ Fase 1 (2026-11-10) e fase 2 (2026-11-12): controle duplo k de N e troca após o uso. Migrations 20261110 e 20261112 |
+| 9.2 | Rotação no cliente (sem passar pelo servidor) | Premium | Solução B | ✅ Fase 1 (2026-11-14): GitLab (gitlab.com) no navegador e Cloudflare no app desktop; o app desktop em Tauri 2 é só esqueleto, compilado e testado no CI. AWS, Google e Microsoft continuam pelo servidor. Migration 20261114 |
+| 9.6 | Credenciais para agentes de IA (conector MCP com aprovação) | Business | Solução B + Segurança | ✅ Fase 1 (2026-11-12): `agent-broker/`, servidor MCP local; ver [agent-broker](agent-broker.md) |
+| 9.7 | Analytics de risco sem ver conteúdo (empresas e MSPs) | Premium (criar); aceitar em qualquer plano | Solução A | ✅ Fase 1 (2026-11-13): organizações, convites por e-mail, painel de risco só com números, CSV. Migration 20261113 |
 | 9.8 | Contingência como recurso | Todos | — | ✅ Feito (falta o contato de emergência, fase 2) |
 
 ---

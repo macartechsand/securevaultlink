@@ -1,6 +1,6 @@
 # Validação do desenvolvimento antes da versão 1 beta
 
-Versão de **2026-11-06** · Ambiente: https://securelinkvaultdev.netlify.app (Supabase `sueemdqyhwnmbqokpefz`) · Código: `dev`
+Versão de **2026-11-14** · Ambiente: https://securelinkvaultdev.netlify.app (Supabase `sueemdqyhwnmbqokpefz`) · Código: `dev`
 
 Roteiro para o dono validar o desenvolvimento. Com tudo aprovado, o código segue para a produção e para a preparação do lançamento (seção 5). Cada caso diz o que fazer e o **resultado esperado**; qualquer diferença vira um achado na seção 6.
 
@@ -76,6 +76,32 @@ Roteiro para o dono validar o desenvolvimento. Com tudo aprovado, o código segu
 | C1 | Configurações → "Se algo der errado" | Lista com o estado de cada item |
 | C2 | Testar a chave de recuperação certa e uma errada | "abre este cofre" e "não abre este cofre"; nada muda |
 | C3 | Baixar o leitor offline, exportar um backup, abrir o leitor **sem internet** | Abre o backup com a senha da exportação |
+
+### 2.9 Login, vínculo de contas e inovação fase 2 (2026-11-14)
+Antes, no SQL Editor do desenvolvimento e nesta ordem, rodar as migrations:
+1. `20261111000000_login_methods.sql`;
+2. `20261112000000_jit_dual_control.sql`;
+3. `20261113000000_organizations.sql`;
+4. `20261114000000_client_rotation_event.sql`.
+
+Em Authentication → Sign In / Providers, ligar **Allow manual linking**. Os casos L1–L8 estão em [login-experience](../product/login-experience.md).
+
+| # | Passo | Esperado |
+|---|---|---|
+| L1 | Admin gera link de convite → abrir → fechar a aba antes de salvar a senha → abrir o app de novo | A tela "Defina a senha da sua conta" volta |
+| L2 | Salvar a senha do convite → entrar no APK novo com e-mail e senha | Entra |
+| L3 | "Criar conta" com um e-mail já convidado | "Este e-mail já tem conta…" |
+| L4 | Entrar com a senha mestra no lugar da senha da conta | Erro, mais o painel "Não consegue entrar?" |
+| L5 | Configurações → Formas de entrar → Conectar Google | Volta conectado; depois "Continuar com Google" abre o **mesmo** cofre |
+| L6 | Admin → IAM: conta convidada que nunca salvou senha | Selo "Sem senha da conta" |
+| D1 | Premium: em "Quem pode pedir", adicionar um aprovador (a pessoa precisa ter o item compartilhado com ela) e exigir 2 aprovações | O pedido mostra "1 de 2" depois da primeira aprovação; só libera na segunda |
+| D2 | Aprovador recusa | O pedido fica recusado (um veto basta) |
+| D3 | Item com "exigir troca após o uso": encerrar o acesso | Aparece em "Senhas para trocar"; some ao salvar uma senha nova |
+| O1 | Premium: Empresa → criar organização → convidar o e-mail da conta Free | A conta Free vê o convite com o texto de consentimento |
+| O2 | Conta Free aceita | O painel do dono mostra a nota e as contagens dela, nunca nomes de itens |
+| O3 | Conta Free → Atividade | Aparece "painel consultado" (`org.risk_viewed`) |
+| R1 | Item GitLab (gitlab.com) com rotação de um clique → Trocar | Troca feita no navegador; a auditoria mostra `item.rotated_on_device`; a função `rotate` **não** é chamada (aba Rede) |
+| A1 | Broker de IA (ver [agent-broker](../product/agent-broker.md)): conta robô elegível, pedido, aprovação, `run_with_credential` com `node -e "console.log(process.env.SV_PASSWORD)"` | Saída `[REDACTED]`; acesso encerrado |
 
 ### 2.8 Inovação (2026-11-10)
 Antes: rodar `supabase/migrations/20261110000000_jit_access.sql` no SQL Editor do desenvolvimento.

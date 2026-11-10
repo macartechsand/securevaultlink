@@ -139,6 +139,22 @@ Cada linha diz o que tentar e o **resultado esperado**. Qualquer diferença é u
 | Remover a elegibilidade com acesso ativo | O acesso termina na hora |
 | Risco aceito | Durante o prazo, o solicitante pode copiar a senha; por isso a troca após o uso é recomendada |
 
+### 3.7c Controle duplo, organizações, login e broker de IA (desde 2026-11-12)
+| Teste | Esperado |
+|---|---|
+| Solicitante se torna aprovador do próprio item, ou aprova o próprio pedido | Recusado (`JIT_APPROVER_INVALID`, "Request not found") |
+| Aprovador aprova duas vezes para fechar o quórum sozinho | `JIT_ALREADY_APPROVED` |
+| Aprovador sem acesso permanente ao item aprova | `JIT_APPROVER_NO_ACCESS` |
+| Dono tenta liberar sozinho com 2 aprovações exigidas | Fica pendente (`null`) até a segunda pessoa |
+| Membro, terceiro ou chamada com organização `null` lê `org_risk` | "Not allowed" |
+| Admin descobre se um e-mail tem conta pelo convite | Impossível: o convite é guardado igual com ou sem conta |
+| Escrita direta em `organizations`, `org_members`, `org_invites` | Sem permissão (só por RPC) |
+| Admin vê conteúdo, nome de item ou URL de um membro | Impossível: o servidor não tem esses dados |
+| Vincular a outra conta uma identidade Google/GitHub que já pertence a alguém | Recusado pelo Supabase ("already linked") |
+| Comando `rotation_http` do app desktop com host fora da lista, `http:`, porta, `user:pw@`, IP ou cabeçalho com CRLF | Recusado (testes Rust no CI) |
+| Broker MCP: `reveal_credential` sem `SV_ALLOW_REVEAL=1`; variável `PATH`/`NODE_OPTIONS`; comando fora de `SV_ALLOWED_COMMANDS` | Recusado |
+| Risco aceito | O comando executado pelo broker recebe a senha em claro; a redação cobre só a saída capturada e o texto exato |
+
 ### 3.8 App Android (APK de produção, versão 0.9.1)
 | Teste | Esperado |
 |---|---|
