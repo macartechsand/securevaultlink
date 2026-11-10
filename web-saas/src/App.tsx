@@ -47,6 +47,7 @@ import { TrashView } from './components/TrashView';
 import { buildEvidenceCsv } from './lib/evidenceReport';
 import { fetchMyAuditEvents } from './services/auditService';
 import { JitView } from './components/JitView';
+import { OrgView } from './components/OrgView';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -71,6 +72,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   rotation: { title: 'Rotação', subtitle: 'Fila de correção, trocas programadas e conectores de rotação.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
+  org: { title: 'Empresa', subtitle: 'Painel de risco da equipe ou dos clientes, só com números de segurança, nunca com conteúdo.' },
   access: { title: 'Acesso temporário', subtitle: 'Acesso por prazo, com aprovação do dono, sem que o servidor veja a senha.' },
   trash: { title: 'Lixeira', subtitle: `Itens excluídos ficam ${TRASH_DAYS} dias antes de serem apagados para sempre.` },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
@@ -752,6 +754,8 @@ function VaultApp() {
               }}
             />
           )}
+
+          {activeView === 'org' && userId && <OrgView userId={userId} premium={premium} />}
 
           {activeView === 'access' && userId && (
             <JitView
