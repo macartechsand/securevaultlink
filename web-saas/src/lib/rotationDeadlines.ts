@@ -11,7 +11,7 @@
  *  - scheduled rotation: the date set on the item (interval since the last password change).
  */
 import type { RiskFlag } from './itemHealth'
-import { passwordAgeDays, rotationDueInDays } from './items'
+import { EXPIRY_NOTICE_DAYS, daysUntilExpiry, passwordAgeDays, rotationDueInDays } from './items'
 import type { VaultItem } from '../state/itemOps'
 
 export const DAY_MS = 86_400_000
@@ -82,7 +82,7 @@ export function updateRiskSince(
   return next
 }
 
-const URGENCY: RiskFlag[] = ['exposed', 'unsafe', 'due', 'weak', 'reused', 'stale']
+const URGENCY: RiskFlag[] = ['exposed', 'unsafe', 'expiring', 'due', 'weak', 'reused', 'stale']
 
 /** Deadlines of every item the user can change, soonest first. */
 export function computeDeadlines(items: VaultItem[], since: RiskSince, now = Date.now()): Deadline[] {
@@ -102,6 +102,9 @@ export function computeDeadlines(items: VaultItem[], since: RiskSince, now = Dat
         candidates.push({ flag: 'due', at: now + (item.data.rotationIntervalDays - age) * DAY_MS })
       }
     }
+    // Validity date (certificates, powers of attorney, tokens): the deadline is the date itself.
+    const expiry = daysUntilExpiry(item.data, now)
+    if (expiry !== null && expiry <= EXPIRY_NOTICE_DAYS) candidates.push({ flag: 'expiring', at: Date.parse(`${item.data.expiresOn}T23:59:59`) })
     if (!candidates.length) continue
     const dueAt = Math.min(...candidates.map((c) => c.at))
     const reasons = [...new Set(candidates.map((c) => c.flag))].sort((a, b) => URGENCY.indexOf(a) - URGENCY.indexOf(b))

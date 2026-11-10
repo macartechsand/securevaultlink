@@ -87,3 +87,25 @@ describe('computeDeadlines', () => {
     expect([deadlineLabel(-2), deadlineLabel(0), deadlineLabel(1)]).toEqual(['venceu há 2 dias', 'vence hoje', 'vence em 1 dia'])
   })
 })
+
+describe('validity dates (Brazilian Secured Items)', () => {
+  const secret = (id: string, expiresOn: string): VaultItem => ({
+    ...item(id),
+    data: { ...emptyItem('secret'), title: id, secretKind: 'cert_a1', expiresOn },
+  })
+
+  it('a certificate expiring within 30 days gets a deadline on its own date; later ones do not', () => {
+    const soon = new Date(NOW + 12 * DAY_MS).toISOString().slice(0, 10)
+    const later = new Date(NOW + 90 * DAY_MS).toISOString().slice(0, 10)
+    const [d, ...rest] = computeDeadlines([secret('a1', soon), secret('far', later)], {}, NOW)
+    expect(rest).toEqual([])
+    expect(d.item.id).toBe('a1')
+    expect(d.reasons).toEqual(['expiring'])
+    expect(d.daysLeft).toBe(12)
+  })
+
+  it('an expired certificate is overdue', () => {
+    const past = new Date(NOW - 3 * DAY_MS).toISOString().slice(0, 10)
+    expect(computeDeadlines([secret('old', past)], {}, NOW)[0].daysLeft).toBeLessThan(0)
+  })
+})

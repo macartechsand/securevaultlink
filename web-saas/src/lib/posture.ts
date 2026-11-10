@@ -15,6 +15,8 @@ export type PostureInput = {
   deadlinesOverdue?: number
   deadlinesSoon?: number
   unsafeSites: number
+  /** Items whose validity date (certificate, power of attorney, token) is within 30 days or past. */
+  expiring?: number
   /** Whether a breach/site check ran in this session. */
   securityCheckRan: boolean
   mfaEnabled: boolean
@@ -63,6 +65,8 @@ export function computePosture(p: PostureInput): Posture {
   // Without deadlines (older callers), overdue scheduled rotations are reported on their own.
   if (p.rotationDue && p.deadlinesOverdue === undefined)
     recommendations.push({ id: 'due', severity: 'medium', title: `${p.rotationDue} troca(s) programada(s) vencida(s)`, detail: 'Use a fila de rotação para trocar com a ajuda do app.', action: { label: 'Abrir fila', view: 'rotation' } })
+  if (p.expiring)
+    recommendations.push({ id: 'expiring', severity: 'medium', title: `${p.expiring} item(ns) com validade vencendo ou vencida`, detail: 'Certificados digitais, procurações e tokens: renove antes de parar de funcionar.', action: { label: 'Ver itens', view: 'vault', filter: 'expiring' } })
   if (p.checkable > 0 && !p.securityCheckRan)
     recommendations.push({ id: 'check', severity: 'low', title: 'Rode a verificação de segurança', detail: 'Confere vazamentos (Have I Been Pwned) e sites perigosos (Google).', action: { label: 'Verificar agora', view: 'dashboard' } })
 

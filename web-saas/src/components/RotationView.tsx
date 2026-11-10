@@ -7,7 +7,7 @@ import { type Deadline, deadlineLabel } from '../lib/rotationDeadlines';
 import type { VaultItem } from '../state/itemOps';
 import { Icon } from './ui/Icon';
 
-const PRIORITY: RiskFlag[] = ['exposed', 'unsafe', 'weak', 'reused', 'due', 'stale'];
+const PRIORITY: RiskFlag[] = ['exposed', 'unsafe', 'expiring', 'weak', 'reused', 'due', 'stale'];
 const RISK_BADGE: Record<RiskFlag, string> = {
   exposed: 'badge--danger',
   unsafe: 'badge--danger',
@@ -15,6 +15,7 @@ const RISK_BADGE: Record<RiskFlag, string> = {
   reused: 'badge--warn',
   due: 'badge--warn',
   stale: 'badge--warn',
+  expiring: 'badge--warn',
 };
 const EXECUTOR_BADGE: Record<Executor, string> = { assisted: 'badge--ok', cloud: 'badge--info', agent: '' };
 

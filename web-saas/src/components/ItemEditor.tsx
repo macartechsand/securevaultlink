@@ -6,8 +6,11 @@ import {
   ITEM_TYPES,
   type ItemType,
   LIMITS,
+  EXPIRY_NOTICE_DAYS,
   SECRET_KINDS,
+  SECRET_KIND_FIELDS,
   type SecuredItemData,
+  daysUntilExpiry,
   emptyItem,
   normalizeTags,
   validateItem,
@@ -138,6 +141,7 @@ export function ItemEditor({
   const [confirmUnsafe, setConfirmUnsafe] = useState(false);
 
   const readOnly = item?.access === 'view';
+  const expiryDays = daysUntilExpiry(data);
   const isOwner = !item || item.access === 'owner';
   const set = <K extends keyof SecuredItemData>(key: K, value: SecuredItemData[K]) => setData((d) => ({ ...d, [key]: value }));
   const urlReport = data.url.trim() ? analyzeUrl(data.url) : null;
@@ -395,14 +399,25 @@ export function ItemEditor({
                     ))}
                   </select>
                 </label>
+                {SECRET_KIND_FIELDS[data.secretKind] && <span className="field__hint">{SECRET_KIND_FIELDS[data.secretKind]!.hint}</span>}
                 <label className="field">
-                  Identificador (opcional)
+                  {SECRET_KIND_FIELDS[data.secretKind]?.identifier ?? 'Identificador (opcional)'}
                   <input value={data.username} onChange={(e) => set('username', e.target.value)} placeholder="ID da chave, conta, usuário…" readOnly={readOnly} />
                 </label>
                 <div className="field">
-                  <label htmlFor="item-secret">Valor do segredo</label>
+                  <label htmlFor="item-secret">{SECRET_KIND_FIELDS[data.secretKind]?.value ?? 'Valor do segredo'}</label>
                   <SecretInput id="item-secret" value={data.password} onChange={(v) => set('password', v)} readOnly={readOnly} multiline />
                 </div>
+                <label className="field">
+                  Validade (opcional)
+                  <input type="date" value={data.expiresOn} onChange={(e) => set('expiresOn', e.target.value)} readOnly={readOnly} />
+                  {expiryDays !== null && (
+                    <span className={`field__hint ${expiryDays <= EXPIRY_NOTICE_DAYS ? 'text-warn' : ''}`}>
+                      {expiryDays < 0 ? `Venceu há ${-expiryDays} dia(s).` : expiryDays === 0 ? 'Vence hoje.' : `Vence em ${expiryDays} dia(s).`}
+                      {' '}O cofre avisa {EXPIRY_NOTICE_DAYS} dias antes, na fila de Rotação e na Visão geral.
+                    </span>
+                  )}
+                </label>
               </>
             )}
 
