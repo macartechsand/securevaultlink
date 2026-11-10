@@ -16,7 +16,7 @@ type JitViewProps = {
   onOpenVault: () => Promise<void>;
 };
 
-type Data = { eligibility: jit.JitEligibilityRow[]; requests: jit.JitRequestRow[] };
+type Data = jit.JitData;
 
 const STATUS_BADGE = { pending: 'badge--warn', active: 'badge--ok', expired: '', denied: 'badge--danger', revoked: '', cancelled: '' } as const;
 
@@ -32,7 +32,7 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
 
   const load = useCallback(async () => {
     try {
-      const next = await jit.fetchJit();
+      const next = await jit.fetchJit(userId);
       setData(next);
       setNow(Date.now());
       if (!next) return;
@@ -59,6 +59,18 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
       setError(friendlyError(err, 'Não foi possível carregar os acessos.'));
     }
   }, [getKeyPair, userId]);
+
+  // "Rotate after use": a password changed after the access ended clears the pending rotation by itself.
+  useEffect(() => {
+    if (!data) return;
+    const changed = data.rotationDue.filter((d) => {
+      const item = items.find((i) => i.id === d.item_id);
+      const at = item?.data.passwordUpdatedAt ? Date.parse(item.data.passwordUpdatedAt) : 0;
+      return at > Date.parse(d.due_from);
+    });
+    if (changed.length === 0) return;
+    void Promise.all(changed.map((d) => jit.clearRotationDue(d.request_id).catch(() => undefined))).then(() => load());
+  }, [data, items, load]);
 
   useEffect(() => {
     void load();
@@ -94,7 +106,12 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
     );
 
   const mine = data.requests.filter((r) => r.owner_id === userId);
-  const pending = mine.filter((r) => jitStatus(r, now) === 'pending');
+  const approverOf = new Set(data.approvers.filter((a) => a.approver_id === userId).map((a) => a.eligibility_id));
+  // Pending requests I can decide: as the owner, or as a named approver (dual control).
+  const pending = data.requests.filter(
+    (r) => jitStatus(r, now) === 'pending' && r.requester_id !== userId && (r.owner_id === userId || approverOf.has(r.eligibility_id)),
+  );
+  const rotationDue = data.rotationDue.filter((d) => Date.parse(d.due_from) <= now);
   const active = mine.filter((r) => jitStatus(r, now) === 'active');
   const myEligibility = data.eligibility.filter((e) => e.owner_id === userId);
   const canAsk = data.eligibility.filter((e) => e.member_id === userId);
@@ -122,40 +139,56 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
           <p className="muted">Nenhum pedido esperando.</p>
         ) : (
           <ul className="plain-list">
-            {pending.map((r) => (
+            {pending.map((r) => {
+              const e = eligibilityById.get(r.eligibility_id);
+              const required = e?.approvals_required ?? 1;
+              const approvedByMe = data.myApprovals.has(r.id);
+              return (
               <li key={r.id} className="jit-card">
                 <div>
-                  <strong>{titleOf.get(r.item_id) ?? 'Item'}</strong> · {eligibilityById.get(r.eligibility_id)?.member_email ?? 'pessoa'} pede{' '}
+                  <strong>{titleOf.get(r.item_id) ?? 'Item'}</strong> · {e?.member_email ?? 'pessoa'} pede{' '}
                   <strong>{durationLabel(r.minutes)}</strong>
-                  <div className="subtle">Pedido em {formatDateTime(r.created_at)}</div>
-                  <blockquote className="jit-reason">{reasons.get(r.id) ?? 'Justificativa ilegível'}</blockquote>
+                  <div className="subtle">
+                    Pedido em {formatDateTime(r.created_at)}
+                    {r.owner_id !== userId && ` · item de ${e?.owner_email ?? 'outra pessoa'}`}
+                  </div>
+                  {required > 1 && (
+                    <span className="badge badge--info">
+                      {r.approvals ?? 0} de {required} aprovações
+                    </span>
+                  )}
+                  <blockquote className="jit-reason">
+                    {r.owner_id === userId ? reasons.get(r.id) ?? 'Justificativa ilegível' : 'A justificativa é cifrada para o dono do item.'}
+                  </blockquote>
                 </div>
                 <div className="row">
                   <button
                     type="button"
                     className="btn btn--primary btn--sm"
-                    disabled={Boolean(busy)}
+                    disabled={Boolean(busy) || approvedByMe}
                     onClick={() =>
-                      void run(
-                        r.id,
-                        async () => {
-                          const publicKey = await jit.requesterKey(r.id);
-                          const sealed = await sealItemKeyFor(r.item_id, publicKey, r.requester_id);
-                          await jit.approve(r.id, sealed);
-                        },
-                        `Acesso liberado por ${durationLabel(r.minutes)}.`,
-                      )
+                      void run(r.id, async () => {
+                        const publicKey = await jit.requesterKey(r.id);
+                        const sealed = await sealItemKeyFor(r.item_id, publicKey, r.requester_id);
+                        const until = await jit.approve(r.id, sealed);
+                        setInfo(
+                          until
+                            ? `Acesso liberado por ${durationLabel(r.minutes)}.`
+                            : `Aprovação registrada. Faltam ${Math.max(1, required - (r.approvals ?? 0) - 1)} aprovação(ões) de outra pessoa.`,
+                        );
+                      })
                     }
                   >
                     <Icon name="check" size={14} />
-                    Aprovar
+                    {approvedByMe ? 'Você aprovou' : 'Aprovar'}
                   </button>
                   <button type="button" className="btn btn--sm" disabled={Boolean(busy)} onClick={() => void run(r.id, () => jit.deny(r.id), 'Pedido recusado.')}>
                     Recusar
                   </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -186,13 +219,60 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
         </section>
       )}
 
+      {rotationDue.length > 0 && (
+        <section className="card">
+          <p className="eyebrow">Trocar após o uso</p>
+          <h2>
+            Senhas para trocar <span className="muted">({rotationDue.length})</span>
+          </h2>
+          <p className="subtle">
+            Estes itens exigem troca de senha depois de cada acesso temporário: a pessoa pode ter copiado a senha. Troque pela fila
+            de Rotação (um clique nos itens com conector). Ao salvar a senha nova, o aviso some sozinho.
+          </p>
+          <ul className="plain-list">
+            {rotationDue.map((d) => (
+              <li key={d.request_id} className="row-between">
+                <span>
+                  <strong>{titleOf.get(d.item_id) ?? 'Item'}</strong> · acesso encerrado em {formatDateTime(d.due_from)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  disabled={Boolean(busy)}
+                  onClick={() => {
+                    if (window.confirm('Dispensar a troca? Faça isso só se a senha já foi trocada por fora do SecureLink.'))
+                      void run(d.request_id, () => jit.clearRotationDue(d.request_id), 'Aviso dispensado.');
+                  }}
+                >
+                  Já troquei
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <EligibilityCard
         premium={premium}
         items={items.filter((i) => i.access === 'owner' && i.version === 2 && (i.data.type === 'login' || i.data.type === 'secret'))}
         rows={myEligibility}
+        approvers={data.approvers}
         titleOf={titleOf}
         busy={busy}
-        onAdd={(item, email, maxMinutes) =>
+        onAddApprover={(row, email) =>
+          run(
+            row.id,
+            async () => {
+              const person = await findRecipient(email.trim());
+              if (!person) throw new Error('Não encontrei uma conta com esse e-mail que já tenha aberto o cofre.');
+              await jit.addApprover(row.id, person.userId);
+            },
+            'Aprovador adicionado.',
+          )
+        }
+        onRemoveApprover={(row, approverId) => run(row.id, () => jit.removeApprover(row.id, approverId), 'Aprovador removido.')}
+        onSetRequired={(row, required) => run(row.id, () => jit.setApprovalsRequired(row.id, required), 'Regra de aprovação salva.')}
+        onAdd={(item, email, maxMinutes, rotateAfterUse) =>
           run(
             'add',
             async () => {
@@ -200,7 +280,14 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
               if (!recipient) throw new Error('Não encontrei uma conta com esse e-mail que já tenha aberto o cofre.');
               const pair = await getKeyPair();
               const sealed = await sealJitLabel(recipient.publicKey, item.id, recipient.userId, item.data);
-              await jit.createEligibility({ item_id: item.id, member_id: recipient.userId, owner_public_key: pair.publicKey, sealed_label: sealed, max_minutes: maxMinutes });
+              await jit.createEligibility({
+                item_id: item.id,
+                member_id: recipient.userId,
+                owner_public_key: pair.publicKey,
+                sealed_label: sealed,
+                max_minutes: maxMinutes,
+                rotate_after_use: rotateAfterUse,
+              });
             },
             'Pronto: essa pessoa já pode pedir acesso.',
           )
@@ -229,6 +316,7 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
                     {label?.host ? ` · ${label.host}` : ''}
                     <div className="subtle">
                       De {e.owner_email ?? 'dono'} · até {durationLabel(e.max_minutes)} por pedido
+                      {(e.approvals_required ?? 1) > 1 && ` · ${e.approvals_required} aprovações`}
                     </div>
                     {status && <span className={`badge ${STATUS_BADGE[status]}`}>{JIT_STATUS_LABEL[status]}</span>}
                     {status === 'active' && <span className="subtle"> até {formatDateTime(last!.expires_at!)}</span>}
@@ -250,7 +338,9 @@ export function JitView({ userId, items, premium, getKeyPair, sealItemKeyFor, on
                         run(
                           e.id,
                           async () => jit.requestAccess(e.id, minutes, await sealJitReason(e.owner_public_key, e.id, e.owner_id, reason)),
-                          'Pedido enviado. O dono precisa aprovar no aparelho dele.',
+                          (e.approvals_required ?? 1) > 1
+                            ? `Pedido enviado. Precisa de ${e.approvals_required} aprovações (dono e aprovadores).`
+                            : 'Pedido enviado. O dono precisa aprovar no aparelho dele.',
                         )
                       }
                     />
@@ -340,22 +430,32 @@ function EligibilityCard({
   premium,
   items,
   rows,
+  approvers,
   titleOf,
   busy,
   onAdd,
   onRemove,
+  onAddApprover,
+  onRemoveApprover,
+  onSetRequired,
 }: {
   premium: boolean;
   items: VaultItem[];
   rows: jit.JitEligibilityRow[];
+  approvers: jit.JitApproverRow[];
   titleOf: Map<string, string>;
   busy: string;
-  onAdd: (item: VaultItem, email: string, maxMinutes: number) => Promise<void>;
+  onAdd: (item: VaultItem, email: string, maxMinutes: number, rotateAfterUse: boolean) => Promise<void>;
   onRemove: (row: jit.JitEligibilityRow) => Promise<void>;
+  onAddApprover: (row: jit.JitEligibilityRow, email: string) => Promise<void>;
+  onRemoveApprover: (row: jit.JitEligibilityRow, approverId: string) => Promise<void>;
+  onSetRequired: (row: jit.JitEligibilityRow, required: number) => Promise<void>;
 }) {
   const [itemId, setItemId] = useState('');
   const [email, setEmail] = useState('');
   const [max, setMax] = useState(60);
+  const [rotateAfterUse, setRotateAfterUse] = useState(true);
+  const [approverEmail, setApproverEmail] = useState<Record<string, string>>({});
   const item = items.find((i) => i.id === itemId);
   return (
     <section className="card">
@@ -375,7 +475,7 @@ function EligibilityCard({
           className="form"
           onSubmit={(event) => {
             event.preventDefault();
-            if (item) void onAdd(item, email, max).then(() => setEmail(''));
+            if (item) void onAdd(item, email, max, rotateAfterUse).then(() => setEmail(''));
           }}
         >
           <div className="grid grid--2">
@@ -410,22 +510,86 @@ function EligibilityCard({
               Permitir pedidos
             </button>
           </div>
+          <label className="check">
+            <input type="checkbox" checked={rotateAfterUse} onChange={(e) => setRotateAfterUse(e.target.checked)} />
+            Exigir troca da senha depois de cada acesso (recomendado)
+          </label>
         </form>
       ) : (
         <p className="muted">Liberar acesso temporário com aprovação faz parte do Premium. Pedir acesso a itens de outras pessoas funciona em qualquer plano.</p>
       )}
       {rows.length > 0 && (
         <ul className="plain-list">
-          {rows.map((r) => (
-            <li key={r.id} className="row-between">
-              <span>
-                <strong>{titleOf.get(r.item_id) ?? 'Item'}</strong> · {r.member_email} · até {durationLabel(r.max_minutes)}
-              </span>
-              <button type="button" className="btn btn--ghost btn--sm" disabled={Boolean(busy)} onClick={() => void onRemove(r)}>
-                Remover
-              </button>
-            </li>
-          ))}
+          {rows.map((r) => {
+            const named = approvers.filter((a) => a.eligibility_id === r.id);
+            const required = r.approvals_required ?? 1;
+            const phase2 = r.approvals_required !== undefined;
+            return (
+              <li key={r.id} className="jit-card">
+                <div className="row-between">
+                  <span>
+                    <strong>{titleOf.get(r.item_id) ?? 'Item'}</strong> · {r.member_email} · até {durationLabel(r.max_minutes)}{' '}
+                    {r.rotate_after_use && <span className="badge">troca após uso</span>}
+                  </span>
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={Boolean(busy)} onClick={() => void onRemove(r)}>
+                    Remover
+                  </button>
+                </div>
+                {phase2 && premium && (
+                  <div className="stack-sm">
+                    <span className="subtle">
+                      Controle duplo: você{named.length ? ` e ${named.map((a) => a.approver_email ?? 'aprovador').join(', ')}` : ''} podem aprovar.
+                      Aprovadores precisam ter o item compartilhado com eles.
+                    </span>
+                    <label className="field">
+                      Aprovações necessárias
+                      <select value={required} disabled={Boolean(busy)} onChange={(e) => void onSetRequired(r, Number(e.target.value))}>
+                        {Array.from({ length: Math.min(5, Math.max(required, 1 + named.length)) }, (_, i) => i + 1).map((n) => (
+                          <option key={n} value={n}>
+                            {n === 1 ? '1 (qualquer um)' : `${n} pessoas diferentes`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {named.map((a) => (
+                      <div key={a.approver_id} className="row-between">
+                        <span className="subtle">Aprovador: {a.approver_email}</span>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={Boolean(busy) || required > named.length}
+                          title={required > named.length ? 'Reduza as aprovações necessárias antes de remover' : undefined}
+                          onClick={() => void onRemoveApprover(r, a.approver_id)}
+                        >
+                          Remover aprovador
+                        </button>
+                      </div>
+                    ))}
+                    {named.length < 4 && (
+                      <form
+                        className="row"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const value = approverEmail[r.id] ?? '';
+                          if (value) void onAddApprover(r, value).then(() => setApproverEmail((m) => ({ ...m, [r.id]: '' })));
+                        }}
+                      >
+                        <input
+                          type="email"
+                          placeholder="E-mail de outro aprovador"
+                          value={approverEmail[r.id] ?? ''}
+                          onChange={(e) => setApproverEmail((m) => ({ ...m, [r.id]: e.target.value }))}
+                        />
+                        <button type="submit" className="btn btn--sm" disabled={Boolean(busy) || !approverEmail[r.id]}>
+                          Adicionar aprovador
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
