@@ -77,6 +77,23 @@ Roteiro para o dono validar o desenvolvimento. Com tudo aprovado, o código segu
 | C2 | Testar a chave de recuperação certa e uma errada | "abre este cofre" e "não abre este cofre"; nada muda |
 | C3 | Baixar o leitor offline, exportar um backup, abrir o leitor **sem internet** | Abre o backup com a senha da exportação |
 
+### 2.8 Inovação (2026-11-10)
+Antes: rodar `supabase/migrations/20261110000000_jit_access.sql` no SQL Editor do desenvolvimento.
+
+| # | Passo | Esperado |
+|---|---|---|
+| J1 | Premium: Acesso temporário → "Quem pode pedir acesso": escolher um login, o e-mail da conta Free, máximo 1 h | "Essa pessoa já pode pedir acesso" |
+| J2 | Conta Free: Acesso temporário | Vê o título, o usuário e o site do item, **sem a senha** |
+| J3 | Conta Free: pedir 30 min com justificativa | "Aguardando aprovação"; o item **não** aparece no cofre |
+| J4 | Premium: "Pedidos pendentes" | Mostra quem pediu, por quanto tempo e a justificativa; Aprovar |
+| J5 | Conta Free: "Abrir no cofre" | O item aparece em compartilhados comigo, **só leitura**, com prazo |
+| J6 | Premium: "Encerrar agora" (ou esperar o prazo) | O item some da conta Free; a auditoria registra pedido, aprovação e fim |
+| J7 | Premium: remover a pessoa de "Quem pode pedir" com um acesso ativo | O acesso termina na hora |
+| B1 | Segredo → tipo "Certificado digital A1", validade daqui a 10 dias | Aparece em Rotação com o prazo e na Visão geral ("validade vencendo") |
+| B2 | Tipos Chave Pix, gov.br, credencial fiscal, procuração | Rótulos e dicas próprios de cada tipo |
+| V1 | Premium: Rotação → "Relatório de evidências (CSV)" com "Trocar títulos por códigos" | Arquivo abre no Excel; sem senhas, URLs ou notas; títulos como ITEM-001 |
+| T1 | Backup (`scripts/backup/backup.mjs`) | Grava `audit-anchor-<n>.json` e `.ots`; mensagem "timestamped by N public calendar(s)" |
+
 ## 3. Regressão (o que já existia)
 - Entrar (e-mail, Google, GitHub), MFA, desbloquear, criar, editar e compartilhar itens, arquivos, transferências, exportar e importar.
 - Postura, vazamentos, prazos de troca e notificação.

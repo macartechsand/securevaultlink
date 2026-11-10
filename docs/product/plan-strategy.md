@@ -72,6 +72,9 @@ O diferencial vem da experiência do fundador em IAM e PAM (CyberArk, Entra ID, 
 | **Lixeira de 14 dias** | C | — (excluir é definitivo) | ✅ | ✅ | Banco | Decisão de 2026-11-06 |
 | **OTP de sistemas externos** (códigos no item e na extensão) | C | — (os já salvos continuam) | ✅ | ✅ | Nenhum | Decisão de 2026-11-06 |
 | **Contato de emergência** (até 5, espera de 7 dias) | S | — | ✅ (fase 2) | ✅ | Banco e e-mail | Decisão de 2026-11-06 |
+| **Acesso temporário com aprovação (JIT)**: liberar | A | — (pedir é livre) | ✅ | ✅ | Banco | 2026-11-10 |
+| Relatório de evidências de troca (CSV) | C | — | ✅ | ✅ | Nenhum | 2026-11-10 |
+| Secured Items brasileiros com validade e alerta | S | ✅ | ✅ | ✅ | Nenhum | 2026-11-10 |
 | Login por passkey; biometria no celular | S | ✅ (a fazer) | ✅ | ✅ | Nenhum | Esperado pelo mercado |
 | Chave de recuperação, exportação cifrada, importação CSV | S | ✅ | ✅ | ✅ | Nenhum | Sem aprisionamento |
 | Atividade (auditoria pessoal) | S | ✅ 365 dias | ✅ 365 dias | Política e exportação | Banco (eventos pequenos) | Trilha de segurança igual para todos |

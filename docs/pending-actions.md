@@ -12,7 +12,7 @@ Contexto do que foi implementado: [`mvp-progress.md`](mvp-progress.md). Modelo d
 
 Roteiro completo: [`operations/dev-validation.md`](operations/dev-validation.md).
 
-1. [ ] **SQL Editor (desenvolvimento):** rodar `supabase/migrations/20261106000000_trash_usage_pin.sql`.
+1. [ ] **SQL Editor (desenvolvimento):** rodar `supabase/migrations/20261106000000_trash_usage_pin.sql` e depois `20261110000000_jit_access.sql` (acesso temporário).
 2. [ ] Recriar `web-saas/.env.test.local` e avisar o Claude (integração e testes de ponta a ponta).
 3. [ ] Contas de teste Free e Premium; seguir as seções 2 e 3 do roteiro e registrar os achados.
 

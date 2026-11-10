@@ -21,6 +21,7 @@ export const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     label: 'Proteção',
     items: [
       { key: 'rotation', label: 'Rotação', icon: 'refresh' },
+      { key: 'access', label: 'Acesso temporário', icon: 'zap' },
       { key: 'generator', label: 'Gerador', icon: 'wand' },
       { key: 'activity', label: 'Atividade', icon: 'activity' },
     ],

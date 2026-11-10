@@ -4,10 +4,10 @@ As ideias da [revisão comparada](/architecture/security-architecture-review) (s
 
 | # | Ideia | Plano | Responsável | Estado |
 |---|---|---|---|---|
-| 9.5 | Secured Items brasileiros com alerta de vencimento | Free e Premium (o alerta de vencimento no Premium) | Solução A | Fase 1 em implementação |
-| 9.4 | Relatório de evidências de troca | Premium | Solução A | Fase 1 em implementação |
-| 9.3 | Auditoria verificável publicamente (OpenTimestamps) | Plataforma | Solução A + Segurança | Fase 1 em implementação |
-| 9.1 | Acesso just-in-time com aprovação, sem o servidor ver o segredo | Premium | Solução A (servidor) + B (telas) + Segurança | Fase 1 em implementação |
+| 9.5 | Secured Items brasileiros com alerta de vencimento | Todos os planos (vencimento é segurança) | Solução A | ✅ Fase 1 no desenvolvimento (2026-11-10) |
+| 9.4 | Relatório de evidências de troca | Premium | Solução A | ✅ Fase 1 no desenvolvimento (2026-11-10) |
+| 9.3 | Auditoria verificável publicamente (OpenTimestamps) | Plataforma | Solução A + Segurança | ✅ No script de backup (2026-11-10) |
+| 9.1 | Acesso just-in-time com aprovação, sem o servidor ver o segredo | Premium (para liberar); pedir funciona em qualquer plano | Solução A (servidor) + B (telas) + Segurança | ✅ Fase 1 no desenvolvimento (2026-11-10); falta a migration no dev |
 | 9.2 | Rotação no cliente (sem passar pelo servidor) | Premium | Solução B | Planejado (depende do app de desktop em Tauri ou do service worker da extensão) |
 | 9.6 | Credenciais para agentes de IA (conector MCP com aprovação) | Business | Solução B + Segurança | Planejado (depende de 9.1) |
 | 9.7 | Analytics de risco sem ver conteúdo (empresas e MSPs) | Business | Solução A | Planejado (depende de organizações) |

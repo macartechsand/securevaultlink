@@ -126,6 +126,19 @@ Cada linha diz o que tentar e o **resultado esperado**. Qualquer diferença é u
 | `chrome.storage.local` e `session` depois de usar | Nenhuma senha em claro em `local` |
 | Popup embutido num site | Recusado (`frame-ancestors`) |
 
+### 3.7b Acesso temporário com aprovação (JIT, desde 2026-11-10)
+| Teste | Esperado |
+|---|---|
+| Solicitante lê `item_shares`, `vault_entries` ou a chave selada antes da aprovação | Nada |
+| Solicitante chama `jit_approve`, `jit_requester_key` ou insere em `item_shares` com `jit_request_id` | Recusado ("only by jit_approve") |
+| Dono tenta criar um compartilhamento JIT fora de `jit_approve` | Recusado |
+| Solicitante altera `expires_at` do próprio compartilhamento | Sem permissão |
+| Pedido com mais minutos que o máximo, sem justificativa, repetido enquanto pendente, mais de 20 por dia | Recusado |
+| Terceiro lê elegibilidades, pedidos ou o rótulo selado de outra pessoa | Nada; o rótulo só abre com a chave do destinatário |
+| Depois do prazo ou de "Encerrar agora", ler o item | Nada; a limpeza remove a linha |
+| Remover a elegibilidade com acesso ativo | O acesso termina na hora |
+| Risco aceito | Durante o prazo, o solicitante pode copiar a senha; por isso a troca após o uso é recomendada |
+
 ### 3.8 App Android (APK de produção, versão 0.9.1)
 | Teste | Esperado |
 |---|---|

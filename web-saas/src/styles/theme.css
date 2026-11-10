@@ -1656,3 +1656,28 @@ input[type='range'] {
 .text-warn {
   color: var(--warn);
 }
+
+/* Just-in-time access */
+.jit-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.jit-reason {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--primary);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+}
+.jit-form {
+  min-width: min(100%, 360px);
+}
+.jit-form textarea {
+  width: 100%;
+}

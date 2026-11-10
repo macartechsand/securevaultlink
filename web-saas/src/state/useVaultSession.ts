@@ -9,6 +9,7 @@ import {
   hasRecoveryKey,
   resetPasswordWithRecoveryKey,
   unlockWithPassword,
+  sealItemKeyForRecipient,
   unlockWithRecoveryKey,
 } from '../lib/crypto';
 import { passwordStrength } from '../lib/health/passwordHealth';
@@ -546,6 +547,17 @@ export function useVaultSession() {
     if (rec) setUsage((map) => new Map(map).set(item.id, rec));
   }, []);
 
+  /**
+   * JIT approval: seals the key of an own item to the requester, on this device. The server never
+   * sees the item key; it only stores the sealed copy with the deadline it computes itself.
+   */
+  const sealItemKeyFor = useCallback(async (itemId: string, recipientPublicKey: string, recipientId: string) => {
+    requireKey();
+    const key = itemKeysRef.current.get(itemId);
+    if (!key) throw new Error('Abra e salve este item uma vez antes de liberar acesso (itens antigos ainda não têm chave própria).');
+    return sealItemKeyForRecipient(recipientPublicKey, key, itemId, recipientId);
+  }, []);
+
   /** Recipient removes an item shared with them from their own list. */
   const leaveSharedItem = useCallback(async (item: ops.VaultItem) => {
     if (!item.shareId) return;
@@ -653,6 +665,7 @@ export function useVaultSession() {
     enablePin,
     disablePin,
     emergencyMode,
+    sealItemKeyFor,
     leaveSharedItem,
     getHistory,
     shareItem,

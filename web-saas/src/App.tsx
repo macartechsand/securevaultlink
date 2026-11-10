@@ -46,6 +46,7 @@ import { PREMIUM_FEATURES, type PremiumFeature, TRASH_DAYS } from './lib/plan';
 import { TrashView } from './components/TrashView';
 import { buildEvidenceCsv } from './lib/evidenceReport';
 import { fetchMyAuditEvents } from './services/auditService';
+import { JitView } from './components/JitView';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -70,6 +71,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   rotation: { title: 'Rotação', subtitle: 'Fila de correção, trocas programadas e conectores de rotação.' },
   generator: { title: 'Gerador', subtitle: 'Senhas fortes geradas no navegador.' },
   activity: { title: 'Atividade', subtitle: 'Log de auditoria da sua conta.' },
+  access: { title: 'Acesso temporário', subtitle: 'Acesso por prazo, com aprovação do dono, sem que o servidor veja a senha.' },
   trash: { title: 'Lixeira', subtitle: `Itens excluídos ficam ${TRASH_DAYS} dias antes de serem apagados para sempre.` },
   settings: { title: 'Configurações', subtitle: 'Segurança da conta, recuperação, sessões e diagnóstico.' },
   admin: { title: 'Administração', subtitle: 'Operação da plataforma: usuários, sinais e saúde do sistema.' },
@@ -747,6 +749,20 @@ function VaultApp() {
                   window.confirm(`Excluir também os ${item.data.attachments.length} anexo(s) de "${item.data.title}"? (Cancelar mantém os arquivos em Arquivos.)`);
                 await session.purgeItem(item);
                 if (alsoFiles) for (const a of item.data.attachments) await deleteFileById(a.fileId).catch(() => undefined);
+              }}
+            />
+          )}
+
+          {activeView === 'access' && userId && (
+            <JitView
+              userId={userId}
+              items={items}
+              premium={premium}
+              getKeyPair={session.getKeyPair}
+              sealItemKeyFor={session.sealItemKeyFor}
+              onOpenVault={async () => {
+                await session.reload();
+                setActiveView('vault');
               }}
             />
           )}
