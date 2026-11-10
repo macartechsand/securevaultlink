@@ -79,7 +79,7 @@ Fonte: *Manage secured items* (Idira Docs, PDF).
 | Anexo **cifrado após o upload** no servidor; 10 MB por arquivo, 10 por item, 1 GB por usuário; lista de extensões | Anexo **cifrado antes do upload, no navegador**; cotas por plano | **Atende** (mais restritivo: o servidor nunca vê o arquivo) |
 | Copiar usuário/senha/nota | Copiar com **limpeza automática da área de transferência** | **Atende** (com proteção extra) |
 | **Histórico de senhas** habilitado por política, **pode pedir MFA antes de mostrar** | Histórico de 10 versões, só do dono, cifrado com a chave pessoal; não pede reautenticação | **Parcial**: falta o desafio (senha mestra ou TOTP) antes de revelar histórico e itens sensíveis |
-| Só o dono exclui; **lixeira** com restauração em lote (early access) | Só o dono exclui; exclusão imediata, sem lixeira | **Gap baixo** (a exportação cifrada e o backup cobrem a recuperação) |
+| Só o dono exclui; **lixeira** com restauração em lote (early access) | Só o dono exclui; **lixeira de 14 dias no Premium** (2026-11-06, no desenvolvimento); no Free a exclusão é imediata | **Atende** no Premium (falta restauração em lote) |
 | Alertas: senha comprometida, acesso restrito pelo admin | Alerta de senha vazada (HIBP), fraca e reutilizada | **Atende** |
 | Recomendação de **não guardar dados pessoais (PII)** | No Idira o fornecedor consegue processar o conteúdo; aqui o conteúdo é cifrado de ponta a ponta, então guardar documentos pessoais é aceitável | **Atende** (modelo diferente) |
 
