@@ -33,11 +33,12 @@ async function invokeRotate<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 /** Rotates on the platform through the `rotate` Edge Function (per-item consent required). */
-export function rotateCredential(auto: AutoRotation, credential: Credential, admin?: Credential) {
-  return invokeRotate<RotationResult>({ action: 'rotate', connector: auto.connectorId, credential, admin, config: auto.config });
+export function rotateCredential(auto: AutoRotation, credential: Credential, admin?: Credential, itemId?: string) {
+  // itemId is an opaque id recorded in the audit trail (evidence report); never a secret.
+  return invokeRotate<RotationResult>({ action: 'rotate', connector: auto.connectorId, credential, admin, config: auto.config, itemId });
 }
 
 /** Second phase: removes the previous credential, authenticated with the NEW one (already saved). */
-export function revokeOldCredential(auto: AutoRotation, credential: Credential, oldId: string, newKeyId?: string) {
-  return invokeRotate<{ ok: true }>({ action: 'revoke_old', connector: auto.connectorId, credential, config: auto.config, oldId, newKeyId });
+export function revokeOldCredential(auto: AutoRotation, credential: Credential, oldId: string, newKeyId?: string, itemId?: string) {
+  return invokeRotate<{ ok: true }>({ action: 'revoke_old', connector: auto.connectorId, credential, config: auto.config, oldId, newKeyId, itemId });
 }

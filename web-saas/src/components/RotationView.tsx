@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { CATEGORY_LABELS, CONNECTORS, type ConnectorCategory, EXECUTOR_LABELS, type Executor, connectorById } from '../lib/connectors';
 import { formatDate, formatDateTime } from '../lib/messages';
 import { type ItemHealth, RISK_LABELS, type RiskFlag } from '../lib/itemHealth';
@@ -29,6 +29,8 @@ type RotationViewProps = {
   /** One click: automatic (connector with consent) or quick assisted (logins). */
   onQuickRotate: (item: VaultItem) => void;
   onOpen: (item: VaultItem) => void;
+  /** Premium: downloads the rotation evidence report (CSV, built on the device). */
+  onEvidenceReport?: (pseudonymize: boolean) => Promise<void>;
 };
 
 /** Which one-click rotation an item supports, if any. */
@@ -75,7 +77,9 @@ function DeadlineBadge({ deadline }: { deadline?: Deadline }) {
   );
 }
 
-export function RotationView({ items, health, deadlines, onRotate, onQuickRotate, onOpen }: RotationViewProps) {
+export function RotationView({ items, health, deadlines, onRotate, onQuickRotate, onOpen, onEvidenceReport }: RotationViewProps) {
+  const [codes, setCodes] = useState(true);
+  const [reportBusy, setReportBusy] = useState(false);
   const deadlineById = useMemo(() => new Map(deadlines.map((d) => [d.item.id, d])), [deadlines]);
   const automatic = useMemo(() => items.filter((i) => quickRotateMode(i) === 'auto'), [items]);
   const queue = useMemo(
@@ -120,6 +124,31 @@ export function RotationView({ items, health, deadlines, onRotate, onQuickRotate
             contados de quando o risco foi encontrado. A verificação de vazamentos roda sozinha uma vez por dia; os avisos
             por notificação ficam em Configurações.
           </p>
+          {onEvidenceReport && (
+            <div className="row">
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={reportBusy}
+                onClick={async () => {
+                  setReportBusy(true);
+                  try {
+                    await onEvidenceReport(codes);
+                  } finally {
+                    setReportBusy(false);
+                  }
+                }}
+              >
+                <Icon name="download" size={14} />
+                {reportBusy ? 'Gerando…' : 'Relatório de evidências (CSV)'}
+              </button>
+              <label className="check">
+                <input type="checkbox" checked={codes} onChange={(e) => setCodes(e.target.checked)} />
+                Trocar títulos por códigos
+              </label>
+              <span className="subtle">Para auditorias (LGPD, ISO 27001, SOC 2): sem senhas, URLs ou notas.</span>
+            </div>
+          )}
         </div>
         {queue.length === 0 ? (
           <p className="empty">

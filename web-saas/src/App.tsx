@@ -34,7 +34,7 @@ import { type RiskSince, computeDeadlines, summarizeDeadlines, updateRiskSince }
 import { claimDailyCheck, loadRiskSince, maybeNotify, saveRiskSince } from './lib/rotationReminders';
 import { isNativeShell } from './lib/nativeShell';
 import { isSupabaseConfigured } from './lib/supabase';
-import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits } from './services/fileService';
+import { FREE_LIMITS, type PlanLimits, deleteFileById, fetchPlanLimits, saveToDisk } from './services/fileService';
 import { type AdminStatus, fetchAdminStatus } from './services/adminService';
 import { exchangeOAuthCode } from './services/authService';
 import { listVerifiedTotpFactors } from './services/mfaService';
@@ -44,6 +44,8 @@ import { checkUrlsReputation, type UrlReputation } from './services/urlReputatio
 import { IDLE_LOCK_MS, type VaultItem, useVaultSession } from './state/useVaultSession';
 import { PREMIUM_FEATURES, type PremiumFeature, TRASH_DAYS } from './lib/plan';
 import { TrashView } from './components/TrashView';
+import { buildEvidenceCsv } from './lib/evidenceReport';
+import { fetchMyAuditEvents } from './services/auditService';
 
 /** Public transfer links: /?transfer=<id>#k=<secret>. The secret never leaves the browser. */
 function readTransferLink() {
@@ -721,7 +723,15 @@ function VaultApp() {
           )}
 
           {activeView === 'rotation' && (
-            <RotationView items={items} health={health} deadlines={deadlines} onRotate={(item) => requirePremium('rotation') && setRotatingItem(item)} onQuickRotate={startQuickRotate} onOpen={(item) => setEditing({ item })} />
+            <RotationView items={items} health={health} deadlines={deadlines} onRotate={(item) => requirePremium('rotation') && setRotatingItem(item)}
+              onQuickRotate={startQuickRotate}
+              onEvidenceReport={async (pseudonymize) => {
+                if (!requirePremium('rotation')) return;
+                const events = await fetchMyAuditEvents(1000).catch(() => []);
+                const csv = buildEvidenceCsv({ items, health, deadlines, events, account: user?.email ?? '', pseudonymize });
+                // UTF-8 BOM so Excel shows accents correctly.
+                saveToDisk(new TextEncoder().encode(`\uFEFF${csv}`), `securelink-evidencias-${new Date().toISOString().slice(0, 10)}.csv`);
+              }} onOpen={(item) => setEditing({ item })} />
           )}
 
           {activeView === 'files' && <FilesView getKeyContext={session.getKeyContext} getKeyPair={session.getKeyPair} />}
