@@ -33,7 +33,7 @@ Roteiro para o dono validar o desenvolvimento. Com tudo aprovado, o código segu
 | # | Passo | Esperado |
 |---|---|---|
 | U1 | Premium: copiar a senha no cofre e abrir o item | "Último uso: copiada há poucos instantes · app web (navegador · sistema)" |
-| U2 | Premium: preencher pela extensão num site | No app: "preenchida em <site> há … · extensão (…)" |
+| U2 | Premium: preencher pela extensão num site | No app: "preenchida em `<site>` há … · extensão (…)" |
 | U3 | Free: abrir um item | "Onde e quando a senha foi usada: recurso Premium"; nada é gravado |
 
 ### 2.3 OTP de sistemas externos (Premium)

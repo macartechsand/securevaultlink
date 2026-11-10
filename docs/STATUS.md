@@ -10,6 +10,8 @@ Esta página serve para **retomar o trabalho**: onde o projeto está, o que est�
 
 **Revisão da arquitetura de segurança comparada a Idira (CyberArk), Bitwarden e Google, com potencial de inovação:** [`architecture/security-architecture-review.md`](architecture/security-architecture-review.md).
 
+**Portal de documentação** (diagramas, seções e busca): `cd docs; npm ci; npm run dev` e abrir http://localhost:5173. Guia da equipe: [`guide/engineering.md`](guide/engineering.md).
+
 **Outros documentos de planejamento:**
 - [`product/plan-strategy.md`](product/plan-strategy.md): planos e matriz Free/Pro/Enterprise;
 - [`product/feature-review.md`](product/feature-review.md): inventário com evidências e lacunas P0–P4;

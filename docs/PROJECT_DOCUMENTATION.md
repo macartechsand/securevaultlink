@@ -210,16 +210,16 @@ O arquivo `.env` existente no `web-saas` já deve estar configurado com estes va
 ### Passo a passo
 
 1. Clone o repositório:
-   ```bash
+```bash
 git clone <repo-url>
 cd securityvaultclone
 ```
 2. Instale dependências do app mobile:
-   ```bash
+```bash
 npm install
 ```
 3. Instale dependências da aplicação web:
-   ```bash
+```bash
 cd web-saas
 npm install
 ```

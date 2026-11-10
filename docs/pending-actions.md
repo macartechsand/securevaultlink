@@ -114,7 +114,7 @@ Função `rotate` e site publicados; não há migration. Para validar cada conec
    - [ ] **Google Cloud:** service account de teste com o papel "Service Account Key Admin" nela mesma, e uma chave JSON colada em "Valor do segredo". Depois da rotação, só a chave nova deve aparecer em IAM → Service accounts → Keys.
    - [ ] **Microsoft 365 / Entra ID (senha de usuário):** usuário de teste não administrador, salvo como **Login** com o e-mail em "Usuário". Um app de teste com a permissão de aplicativo `User-PasswordProfile.ReadWrite.All` (com consentimento do admin), salvo como **Segredo**: client ID em "Identificador" e secret no valor. No login: Rotação automática → Microsoft 365 / Entra ID → tenant ID e o segredo do app. Depois de rotacionar, entre em office.com com a senha nova.
    - [ ] **Google Workspace (senha de usuário):** service account de teste com delegação em todo o domínio no Admin Console (Segurança → Controles de API → escopo `https://www.googleapis.com/auth/admin.directory.user`), com o JSON salvo como **Segredo**. No login do usuário de teste: Rotação automática → Google Workspace → e-mail de um administrador e o segredo da service account. Depois de rotacionar, entre com a senha nova.
-   - [ ] **Entra ID:** app registration de teste com a permissão de aplicativo `Application.ReadWrite.OwnedBy` (com consentimento do admin) e a service principal como dona do app. Client ID em "Identificador", secret no valor, tenant ID na configuração. Depois da rotação, em Certificates & secrets, deve sobrar só a secret "SecureVault <data>".
+   - [ ] **Entra ID:** app registration de teste com a permissão de aplicativo `Application.ReadWrite.OwnedBy` (com consentimento do admin) e a service principal como dona do app. Client ID em "Identificador", secret no valor, tenant ID na configuração. Depois da rotação, em Certificates & secrets, deve sobrar só a secret "SecureVault `<data>`".
 4. [ ] Peça ao Claude para marcar como "Disponível" os conectores aprovados.
 
 ## Desbloqueio, reset do cofre e convites Premium (2026-10-19)
@@ -379,7 +379,7 @@ Antes do roteiro de arquivos, confira rapidamente no cofre de senhas que **edita
 - [ ] Entre com a conta **B** → abra **Files** uma vez, o que cria o par de chaves dela. Em **Shared with me**, anote a **impressão digital** (*Your sharing key fingerprint*).
 - [ ] Saia e entre com a conta **A** → **Files → Share** no arquivo → informe o e-mail da B → **Find**.
 - [ ] A impressão digital exibida deve ser **idêntica** à anotada na conta B. Só então clique em **Confirm and share**.
-- [ ] Entre com a conta **B** → **Shared with me**. O arquivo aparece com "from <e-mail da A>" e o **Download** funciona.
+- [ ] Entre com a conta **B** → **Shared with me**. O arquivo aparece com "from `<e-mail da A>`" e o **Download** funciona.
 - [ ] Volte à conta **A** → **Share** → **Revoke**. Na conta **B**, o arquivo deve sumir (recarregue a página).
 
 ### 5.3 Link de transferência temporária
